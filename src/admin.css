@@ -1,0 +1,467 @@
+/* Admin, mengikuti frame Figma 1440 x 1024. Semua aturan dikurung di .adm supaya tidak bocor ke website. */
+.adm { display: flex; min-height: 100vh; background: var(--paper) }
+.adm svg { width: 18px; height: 18px }
+.adm button { cursor: pointer }
+/* :where menjaga reset ini tetap lemah, supaya gaya tiap tombol di bawah yang menang */
+.adm :where(button:not(.btn)) { font: inherit; color: inherit; background: none; border: 0 }
+.adm button:disabled { cursor: default }
+.adm :focus-visible { outline: 2px solid var(--ink); outline-offset: 2px }
+.adm-side :focus-visible { outline-color: var(--green-soft) }
+
+.adm-side { position: sticky; top: 0; z-index: 2; display: flex; flex-direction: column; justify-content: space-between; width: 256px; height: 100vh; flex: none; padding: 28px 18px; background: var(--ink); overflow-y: auto }
+.adm-side .logo { padding: 0 8px; color: var(--paper2) }
+.adm-sub { margin: 6px 0 0 44px; font-size: 12px; letter-spacing: .18em; color: #9FA29A }
+.adm-side nav { flex-direction: column; align-items: stretch; gap: 4px; margin-top: 36px }
+.adm-side nav a { display: flex; align-items: center; gap: 12px; height: 46px; padding: 0 14px; border-radius: 10px; color: #B9BCB4; font-weight: 600; font-size: 15px; transition: background .2s }
+.adm-side nav a[href]:hover { background: #ffffff14 }
+.adm-side nav a.on, .adm-side nav a.on:hover { background: linear-gradient(180deg, var(--green-hi), var(--green)); color: var(--ink); font-weight: 800; border-bottom: 4px solid var(--green-lo); box-shadow: inset 0 2px 0 rgba(255, 255, 255, .5), 0 10px 16px -8px rgba(20, 22, 18, .28) }
+.adm-user { display: flex; align-items: center; gap: 12px; margin-top: 24px; padding: 12px; border-top: 1px solid #3B3D36; font-size: 14px; color: var(--paper2) }
+.adm-user > span { display: flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: 8px; background: var(--green); color: var(--ink); font-weight: 800 }
+.adm-user b { display: block; font-weight: 700 }
+.adm-user small { display: block; font-size: 12px; color: #9FA29A }
+.adm-user button { margin-top: 4px; padding: 0; font-size: 13px; text-decoration: underline; color: #9FA29A }
+.adm-user button:hover { color: var(--paper2) }
+
+.adm-main { position: relative; flex: 1; min-width: 0; padding: 36px 44px 64px }
+.adm-main > .tex { position: fixed; left: 256px; opacity: .36 }
+.adm-in { position: relative; max-width: 1180px }
+.a-title { display: flex; justify-content: space-between; align-items: flex-end; gap: 20px }
+.a-title h1 { font-size: 44px }
+.a-title p { margin-top: 10px; font-size: 16px; color: var(--muted) }
+.crumb { margin-bottom: 10px; font-size: 14px; color: var(--muted) }
+.crumb b { color: var(--ink) }
+.adm .card { box-shadow: inset 0 2px 0 #fff, 0 18px 28px -16px rgba(39, 41, 36, .35) }
+.mut { color: var(--muted) }
+
+/* kolom isian: cekung ke dalam */
+.field > span:first-child { display: block; margin-bottom: 8px; font-weight: 800; font-size: 12px; letter-spacing: .14em; text-transform: uppercase }
+.inp { display: flex; align-items: center; height: 48px; padding: 0 14px; border-radius: 10px; background: #fff; font-size: 16px; box-shadow: inset 0 3px 6px rgba(0, 0, 0, .1), inset 0 0 0 1px #E1E4DD }
+.inp:focus-within { box-shadow: inset 0 3px 6px rgba(0, 0, 0, .1), inset 0 0 0 2px var(--ink) }
+.inp input, .inp select { flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; background: none; font: inherit; color: inherit }
+.inp input::placeholder { color: #767970 }
+.inp input:disabled { cursor: not-allowed }
+.inp small { margin-left: 8px; font-size: 13px; color: var(--muted) }
+.inp .unit { margin-right: 8px; font-weight: 500; color: var(--muted) }
+.inp.bold, .inp.sm { font-weight: 700 }
+.inp.sm { width: 130px; height: 40px }
+.inp.sm .unit { margin-right: 6px }
+.inp.xl { height: 56px; font-weight: 800; font-size: 22px }
+.inp.xl .unit { font-size: 16px }
+.inp.sel { position: relative; padding: 0 }
+.inp.sel select { padding: 0 40px 0 14px; appearance: none; -webkit-appearance: none; cursor: pointer }
+.inp.sel svg { position: absolute; right: 14px; pointer-events: none }
+
+.tog { position: relative; width: 46px; height: 26px; border-radius: 13px; flex: none; background: linear-gradient(180deg, var(--green-hi), var(--green)); box-shadow: inset 0 2px 4px rgba(0, 0, 0, .25) }
+.tog i { position: absolute; left: 23px; top: 3px; width: 20px; height: 20px; border-radius: 50%; background: linear-gradient(180deg, #fff, #E4E6E0); box-shadow: 0 2px 3px rgba(0, 0, 0, .3); transition: left .2s var(--ease) }
+.adm .tog { background: linear-gradient(180deg, var(--green-hi), var(--green)) }
+.adm .tog.off { background: #C4C7C0 }
+.tog.off i { left: 3px }
+
+/* daftar produk */
+.stats { display: flex; gap: 16px; margin-top: 28px }
+.stat { flex: 1; padding: 18px 20px }
+.stat p { font-weight: 600; font-size: 13px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted) }
+.stat b { display: block; margin-top: 8px; font-weight: 900; font-size: 34px; line-height: 1.2 }
+.stat small { display: block; min-height: 18px; margin-top: 2px; font-size: 13px; color: var(--muted) }
+.a-bar { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-top: 26px }
+.pills { display: flex; flex-wrap: wrap; gap: 8px }
+.pills button { height: 38px; padding: 0 14px; border-radius: 8px; border: 1.5px solid var(--line); font-weight: 600; font-size: 14px; white-space: nowrap; transition: background .2s }
+.pills button:hover { background: #ffffff8c }
+.pills button.on { background: var(--ink); border-color: var(--ink); color: var(--paper2) }
+.find { width: 240px; height: 40px; gap: 10px; flex: none; font-size: 15px; color: var(--muted) }
+.find input { color: var(--ink) }
+.tbl { margin-top: 16px; overflow-x: auto }
+.adm table { width: 100%; border-collapse: collapse }
+.adm th { height: 46px; padding: 0 16px; text-align: left; font-weight: 800; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; white-space: nowrap; color: var(--muted); border-bottom: 1.5px dashed var(--line) }
+.adm td { height: 64px; padding: 0 16px; font-size: 15px; border-bottom: 1.5px dashed var(--line) }
+.adm tr:last-child td { border-bottom: 0 }
+.adm tr.off > :not(.c-edit) { opacity: .55 }
+.c-foto { width: 78px }
+.c-nama { font-weight: 700; font-size: 16px }
+.c-edit { text-align: right }
+.c-edit a { font-weight: 700; text-decoration: underline }
+.lab { display: flex; align-items: center; gap: 8px; font-weight: 600; white-space: nowrap }
+.st { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--muted) }
+.thumb { position: relative; width: 46px; height: 46px; border-radius: 6px; overflow: hidden }
+.thumb.none { background: var(--green); opacity: .35 }
+.thumb img { position: absolute; left: 50%; top: 3px; height: 40px; max-width: none; transform: translateX(-50%) }
+.thumb.cover img { left: 0; top: 0; width: 100%; height: 100%; object-fit: cover; transform: none }
+
+/* edit produk */
+.edit { display: grid; grid-template-columns: 1fr 380px; gap: 26px; align-items: start; margin-top: 24px }
+.form { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px 18px; padding: 26px 28px 24px }
+.form > * { min-width: 0 }
+.s2 { grid-column: span 2 } .s3 { grid-column: span 3 }
+.well { display: flex; gap: 4px; padding: 4px; border-radius: 10px; background: #E4E6E0; box-shadow: inset 0 3px 6px rgba(0, 0, 0, .12) }
+.well button { flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; height: 48px; border-radius: 8px; font-weight: 700; font-size: 15px; white-space: nowrap }
+.well.dim { opacity: .5 }
+.serve button { gap: 6px; height: 40px; font-weight: 600; color: var(--muted) }
+.serve svg { width: 16px; height: 16px }
+.serve [aria-pressed=true] { background: #fff; border-bottom: 3px solid var(--line); font-weight: 800; color: var(--ink) }
+.lvl [aria-pressed=true] { background: linear-gradient(180deg, #45473F, #272924); border-bottom: 4px solid #111210; color: var(--paper2) }
+.beanrow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center }
+.beanrow button { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 14px; border-radius: 8px; background: #ECEEE9; font-weight: 600; font-size: 14px; color: #6B6E66 }
+.beanrow i { width: 14px; height: 14px; border-radius: 4px; opacity: .45 }
+.beanrow [aria-pressed=true] { background: #fff; border-bottom: 3px solid var(--line); color: var(--ink) }
+.beanrow [aria-pressed=true] i { opacity: 1; box-shadow: inset 0 -2px 0 rgba(0, 0, 0, .18) }
+.beanrow small { margin-left: 6px; font-size: 13px; color: var(--muted) }
+.togs { display: flex; flex-wrap: wrap; gap: 14px 32px; padding-top: 16px; border-top: 1.5px dashed var(--line) }
+.togs span { display: flex; align-items: center; gap: 10px; font-weight: 700 }
+.fotocard { padding: 22px 22px 20px }
+.fotocard .big { margin-top: 36px }
+.fotocard .big .drink { top: -40px; height: 252px }
+.upl { display: flex; align-items: center; gap: 12px; margin-top: 12px; padding: 12px 14px; border-radius: 10px; border: 1.5px dashed #B9BDB3; background: #fff; font-size: 14px; line-height: 1.35; color: var(--muted); cursor: pointer }
+.upl:hover, .upl:focus-within { border-color: var(--ink) }
+.upl svg { width: 22px; height: 22px; color: var(--ink) }
+.upl b { color: var(--ink) }
+.upl input { position: absolute; opacity: 0; width: 1px; height: 1px }
+.field.mat { margin-top: 18px }
+.mats { display: flex; justify-content: space-between }
+.mats button { display: flex; flex-direction: column; align-items: center; gap: 6px; font-weight: 600; font-size: 12px; color: var(--muted) }
+.mats .slot { display: block; width: 62px; height: 62px }
+.mats [aria-pressed=true] { font-weight: 800; color: var(--ink) }
+.mats [aria-pressed=true] .slot { box-shadow: 0 0 0 3px var(--paper2), 0 0 0 5px var(--ink) }
+.a-act { display: flex; justify-content: flex-end; gap: 12px; margin-top: 22px }
+.adm .btn:disabled { opacity: .5; transform: none }
+
+/* harga massal */
+.massal { display: flex; gap: 28px; align-items: flex-start; margin-top: 26px }
+.ctrl { display: flex; flex-direction: column; gap: 24px; width: 430px; flex: none; padding: 26px 28px }
+.cats { display: flex; flex-wrap: wrap; gap: 8px }
+.cats button { display: inline-flex; align-items: center; gap: 8px; height: 42px; padding: 0 16px; border-radius: 8px; border: 1.5px solid var(--line); background: #fff; font-weight: 600; font-size: 15px }
+.cats [aria-pressed=true] { background: var(--ink); border-color: var(--ink); color: var(--paper2) }
+.cats svg { width: 16px; height: 16px }
+.opts { display: flex; flex-wrap: wrap; gap: 8px }
+.opt { display: flex; align-items: center; gap: 8px; height: 48px; padding: 0 14px; border-radius: 10px; font-size: 16px; box-shadow: inset 0 3px 6px rgba(0, 0, 0, .1), inset 0 0 0 1px #E1E4DD }
+.adm .opt { background: #fff; color: var(--muted) }
+.adm .opt[aria-pressed=true] { font-weight: 700; color: var(--ink); box-shadow: inset 0 3px 6px rgba(0, 0, 0, .1), inset 0 0 0 1.5px var(--ink) }
+.info { padding: 16px; border-radius: 8px; background: var(--ink); color: var(--paper2); font-size: 15px; line-height: 1.5 }
+.prev { flex: 1; min-width: 0; margin-top: 0 }
+.prev-h { display: flex; justify-content: space-between; align-items: center; padding: 18px 16px; font-size: 14px; color: var(--muted) }
+.prev-h b { font-size: 17px; color: var(--ink) }
+.prev td { white-space: nowrap }
+.prev .new { font-weight: 800 }
+.diff { display: inline-flex; align-items: center; height: 26px; padding: 0 10px; border-radius: 13px; background: #D5F2D3; color: #16701A; font-weight: 700; font-size: 13px }
+.diff.min { background: #F8DDD9; color: #8F2A22 }
+
+/* layar masuk */
+.adm.login { position: relative; align-items: center; justify-content: center; padding: 24px; overflow: hidden }
+.adm.login > .tex { opacity: .36 }
+.adm .login-card { position: relative; display: flex; flex-direction: column; gap: 16px; width: min(520px, 100%); padding: 34px 34px 28px }
+.adm .login-card h1 { font-size: 36px; margin-top: 8px }
+.adm .login-card .logo { align-self: flex-start }
+.adm .login-card .aback { align-self: flex-start; font-size: 14px; text-decoration: underline }
+.adm .accs { display: flex; flex-direction: column; gap: 10px; margin: 6px 0; list-style: none }
+.adm .accs button { display: flex; align-items: center; gap: 14px; width: 100%; padding: 12px 14px; border-radius: 10px; background: #fff; border-bottom: 4px solid var(--line); box-shadow: inset 0 2px 0 #fff, 0 10px 16px -12px rgba(39, 41, 36, .4); text-align: left; transition: transform .15s var(--ease) }
+.adm .accs button:hover { transform: translateY(-2px) }
+.adm .accs button:active { transform: translateY(2px); border-bottom-width: 2px }
+.adm .accs .av { display: flex; align-items: center; justify-content: center; width: 42px; height: 42px; border-radius: 8px; flex: none; background: linear-gradient(180deg, var(--green-hi), var(--green)); border-bottom: 3px solid var(--green-lo); font-weight: 800; color: var(--ink) }
+.adm .accs .who { flex: 1; display: flex; flex-direction: column }
+.adm .accs .who b { font-size: 17px }
+.adm .accs .who small { font-size: 13px; color: var(--muted) }
+.adm .accs .go { font-size: 13px; font-weight: 700; text-decoration: underline; white-space: nowrap }
+
+/* pesan dan kosong */
+.adm .warn { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 16px; padding: 12px 16px; border-radius: 8px; background: #F8DDD9; color: #8F2A22; font-weight: 700; font-size: 14px; line-height: 1.45 }
+.adm .warn button { flex: none; text-decoration: underline; font-weight: 700 }
+.adm .fotocard .warn { margin: 12px 0 0 }
+.adm .empty { padding: 22px 16px; font-size: 15px; color: var(--muted) }
+.adm .saved { align-self: center; margin-right: auto; font-weight: 700; color: #16701A }
+
+/* tombol kecil, saklar berlabel, konfirmasi di tempat */
+.adm .mini { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: 8px; background: #fff; border-bottom: 3px solid var(--line); font-weight: 700; font-size: 13px; white-space: nowrap; box-shadow: inset 0 1px 0 #fff }
+.adm .mini:hover:not(:disabled) { background: #F4F5F1 }
+.adm .mini:disabled { opacity: .45 }
+.adm .mini.danger { color: #8F2A22 }
+.adm .mini.solid { background: #8F2A22; border-bottom-color: #5E1913; color: #fff }
+.adm .mini.solid:hover { background: #7A241D }
+.adm .mini svg { width: 15px; height: 15px }
+.adm .mini.file { position: relative; cursor: pointer }
+.adm .mini.file input { position: absolute; opacity: 0; width: 1px; height: 1px }
+.adm .mini.file:focus-within { outline: 2px solid var(--ink); outline-offset: 2px }
+.adm .lnk { font-weight: 700; font-size: 15px; text-decoration: underline }
+.adm .tl { display: inline-flex; align-items: center; gap: 10px; font-weight: 700; font-size: 14px }
+.adm .ask { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; line-height: 1.3 }
+.adm .a-act .push { margin-right: auto }
+.adm .a-act .ask { font-size: 14px }
+.adm .acts { display: inline-flex; align-items: center; gap: 12px; justify-content: flex-end }
+.adm .nowrap { white-space: nowrap }
+.adm .anote { max-width: 200px; font-size: 14px; color: var(--muted) }
+
+/* ringkasan */
+.adm .duo { display: grid; grid-template-columns: 1.35fr 1fr; gap: 22px; margin-top: 22px; align-items: start }
+.adm .apanel { padding: 22px 24px }
+.adm .apanel.stack { display: flex; flex-direction: column; gap: 18px; margin-top: 22px }
+.adm .apanel.stack > .a-act { margin-top: 0 }
+.adm .aph { font-weight: 800; font-size: 18px }
+.adm .aph.sec { margin-top: 30px }
+.adm .aph-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px }
+.adm .aph-row p { margin-top: 4px; font-size: 14px }
+.adm .lst { list-style: none; margin-top: 6px }
+.adm .lst li { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1.5px dashed var(--line) }
+.adm .lst li:last-child { border-bottom: 0 }
+.adm .lst .grow { flex: 1; min-width: 0 }
+.adm .lst b { display: block; font-size: 15px }
+.adm .lst small { display: block; margin-top: 2px; font-size: 13px; color: var(--muted) }
+.adm .short { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 14px }
+.adm .short a { display: block; padding: 18px 20px; transition: transform .2s var(--ease) }
+.adm .short a:hover { transform: translateY(-3px) }
+.adm .short b { display: block; font-size: 16px }
+.adm .short small { display: block; margin-top: 4px; font-size: 13px; color: var(--muted) }
+.adm .mtier { display: inline-flex; align-items: center; height: 26px; padding: 0 10px; border-radius: 13px; font-weight: 700; font-size: 13px; white-space: nowrap; background: #E4E6E0; box-shadow: inset 0 -2px 0 rgba(0, 0, 0, .1) }
+.adm .mtier.m1 { background: var(--butter) }
+.adm .mtier.m2, .adm .mtier.m3 { background: var(--ink); color: var(--paper2) }
+
+/* formulir bertingkat */
+.adm .inp.area { height: auto; align-items: flex-start; padding: 12px 14px }
+.adm .inp textarea { flex: 1; min-width: 0; min-height: 64px; border: 0; outline: 0; background: none; font: inherit; color: inherit; resize: vertical; line-height: 1.45 }
+.adm .fgrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px }
+.adm .fgrid.g3 { grid-template-columns: repeat(3, 1fr) }
+.adm .fgrid.two { gap: 12px }
+.adm .fgrid > * { min-width: 0 }
+.adm .fgrid .full { grid-column: 1 / -1 }
+.adm .fgrid .s3 { grid-column: 1 / -1 }
+.adm .achips { display: flex; flex-wrap: wrap; gap: 8px; list-style: none }
+.adm .achip { display: inline-flex; align-items: center; gap: 6px; height: 40px; padding: 0 6px 0 14px; border-radius: 8px; background: #fff; border-bottom: 3px solid var(--line); font-weight: 600; font-size: 15px }
+.adm .achip button { display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 6px; color: var(--muted) }
+.adm .achip button:hover { background: #F8DDD9; color: #8F2A22 }
+.adm .achip svg { width: 14px; height: 14px }
+.adm .addrow { display: flex; align-items: center; gap: 12px }
+.adm .addrow .inp:first-child { flex: 1; min-width: 0 }
+.adm .addrow .inp.sel { width: 180px }
+.adm .addrow .btn { height: 48px; font-size: 14px }
+
+/* promo */
+.adm .sets { list-style: none }
+.adm .setrow { display: grid; grid-template-columns: 76px 1fr 1fr 150px 150px; gap: 14px 16px; align-items: end; padding: 18px 0; border-bottom: 1.5px dashed var(--line) }
+.adm .setrow:first-child { padding-top: 4px }
+.adm .setrow .thumb { width: 64px; height: 64px; align-self: center }
+.adm .setrow .thumb.none { background: var(--green) }
+.adm .setrow.offrow .thumb { opacity: .5 }
+.adm .setact { grid-column: 2 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px }
+
+/* member */
+.adm .stats.flow { flex-wrap: wrap }
+.adm .stats.flow .stat { flex: 1 1 160px }
+.adm .visit { display: flex; align-items: center; gap: 12px }
+.adm .visit b { font-size: 17px }
+.adm .visit small { display: block; font-size: 12px; color: var(--muted); white-space: nowrap }
+
+/* pengaturan */
+.adm .trows { display: flex; flex-direction: column }
+.adm .trow { display: grid; grid-template-columns: 1.2fr 170px 130px 2fr 84px; gap: 12px; align-items: center; padding: 10px 0; border-bottom: 1.5px dashed var(--line) }
+.adm .trow:last-child { border-bottom: 0 }
+.adm .trow.head { padding: 0 0 10px; font-weight: 800; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted) }
+.adm .trow.urow { grid-template-columns: 1.3fr 190px 150px 130px }
+.adm .trow .inp { min-width: 0 }
+.adm .matrix { margin-top: 6px; box-shadow: inset 0 0 0 1.5px var(--line); border-radius: 10px }
+.adm .matrix caption { padding: 14px 16px 6px; text-align: left; font-weight: 800; font-size: 14px }
+.adm .matrix td { height: 44px }
+.adm .matrix th:not(:first-child), .adm .matrix td:not(:first-child) { text-align: center }
+.adm .matrix .cyes { font-weight: 800; color: #16701A }
+.adm .matrix .cno { color: var(--muted) }
+
+/* layar sempit: sidebar jadi baris di atas, isi bertumpuk */
+@media (max-width: 1100px) {
+  .adm .edit { grid-template-columns: 1fr }
+  .adm .massal { flex-direction: column; align-items: stretch }
+  .adm .ctrl { width: auto }
+  .adm .stats { flex-wrap: wrap } .adm .stat { flex: 1 1 40% }
+  .adm .setrow { grid-template-columns: 76px 1fr 1fr }
+  .adm .setrow > :nth-child(4) { grid-column: 2 }
+  .adm .trow { grid-template-columns: 1fr 1fr }
+  .adm .trow.urow { grid-template-columns: 1fr 1fr }
+  .adm .trow.head { display: none }
+}
+@media (max-width: 860px) {
+  .adm { display: block }
+  .adm-side { position: static; width: auto; height: auto; padding: 16px 20px }
+  .adm-sub { display: none }
+  .adm-user { margin-top: 12px; padding: 10px 0 0 }
+  .adm-side nav { flex-direction: row; overflow-x: auto; margin-top: 14px }
+  .adm-side nav a { flex: none; height: 42px; white-space: nowrap }
+  .adm-main { padding: 24px 20px 48px }
+  .adm-main > .tex { left: 0 }
+  .adm .a-title { flex-direction: column; align-items: flex-start }
+  .adm .a-title h1 { font-size: 32px }
+  .adm .a-bar { flex-direction: column; align-items: stretch }
+  .adm .find { width: auto }
+  .adm .form { grid-template-columns: 1fr }
+  .adm .s2, .adm .s3 { grid-column: auto }
+  .adm .lvl { flex-wrap: wrap } .lvl button { flex: 1 1 40% }
+  .adm table { min-width: 640px }
+  .adm .prev table { min-width: 420px }
+  .adm .a-act .btn { flex: 1 }
+  .adm .duo, .adm .fgrid, .adm .fgrid.g3, .adm .setrow, .adm .trow, .adm .trow.urow { grid-template-columns: 1fr }
+  .adm .setrow > :nth-child(4) { grid-column: auto }
+  .adm .setact { grid-column: auto }
+  .adm .trow.head { display: none }
+  .adm .addrow { flex-wrap: wrap }
+  .adm .addrow .inp { flex: 1 1 100% }
+  .adm .short { grid-template-columns: 1fr 1fr }
+  .adm .acts { flex-wrap: wrap }
+}
+
+.adm .tog:disabled { opacity: .55; cursor: default }
+
+/* ---------- kasir dan back office ---------- */
+.adm-side nav { gap: 2px }
+.adm .adm-grp { display: flex; flex-direction: column; gap: 3px }
+.adm .adm-grp + .adm-grp { margin-top: 14px }
+.adm .adm-gl { margin: 0 0 4px 14px; font-weight: 800; font-size: 11px; letter-spacing: .18em; text-transform: uppercase; color: #9FA29A }
+.adm-side nav a { height: 42px }
+.adm-in.wide { max-width: none }
+.a-title.sm h1 { font-size: 32px }
+.a-title.sm p { margin-top: 4px; font-size: 15px }
+.adm .stats.ops .stat b { font-size: 23px; white-space: nowrap }
+.adm .small { font-size: 13px }
+.adm .r { text-align: right }
+.adm .tbl.flat { margin-top: 0; box-shadow: none }
+.adm .lap { margin-top: 22px }
+.adm .lap .tbl td { height: 52px }
+.adm tfoot td { height: 50px; font-weight: 800; border-top: 1.5px solid var(--line) }
+.adm td small { display: block; margin-top: 2px; font-size: 12px }
+.adm td small.u { display: inline; margin-left: 2px }
+.adm .duo.even { grid-template-columns: 1fr 1fr; gap: 0 22px }
+.adm .duo.even > .apanel, .adm .duo.even > .lap { margin-top: 22px }
+.adm .rep-note { margin-top: 12px }
+.adm .badge { display: inline-flex; align-items: center; height: 26px; padding: 0 10px; border-radius: 13px; background: #E4E6E0; font-weight: 700; font-size: 13px; white-space: nowrap }
+.adm .badge.good { background: #D5F2D3; color: #16701A }
+.adm .badge.bad { background: #F8DDD9; color: #8F2A22 }
+.adm .badge.warnb { background: var(--butter); color: var(--ink) }
+.adm .info.bad { background: #8F2A22 }
+.adm .info.sample { margin-top: 18px; background: var(--butter); color: var(--ink); font-size: 14px }
+.adm .fgrid.g4 { grid-template-columns: repeat(4, 1fr) }
+.adm .a-bar.filt { align-items: flex-end; justify-content: flex-start; flex-wrap: wrap }
+.adm .a-bar.filt .field.grow { flex: 1; min-width: 180px }
+.adm .a-bar.filt .inp { height: 42px }
+.adm .a-bar.tight { margin-top: 0; flex-wrap: wrap }
+.adm .a-bar.pad { padding: 16px 16px 4px }
+.adm .inp input[type=date] { cursor: pointer }
+.adm .ksel { min-width: 260px }
+.adm tr.cur > td { background: #fff8 }
+.adm td.neg { font-weight: 700; color: #8F2A22 }
+.adm td.pos { font-weight: 700; color: #16701A }
+.adm .voidbox { display: flex; flex-direction: column; gap: 12px; align-items: flex-start }
+.adm .voidbox .field { align-self: stretch }
+.adm .trow.sup { grid-template-columns: 1.2fr 1fr 2fr 84px }
+
+/* kasir */
+.adm .kasir { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 20px; align-items: start; margin-top: 18px }
+.adm .kmenu { min-width: 0 }
+.adm .kmenu .find { flex: 1 1 180px; width: auto; min-width: 150px }
+.adm .mini-in { width: 128px; height: 40px }
+.adm .mini-in input { width: 100%; font-weight: 700 }
+.adm .cats-bar { margin-top: 12px; flex-wrap: nowrap; overflow-x: auto; padding-bottom: 6px }
+.adm .mtiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(124px, 1fr)); gap: 12px; margin-top: 16px; list-style: none }
+.adm .mtile { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; width: 100%; height: 100%; min-height: 104px; padding: 12px 12px 10px; border-radius: 8px; background: linear-gradient(180deg, #fff, #F4F5F1); border-bottom: 4px solid var(--line); box-shadow: inset 0 2px 0 #fff, 0 10px 16px -12px rgba(39, 41, 36, .45); text-align: left; transition: transform .15s var(--ease) }
+.adm .mtile:hover:not(:disabled) { transform: translateY(-2px) }
+.adm .mtile:active:not(:disabled) { transform: translateY(2px); border-bottom-width: 2px }
+.adm .mtile b { font-size: 15px; line-height: 1.25 }
+.adm .mtile small { font-size: 12px; line-height: 1.3; color: var(--muted) }
+.adm .mtile .pr { margin-top: auto; font-weight: 800; font-size: 14px }
+.adm .mtile.set { background: linear-gradient(180deg, #FFF9D6, var(--butter)); border-bottom-color: #D9CB5E }
+.adm .mtile .etag { font-style: normal; font-weight: 800; font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: #5C5420 }
+.adm .mtile.out { opacity: .6; background: #ECEEE9; cursor: not-allowed }
+.adm .mtile em { font-style: normal; font-weight: 700; font-size: 11px; color: #8F2A22 }
+.adm .mtile .qty-b { position: absolute; top: -6px; right: -6px; display: flex; align-items: center; justify-content: center; min-width: 24px; height: 24px; padding: 0 6px; border-radius: 12px; background: var(--ink); color: var(--paper2); font-weight: 800; font-size: 12px; box-shadow: 0 2px 4px rgba(0, 0, 0, .3) }
+.adm .kcart { position: sticky; top: 16px; display: flex; flex-direction: column; gap: 12px; max-height: calc(100vh - 32px); padding: 18px 18px 16px; overflow-y: auto }
+.adm .clines { list-style: none; display: flex; flex-direction: column }
+.adm .clines li { padding: 10px 0; border-bottom: 1.5px dashed var(--line) }
+.adm .clines li:first-child { padding-top: 0 }
+.adm .cl-top { display: flex; justify-content: space-between; gap: 8px; font-size: 14px }
+.adm .cl-top span { font-weight: 700; white-space: nowrap }
+.adm .cl-bot { display: flex; align-items: center; gap: 8px; margin-top: 8px }
+.adm .stepper { display: inline-flex; align-items: center; gap: 2px; padding: 3px; border-radius: 8px; background: #E4E6E0; box-shadow: inset 0 2px 4px rgba(0, 0, 0, .12) }
+.adm .stepper button { display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 6px; background: #fff; border-bottom: 2px solid var(--line) }
+.adm .stepper button:disabled { opacity: .4 }
+.adm .stepper svg { width: 14px; height: 14px }
+.adm .stepper output { min-width: 26px; text-align: center; font-weight: 800 }
+.adm .sm-in { flex: 1; min-width: 0; height: 36px; font-size: 14px }
+.adm .kmember .mrow { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 8px; background: #D5F2D3 }
+.adm .kmember .mrow small { display: block; font-size: 12px; color: #2B5E2E }
+.adm .kmember .addrow { gap: 8px }
+.adm .kmember .addrow .inp { height: 42px; font-size: 15px }
+.adm .kmember .addrow .btn { height: 42px; padding: 0 16px }
+.adm .kmember .warn { margin: 8px 0 0 }
+.adm .sum { display: flex; flex-direction: column; gap: 6px; padding-top: 10px; border-top: 1.5px dashed var(--line); font-size: 14px }
+.adm .sum > div { display: flex; justify-content: space-between; gap: 12px }
+.adm .sum dd { font-weight: 700 }
+.adm .sum .gt { margin-top: 4px; font-size: 20px; font-weight: 900 }
+.adm .sum .gt dd { font-weight: 900 }
+.adm .cash { display: flex; flex-direction: column; gap: 8px }
+.adm .quick { display: flex; flex-wrap: wrap; gap: 6px }
+.adm .chg { font-size: 14px }
+.adm .chg b { font-size: 18px }
+.adm .chg em { font-style: normal; color: #8F2A22; font-weight: 700 }
+.adm .kcart .warn { margin: 0 }
+.adm .pay { width: 100%; height: 52px; font-size: 17px }
+.adm .clear { align-self: center; font-size: 13px; color: var(--muted) }
+.adm .gate { max-width: 560px }
+.adm .kcart .pills button { flex: 1; padding: 0 8px }
+
+/* resep */
+.adm .resep { display: grid; grid-template-columns: minmax(0, 1fr) 450px; gap: 22px; align-items: start; margin-top: 4px }
+.adm .resep > .tbl { margin-top: 22px }
+.adm .redit { margin-top: 22px; position: sticky; top: 16px }
+.adm .rlines { list-style: none; display: flex; flex-direction: column; gap: 8px }
+.adm .rlines li { display: grid; grid-template-columns: minmax(0, 1fr) 124px 78px 34px; gap: 8px; align-items: center }
+.adm .rlines.po li { grid-template-columns: 1.3fr 150px 130px 110px 34px }
+.adm .rlines .inp { min-width: 0 }
+.adm .rlines .inp.sm { width: auto }
+.adm .rlines .cost { text-align: right; font-size: 14px; color: var(--muted) }
+.adm .rlines .mini { padding: 0; justify-content: center; width: 34px }
+
+/* struk */
+.adm .struk-ov { position: fixed; inset: 0; z-index: 20; display: flex; align-items: flex-start; justify-content: center; padding: 28px 16px; overflow-y: auto; background: rgba(20, 22, 18, .62) }
+.adm .struk-box { display: flex; flex-direction: column; gap: 14px; width: min(360px, 100%) }
+.adm .struk { position: relative; padding: 22px 22px 20px; background: #fff; border-radius: 6px; box-shadow: 0 24px 40px -16px rgba(0, 0, 0, .5); font: 13px/1.5 ui-monospace, 'SF Mono', Menlo, monospace; color: #111 }
+.adm .struk h2 { font-size: 26px; text-align: center }
+.adm .struk .sc { text-align: center; font-size: 12px; color: #555 }
+.adm .struk hr { margin: 10px 0; border: 0; border-top: 1.5px dashed #999 }
+.adm .struk dl.sm > div, .adm .struk .sl li { display: flex; justify-content: space-between; gap: 12px }
+.adm .struk .sl { list-style: none }
+.adm .struk .sl small { display: block; font-size: 11px; color: #555 }
+.adm .struk .tot .gt { margin-top: 4px; padding-top: 4px; border-top: 1.5px solid #111; font-size: 15px; font-weight: 800 }
+.adm .struk.is-void .sl, .adm .struk.is-void .tot { text-decoration: line-through; color: #777 }
+.adm .struk .stamp { margin: 12px 0 4px; padding: 6px; border: 2px solid #8F2A22; border-radius: 4px; text-align: center; font-weight: 800; color: #8F2A22; transform: rotate(-3deg) }
+.adm .struk-act { display: flex; flex-direction: column; gap: 12px; padding: 14px; border-radius: 10px; background: var(--paper) }
+.adm .struk-act .a-act { margin-top: 0 }
+.adm .struk-act .a-act .btn { flex: 1 }
+
+@media (max-width: 1100px) and (min-width: 861px) {
+  .adm-side { width: 214px; padding: 24px 12px }
+  .adm-main > .tex { left: 214px }
+  .adm-main { padding: 28px 22px 56px }
+  .adm .kasir { grid-template-columns: minmax(0, 1fr) 310px }
+  .adm .resep { grid-template-columns: 1fr }
+  .adm .redit { position: static; margin-top: 0 }
+  .adm .fgrid.g4 { grid-template-columns: 1fr 1fr }
+  .adm .duo.even { grid-template-columns: 1fr }
+}
+@media (max-width: 860px) {
+  .adm .kasir, .adm .resep, .adm .duo.even { grid-template-columns: 1fr }
+  .adm .kcart, .adm .redit { position: static; max-height: none }
+  .adm .fgrid.g4 { grid-template-columns: 1fr }
+  .adm .adm-grp { flex-direction: row }
+  .adm .adm-grp + .adm-grp { margin: 0 }
+  .adm .adm-gl { display: none }
+  .adm .rlines li, .adm .rlines.po li { grid-template-columns: 1fr 1fr }
+  .adm .trow.sup { grid-template-columns: 1fr }
+}
+
+/* cetak: hanya struk yang tampak */
+@media print {
+  .adm .adm-side, .adm .adm-main > .tex, .adm .no-print { display: none !important }
+  .adm .adm-in > :not(.struk-ov) { display: none !important }
+  .adm, .adm-main { display: block; padding: 0; background: #fff }
+  .adm .struk-ov { position: static; padding: 0; background: none }
+  .adm .struk { box-shadow: none; width: 300px; margin: 0 auto }
+}
+
+/* Layar sempit: kolom cari di kasir tidak boleh meregang jadi tinggi, dan tombol teks kecil diberi area tekan yang cukup. */
+@media (max-width: 860px) {
+  .adm .kmenu .find { flex: none; min-width: 0; width: auto }
+  .adm .lnk, .adm .c-edit a, .adm .adm-user button, .adm .crumb a { display: inline-flex; align-items: center; min-height: 32px; padding-inline: 6px }
+  .adm .adm-user button { margin-top: 0 }
+}

@@ -1,237 +1,685 @@
+/* Angka di file ini mengikuti desain Figma (frame 1440 dan 390). */
 :root {
   --ink: #272924; --paper: #E7E9E4; --paper2: #F4F5F1; --line: #CBCFC6; --muted: #5F625B;
-  --green: #1FC21B; --green-hi: #5BE357; --green-lo: #0F8C0C; --butter: #F0E072; --butter-lo: #C9B53F;
-  --navy: #163472; --navy-lo: #0B1E48;
-  --shadow: 0 18px 30px -16px rgba(20, 22, 18, .4);
+  --green: #1FC21B; --green-hi: #5BE357; --green-lo: #0F8C0C; --green-soft: #7FE07B;
+  --butter: #F0E072; --butter-lo: #C9B53F; --navy: #163472; --navy-lo: #0B1E48;
   --ease: cubic-bezier(.2, .8, .2, 1);
+  --fx: 0 2px 0 rgba(255, 255, 255, .85), 0 8px 12px rgba(39, 41, 36, .14);
+  --fx-dark: 0 4px 0 rgba(0, 0, 0, .55), 0 12px 18px rgba(0, 0, 0, .3);
 }
 * { box-sizing: border-box; margin: 0; padding: 0 }
 html { scroll-behavior: smooth }
 html, body { overflow-x: clip }
 body { font-family: 'Bricolage Grotesque', system-ui, sans-serif; color: var(--ink); background: var(--paper); -webkit-font-smoothing: antialiased }
-img { display: block; max-width: 100% }
+/* gambar tidak bisa diseret, supaya tidak muncul bayangan gambar saat tidak sengaja ditarik */
+img { display: block; max-width: 100%; -webkit-user-drag: none; user-select: none }
 a { color: inherit; text-decoration: none }
-.wrap { width: min(1312px, 100% - 40px); margin: 0 auto }
-.disp { font-family: 'Unbounded', sans-serif; font-weight: 800; letter-spacing: -.02em; line-height: 1.02 }
-.hand { font-family: 'Covered By Your Grace', cursive }
+svg { flex: none }
+.wrap { position: relative; width: min(1312px, 100% - 64px); margin: 0 auto }
+.disp { font-family: 'Unbounded', sans-serif; font-weight: 800; letter-spacing: -.02em; line-height: 1 }
+.hand { font-family: 'Covered By Your Grace', cursive; font-weight: 400 }
+.fx { text-shadow: var(--fx) }
+.fx-dark { text-shadow: var(--fx-dark) }
+.fx-navy { text-shadow: 0 2px 0 rgba(255, 255, 255, .9), 0 8px 12px rgba(22, 52, 114, .18) }
+.fx-green { text-shadow: 0 4px 0 rgba(15, 140, 12, .6), 0 10px 14px rgba(10, 90, 8, .22) }
 .eyebrow { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 13px; letter-spacing: .2em; text-transform: uppercase }
-.sq { width: 14px; height: 14px; border-radius: 4px; flex: none; background: linear-gradient(160deg, var(--green-hi), var(--green)); box-shadow: inset 0 -2px 0 var(--green-lo) }
-.muted { color: var(--muted) }
-h2.disp { font-size: clamp(34px, 4.5vw, 60px); margin-top: 14px }
-section { position: relative; overflow: hidden; padding: clamp(56px, 8vw, 110px) 0 }
+.sq { display: inline-block; width: 14px; height: 14px; border-radius: 4px; flex: none; background: linear-gradient(160deg, var(--green-hi), var(--green)); box-shadow: inset 0 -2px 0 var(--green-lo) }
+h2.disp { font-size: 56px; margin-top: 14px }
+section { position: relative; overflow: hidden }
 .tex { position: absolute; inset: 0; background-size: cover; background-position: center; pointer-events: none }
-.noise { background-image: url(/img/tex-noise.webp); opacity: .5 }
-.ghost { position: absolute; font-family: 'Unbounded'; font-weight: 900; white-space: nowrap; pointer-events: none; font-size: clamp(120px, 20vw, 320px); color: rgba(39, 41, 36, .05); letter-spacing: -.03em }
+.tex.noise { background-image: url(/img/tex-noise.webp) }
+.tex.beton { background-image: url(/img/tex-beton.webp); opacity: .4 }
+.ghost { position: absolute; font-family: 'Unbounded'; font-weight: 900; white-space: nowrap; pointer-events: none; color: rgba(39, 41, 36, .05); letter-spacing: -.03em; line-height: 1.2 }
+.head { position: relative; display: flex; justify-content: space-between; align-items: flex-end; gap: 20px }
 
-/* tombol 3D: tekan = tepi bawah mengecil */
-.btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; height: 54px; padding: 0 24px; border-radius: 10px; font-family: 'Unbounded'; font-weight: 700; font-size: 15px; white-space: nowrap; cursor: pointer; border: 0; border-bottom: 5px solid; box-shadow: inset 0 2px 0 rgba(255, 255, 255, .5), var(--shadow); transition: transform .15s var(--ease), border-bottom-width .15s, box-shadow .2s }
-.btn:hover { transform: translateY(-2px) }
-.btn:active { transform: translateY(3px); border-bottom-width: 2px; box-shadow: inset 0 2px 0 rgba(255, 255, 255, .5) }
-.btn-green { background: linear-gradient(180deg, var(--green-hi), var(--green) 60%); border-color: var(--green-lo); color: var(--ink) }
-.btn-ink { background: linear-gradient(180deg, #45473F, var(--ink) 70%); border-color: #111210; color: var(--paper2) }
-.btn-paper { background: linear-gradient(180deg, #fff, var(--paper2) 70%); border-color: var(--line); color: var(--ink) }
-.btn svg { width: 18px; height: 18px; flex: none }
+/* tombol 3D: ditekan = tepi bawah mengecil */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; height: 54px; padding: 0 24px; border-radius: 10px; font-family: 'Unbounded'; font-weight: 700; font-size: 15px; white-space: nowrap; cursor: pointer; border: 0; color: var(--ink); background: none; transition: transform .15s var(--ease), border-bottom-width .15s }
+.btn svg { width: 18px; height: 18px }
+.btn[class*=btn-]:hover { transform: translateY(-2px) }
+.btn[class*=btn-]:active { transform: translateY(3px); border-bottom-width: 2px }
+.btn-green { background: linear-gradient(180deg, var(--green-hi), var(--green) 60%); border-bottom: 5px solid var(--green-lo); box-shadow: inset 0 2px 0 rgba(255, 255, 255, .55), 0 10px 16px -10px rgba(20, 22, 18, .28) }
+.btn-ink { background: linear-gradient(180deg, #45473F, var(--ink) 70%); color: var(--paper2); border-bottom: 5px solid #111210; box-shadow: inset 0 2px 0 rgba(255, 255, 255, .18), 0 14px 22px -10px rgba(0, 0, 0, .55) }
+.btn-paper { background: linear-gradient(180deg, #fff, var(--paper2) 70%); border-bottom: 5px solid var(--line); box-shadow: inset 0 2px 0 #fff, 0 12px 20px -10px rgba(39, 41, 36, .35) }
+.btn-line { background: linear-gradient(180deg, #fff, var(--paper2) 70%); border-bottom: 5px solid var(--line); box-shadow: inset 0 2px 0 #fff, inset 0 0 0 1.5px var(--line), 0 12px 20px -10px rgba(39, 41, 36, .3) }
 
-/* kartu 3D */
-.card { position: relative; background: linear-gradient(180deg, #fff, var(--paper2)); border-radius: 10px; border-bottom: 5px solid #D2D6CC; box-shadow: inset 0 2px 0 #fff, var(--shadow); transition: transform .3s var(--ease), box-shadow .3s }
-.card:hover { transform: translateY(-6px) rotate(-.4deg) }
+.card { position: relative; background: linear-gradient(180deg, #FFFFFE, var(--paper2)); border-radius: 10px; border-bottom: 5px solid #D2D6CC; box-shadow: inset 0 2px 0 #fff, 0 22px 34px -18px rgba(39, 41, 36, .4); transition: transform .3s var(--ease) }
+.prod:hover, .pop:hover { transform: translateY(-6px) }
 
 /* slot material: produk "di dalam kotak" */
-.slot { position: relative; border-radius: 10px; height: 220px; background: #C9CDC9 center / cover }
-.slot::after { content: ''; position: absolute; inset: 0; border-radius: 10px; box-shadow: inset 0 16px 20px -6px rgba(0, 0, 0, .3), inset 0 -3px 0 rgba(255, 255, 255, .35); pointer-events: none }
-.steel { background-image: url(/img/tex-baja.webp) }
-.concrete { background-image: url(/img/tex-beton.webp) }
-.ply { background-image: url(/img/tex-ply.webp) }
-.boxgreen { background: linear-gradient(165deg, var(--green-hi), var(--green) 45%, #16A813) }
-.slot .drink { position: absolute; left: 50%; bottom: 8px; height: 118%; transform: translateX(-50%); filter: drop-shadow(0 10px 10px rgba(20, 22, 18, .3)); transition: transform .4s var(--ease) }
-.card:hover .drink { transform: translateX(-50%) translateY(-8px) }
+.slot { position: relative; height: 220px; border-radius: 10px; background: #C9CDC9 }
+.slot.steel { background: linear-gradient(#ffffff14, #ffffff14), url(/img/tex-baja.webp) center / cover }
+.slot.concrete { background: linear-gradient(#ffffff1f, #ffffff1f), url(/img/tex-beton.webp) center / cover }
+.slot.ply { background: linear-gradient(#ffffff0f, #ffffff0f), url(/img/tex-ply.webp) center / cover }
+.slot.green { background: linear-gradient(165deg, var(--green-hi), var(--green) 45%, #16A813) }
+.shade { position: absolute; inset: 0; border-radius: 10px; box-shadow: inset 0 16px 20px -6px rgba(0, 0, 0, .3), inset 0 -3px 0 rgba(255, 255, 255, .35); pointer-events: none }
+.slot .drink { position: absolute; left: 50%; top: -58px; height: 262px; max-width: none; transform: translateX(-50%); transition: transform .4s var(--ease) }
+.prod:hover .drink, .pop:hover .drink { transform: translateX(-50%) translateY(-8px) }
 .slot.food { overflow: hidden }
-.slot.food img { position: absolute; left: -5%; top: 12px; width: 110%; transition: transform .5s var(--ease) }
+.slot.food img { position: absolute; left: -5%; top: 12px; width: 110%; max-width: none; transition: transform .5s var(--ease) }
 .card:hover .slot.food img { transform: scale(1.05) }
 
 /* label harga gantungan kunci */
-.key { display: inline-flex; align-items: center; transform-origin: 11px 50%; transition: transform .4s var(--ease) }
-.card:hover .key { animation: swing .9s var(--ease) }
-.key::before { content: ''; width: 20px; height: 20px; border-radius: 50%; border: 4px solid #A3A79F; box-shadow: inset 0 1px 1px rgba(0, 0, 0, .25) }
-.key::after { content: attr(data-p); order: 2; display: inline-flex; align-items: center; height: 36px; padding: 0 12px; margin-left: 8px; border-radius: 8px; background: linear-gradient(160deg, var(--green-hi), var(--green) 60%); border-bottom: 4px solid var(--green-lo); box-shadow: inset 0 2px 0 rgba(255, 255, 255, .5); font-family: 'Unbounded'; font-weight: 800; font-size: 14px }
-.key.navy::after { background: linear-gradient(160deg, #2D55B0, var(--navy) 60%); border-color: var(--navy-lo); color: #fff }
-.key.ink::after { background: linear-gradient(160deg, #4A4C44, var(--ink) 60%); border-color: #111210; color: var(--paper2) }
-.key s { order: -1; margin-right: 10px; font-weight: 600; color: var(--muted) }
-@keyframes swing { 30% { transform: rotate(-10deg) } 60% { transform: rotate(6deg) } }
+.key { --s: 1; display: inline-flex; align-items: center; flex: none }
+.key s { margin-right: 10px; font-weight: 600; font-size: calc(15px * var(--s)); color: var(--muted) }
+.key i { width: calc(22px * var(--s)); height: calc(22px * var(--s)); border-radius: 50%; border: max(3px, calc(4px * var(--s))) solid #A3A79F; box-shadow: inset 0 1px 1px rgba(0, 0, 0, .25), 0 1px 0 #fff; flex: none }
+.key u { width: calc(9px * var(--s)); height: max(4px, calc(5px * var(--s))); background: #A3A79F; flex: none }
+.key b { display: inline-flex; align-items: center; height: calc(38px * var(--s)); padding: 0 calc(13px * var(--s)); border-radius: 8px; background: linear-gradient(160deg, var(--green-hi), var(--green) 60%); border-bottom: max(3px, calc(4px * var(--s))) solid var(--green-lo); box-shadow: inset 0 2px 0 rgba(255, 255, 255, .5), 0 8px 14px -6px rgba(0, 0, 0, .35); font-family: 'Unbounded'; font-weight: 800; font-size: calc(15px * var(--s)); white-space: nowrap; transform-origin: 0 50% }
+.key.navy b { background: linear-gradient(160deg, #2D55B0, var(--navy) 60%); border-color: var(--navy-lo); color: #fff }
+.key.ink b { background: linear-gradient(160deg, #4A4C44, var(--ink) 60%); border-color: #111210; color: var(--paper2) }
+.card:hover .key b, .rows > div:hover .key b { animation: swing .9s var(--ease) }
+@keyframes swing { 30% { transform: rotate(-8deg) } 60% { transform: rotate(5deg) } }
 
-.token { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 50%; flex: none; font-family: 'Unbounded'; font-weight: 800; font-size: 12px; border-bottom: 3px solid; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .6) }
-.A { background: radial-gradient(circle at 35% 30%, #fff8, #3BC45A 50%); border-color: #1E8A37 }
-.B { background: radial-gradient(circle at 35% 30%, #fff8, #A6D84A 50%); border-color: #6F9B23 }
-.C { background: radial-gradient(circle at 35% 30%, #fff8, #F6D545 50%); border-color: #B99A12 }
-.D { background: radial-gradient(circle at 35% 30%, #fff8, #E06A5F 50%); border-color: #A3372E }
-.chip { display: inline-flex; align-items: center; height: 30px; padding: 0 12px; border-radius: 8px; background: #fff; border: 1.5px dashed #B9BDB3; font-weight: 600; font-size: 13px; color: var(--muted) }
-.tag { display: inline-flex; align-items: center; height: 30px; padding: 0 12px; border-radius: 6px; background: linear-gradient(180deg, #24479A, var(--navy)); border-bottom: 3px solid var(--navy-lo); color: #fff; font-weight: 700; font-size: 12px; letter-spacing: .14em; text-transform: uppercase }
-.sticker { display: grid; place-items: center; text-align: center; width: 150px; height: 150px; border-radius: 10px; background: linear-gradient(160deg, #FFF39A, var(--butter) 60%); border-bottom: 6px solid var(--butter-lo); box-shadow: inset 0 2px 0 rgba(255, 255, 255, .7), var(--shadow); transform: rotate(9deg); animation: bob 4s ease-in-out infinite }
-@keyframes bob { 50% { transform: rotate(5deg) translateY(-8px) } }
+.token { --t: 24px; display: inline-flex; align-items: center; justify-content: center; width: var(--t); height: var(--t); border-radius: 50%; flex: none; font-family: 'Unbounded'; font-weight: 800; font-style: normal; font-size: calc(var(--t) * .48); color: var(--ink); border-bottom: max(2px, calc(var(--t) / 10)) solid; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .6) }
+.A { background: radial-gradient(circle at 35% 30%, #ffffff8c, #3BC45A 50%); border-color: #1E8A37 }
+.B { background: radial-gradient(circle at 35% 30%, #ffffff8c, #A6D84A 50%); border-color: #6F9B23 }
+.C { background: radial-gradient(circle at 35% 30%, #ffffff8c, #F6D545 50%); border-color: #B99A12 }
+.D { background: radial-gradient(circle at 35% 30%, #ffffff8c, #E06A5F 50%); border-color: #A3372E }
+.chip { display: inline-flex; align-items: center; height: 30px; padding: 0 12px; border-radius: 8px; background: #fff; border: 1.5px dashed #B9BDB3; font-weight: 600; font-size: 13px; color: var(--muted); white-space: nowrap }
+.tag { display: inline-flex; align-items: center; height: 30px; padding: 0 12px; border-radius: 6px; background: linear-gradient(180deg, #24479A, var(--navy)); border-bottom: 3px solid var(--navy-lo); color: #fff; font-weight: 700; font-size: 12px; letter-spacing: .14em; text-transform: uppercase; white-space: nowrap }
+.sticker { --rot: 9deg; position: absolute; z-index: 3; display: flex; align-items: center; justify-content: center; text-align: center; width: 150px; height: 150px; border-radius: 10px; color: var(--ink); background: linear-gradient(160deg, #FFF39A, var(--butter) 60%); border-bottom: 6px solid var(--butter-lo); box-shadow: inset 0 2px 0 rgba(255, 255, 255, .7), 0 18px 26px -12px rgba(0, 0, 0, .45); transform: rotate(var(--rot)); animation: bob 4s ease-in-out infinite }
+.sticker small { display: block; font-weight: 800; font-size: 13px; letter-spacing: .2em }
+.sticker b { display: block; margin-top: 4px; font-family: 'Unbounded'; font-weight: 800; font-size: 22px; line-height: 1.05 }
+.sticker em { display: inline-block; margin-top: 8px; padding: 4px 10px; border-radius: 6px; background: var(--ink); color: var(--paper2); font: 800 15px 'Unbounded' }
+@keyframes bob { 50% { transform: rotate(calc(var(--rot) - 4deg)) translateY(-8px) } }
 
 /* header */
-header { position: relative; z-index: 10; display: flex; align-items: center; justify-content: space-between; height: 96px }
-.logo { display: flex; align-items: center; gap: 10px; font-family: 'Unbounded'; font-weight: 800; font-size: 19px }
-.logo i { width: 28px; height: 28px; border-radius: 6px; background: linear-gradient(150deg, var(--green-hi), var(--green) 55%); box-shadow: inset 0 -3px 0 var(--green-lo), inset 0 2px 0 rgba(255, 255, 255, .5) }
-nav { display: flex; gap: 6px }
-nav a { display: inline-flex; align-items: center; height: 40px; padding: 0 16px; border-radius: 8px; font-weight: 600; transition: background .2s }
-nav a:hover, nav a[aria-current] { background: #fff; box-shadow: inset 0 -3px 0 var(--green) }
+/* header menempel: .hbar menjaga tempat, .hfix ikut layar */
+.hbar { height: 96px }
+.hfix { position: fixed; z-index: 50; top: 0; left: 0; right: 0; transition: background .25s, box-shadow .25s }
+.hfix.solid { background: rgba(244, 245, 241, .9); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); box-shadow: 0 10px 24px -16px rgba(0, 0, 0, .35) }
+[id] { scroll-margin-top: 84px }
+header { position: relative; display: flex; align-items: center; justify-content: space-between; height: 96px; transition: height .25s var(--ease) }
+.solid header { height: 72px }
+.logo { display: flex; align-items: center; gap: 10px; font-family: 'Unbounded'; font-weight: 800; font-size: 19px; letter-spacing: -.01em }
+.logo i { width: 28px; height: 28px; border-radius: 6px; background: linear-gradient(150deg, var(--green-hi), var(--green) 55%); box-shadow: inset 0 -3px 0 var(--green-lo), inset 0 2px 0 rgba(255, 255, 255, .5), 0 6px 10px -4px rgba(20, 22, 18, .28) }
+nav { display: flex; gap: 6px; align-items: center }
+header nav a { display: inline-flex; align-items: center; height: 40px; padding: 0 16px; border-radius: 8px; font-weight: 600; font-size: 16px; transition: background .2s }
+header nav a:hover { background: #ffffff8c }
+header nav a[aria-current] { background: #fff; border-bottom: 3px solid var(--green); box-shadow: 0 6px 12px -8px rgba(0, 0, 0, .4); font-weight: 700 }
+.head-cta { height: 48px; font-size: 14px }
 .menu-toggle { display: none }
 
 /* hero */
-.hero { min-height: 940px; padding-top: 0 }
-.hero .tex.beton { background-image: url(/img/tex-beton.webp); opacity: .4 }
-.hero-grid { position: relative; display: grid; grid-template-columns: 1fr 540px; gap: 40px; align-items: center; margin-top: 40px }
-.hero h1 { font-size: clamp(44px, 6vw, 82px); margin-top: 24px }
-.hero h1 i { display: inline-block; width: .68em; height: .68em; margin-left: 14px; vertical-align: -.05em; border-radius: 10px; background: linear-gradient(150deg, var(--green-hi), var(--green) 55%); box-shadow: inset 0 -6px 0 var(--green-lo), inset 0 3px 0 rgba(255, 255, 255, .55) }
-.hero p.lead { margin-top: 28px; max-width: 480px; font-size: 21px; line-height: 1.5; color: var(--muted) }
-.actions { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 34px }
-.box { position: relative; height: 660px }
-.box .back { position: absolute; left: 4%; right: 4%; top: 0; height: 470px; border-radius: 10px 10px 0 0; background: linear-gradient(180deg, #139F10, #0B7409); box-shadow: inset 0 12px 26px rgba(0, 0, 0, .35) }
-.box .front { position: absolute; left: 0; right: 0; bottom: 0; height: 212px; border-radius: 10px; display: grid; place-items: center; background: linear-gradient(165deg, var(--green-hi), var(--green) 38%, #16A813); border-bottom: 10px solid var(--green-lo); box-shadow: inset 0 3px 0 rgba(255, 255, 255, .6), inset 0 -20px 30px rgba(0, 0, 0, .12), var(--shadow) }
-.emboss { font-family: 'Unbounded'; font-weight: 800; font-size: 70px; color: #25BB21; text-shadow: 0 2px 0 rgba(140, 240, 137, .65), 0 -2px 2px rgba(10, 106, 8, .55) }
-.cup { position: absolute; bottom: 200px; filter: drop-shadow(0 16px 18px rgba(20, 22, 18, .35)); animation: float 5s ease-in-out infinite }
-.cup.a { left: 50px; height: 400px }
-.cup.b { left: 228px; height: 455px; animation-delay: -2.5s }
+.hero { height: 960px; background: var(--paper) }
+.hero-in { position: relative; height: 864px }
+.hero-text { position: absolute; left: 0; top: 84px; width: 700px; z-index: 2 }
+.hero h1 { margin-top: 26px; font-size: 82px }
+.hero h1 i { display: inline-block; width: 56px; height: 56px; margin-left: 16px; vertical-align: -4px; border-radius: 10px; background: linear-gradient(150deg, var(--green-hi), var(--green) 55%); box-shadow: inset 0 -6px 0 var(--green-lo), inset 0 3px 0 rgba(255, 255, 255, .55), 0 10px 16px -8px rgba(20, 22, 18, .28) }
+.lead { margin-top: 30px; width: 480px; max-width: 100%; font-size: 21px; line-height: 1.5; color: var(--muted) }
+.actions { display: flex; gap: 14px; margin-top: 36px }
+.box { position: absolute; right: 36px; top: 94px; width: 540px; height: 660px }
+.box .back { position: absolute; left: 4%; right: 4%; top: 0; height: 468px; border-radius: 10px 10px 0 0; background: linear-gradient(180deg, #139F10, #0B7409); box-shadow: inset 0 12px 26px rgba(0, 0, 0, .35), inset 0 2px 0 rgba(255, 255, 255, .25) }
+.box .front { position: absolute; left: 0; right: 0; top: 448px; height: 212px; border-radius: 10px; background: linear-gradient(165deg, var(--green-hi), var(--green) 38%, #16A813); border-bottom: 10px solid var(--green-lo); box-shadow: inset 0 3px 0 rgba(255, 255, 255, .6), inset 0 -20px 30px rgba(0, 0, 0, .12), 0 18px 26px -14px rgba(20, 22, 18, .35) }
+.box .emboss { position: absolute; left: 0; right: 0; top: 68px; font-size: 70px }
+.emboss { display: block; text-align: center; font-family: 'Unbounded'; font-weight: 800; line-height: 1; letter-spacing: .01em; white-space: nowrap; color: #25BB21; text-shadow: 0 2px 0 rgba(140, 240, 137, .65), 0 -2px 2px rgba(10, 106, 8, .55) }
+.cup { position: absolute; max-width: none; animation: float 5s ease-in-out infinite }
+.cup.a { left: 50px; top: 60px; height: 400px }
+.cup.b { left: 228px; top: 5px; height: 455px; animation-delay: -2.5s }
 @keyframes float { 50% { transform: translateY(-12px) } }
-.box .sticker { position: absolute; right: -30px; top: -50px }
-.note { position: absolute; left: -160px; top: -40px; font-size: 30px; line-height: 1; transform: rotate(-6deg) }
+.note { position: absolute; left: -160px; top: -40px; transform: rotate(-6deg) }
+.note p { font-size: 30px; line-height: 1 }
+.note svg { position: absolute; left: 150px; top: 46px; width: 70px; height: 60px }
+.sticker.new { left: 440px; top: -50px }
 
-/* ticker */
-.ticker { position: relative; z-index: 5; margin: -90px -40px 0; height: 58px; display: flex; overflow: hidden; transform: rotate(-1.8deg); background: linear-gradient(180deg, var(--green-hi), var(--green)); border-bottom: 5px solid var(--green-lo); box-shadow: var(--shadow) }
-.ticker div { display: flex; gap: 24px; align-items: center; padding-right: 24px; white-space: nowrap; font-family: 'Unbounded'; font-weight: 700; font-size: 17px; animation: marquee 30s linear infinite }
-.ticker b { width: 12px; height: 12px; border-radius: 3px; background: var(--ink) }
+/* dua pita bersilangan */
+.bands { position: relative; z-index: 6; height: 130px; margin-top: -70px }
+.ticker { position: absolute; left: -40px; right: -40px; display: flex; align-items: center; overflow: hidden; padding-left: 66px; white-space: nowrap; font-family: 'Unbounded'; font-weight: 700; letter-spacing: .02em; box-shadow: 0 16px 26px -12px rgba(0, 0, 0, .4) }
+.ticker > div { display: flex; align-items: center; gap: 24px; padding-right: 24px; flex: none; animation: marquee 40s linear infinite }
+.ticker span { display: flex; align-items: center; gap: 24px }
+.ticker b { width: 12px; height: 12px; border-radius: 3px; background: currentColor; flex: none }
+.ticker.ink { z-index: 2; top: 46px; height: 50px; font-size: 15px; color: var(--paper2); transform: rotate(1.4deg); background: linear-gradient(180deg, #45473F, #272924); border-bottom: 5px solid #111210 }
+.ticker.ink > div { animation-direction: reverse }
+.ticker.green { top: 30px; height: 58px; font-size: 17px; color: var(--ink); transform: rotate(-1.8deg); background: linear-gradient(180deg, var(--green-hi), var(--green)); border-bottom: 5px solid var(--green-lo) }
 @keyframes marquee { to { transform: translateX(-100%) } }
 
-.head { display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; flex-wrap: wrap }
-.grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; margin-top: 30px }
+/* favorit */
+.fav { padding: 60px 0 110px; background: var(--paper) }
+.grid4 { position: relative; display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; margin-top: 30px }
 .prod { padding: 14px 14px 18px; margin-top: 56px }
-.prod h3 { font-family: 'Unbounded'; font-size: 19px; font-weight: 700; margin-top: 18px }
-.prod p { margin-top: 6px; color: var(--muted) }
+.prod h3 { margin-top: 18px; font-family: 'Unbounded'; font-weight: 700; font-size: 19px; letter-spacing: -.01em }
+.prod p { margin-top: 6px; font-size: 15px; line-height: 1.4; color: var(--muted); white-space: nowrap }
 .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 16px }
 .lv { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 14px }
 
 /* nutrisi */
-.dark { margin: 0 16px; border-radius: 10px; color: var(--paper2); background: radial-gradient(circle at 15% 0%, #3A3D35, var(--ink) 55%) }
-.nut h2.disp { font-size: clamp(34px, 4vw, 54px) }
-.nut { display: grid; grid-template-columns: 420px 1fr; gap: 56px; align-items: center }
-.tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px }
-.tile { border-radius: 10px; padding: 26px 24px; min-height: 260px; background: #2F312B; box-shadow: inset 0 10px 18px rgba(0, 0, 0, .35) }
-.tile .token { width: 78px; height: 78px; font-size: 36px; border-bottom-width: 7px; color: var(--ink) }
-.tile h4 { font-family: 'Unbounded'; font-size: 19px; margin-top: 24px }
-.tile p { color: #A9ACA4; margin-top: 8px; line-height: 1.5 }
-.receipt { background: #FFFFFC; color: var(--ink); transform: rotate(2deg); box-shadow: var(--shadow) }
-.receipt div { display: flex; justify-content: space-between; margin-top: 8px }
+.nutri { padding: 0 16px; background: var(--paper) }
+.dark { position: relative; overflow: hidden; border-radius: 10px; padding: 96px 48px; color: var(--paper2); background: radial-gradient(circle at 15% 0%, #3A3D35, var(--ink) 55%); box-shadow: inset 0 2px 0 rgba(255, 255, 255, .08) }
+.nut { position: relative; display: flex; gap: 56px; align-items: center; max-width: 1312px; margin: 0 auto }
+.nut > div:first-child { width: 420px; flex: none }
+.nut h2.disp { margin-top: 18px; font-size: 54px; line-height: 1.02 }
+.nut .sub { margin-top: 22px; font-size: 18px; line-height: 1.6; color: #C3C6BE }
+.nut .hand { margin-top: 22px; font-size: 26px; color: var(--green-soft); transform: rotate(-3deg); transform-origin: left }
+.tiles { flex: 1; display: flex; gap: 16px; align-items: center }
+.tile { flex: 1; min-height: 260px; padding: 26px 24px; border-radius: 10px; background: #2F312B; box-shadow: inset 0 10px 18px rgba(0, 0, 0, .35), inset 0 -2px 0 rgba(255, 255, 255, .06) }
+.tile .token { text-shadow: var(--fx) }
+.tile h4 { margin-top: 24px; font-family: 'Unbounded'; font-weight: 700; font-size: 19px; color: var(--paper2) }
+.tile p { margin-top: 8px; font-size: 15px; line-height: 1.5; color: #A9ACA4 }
+.receipt { position: relative; background: #FFFFFC; color: var(--ink); border-bottom: 5px solid #D2D6CC; transform: rotate(2deg); box-shadow: 0 20px 30px -14px rgba(0, 0, 0, .6) }
+.lbl { display: block; font-weight: 700; font-size: 12px; letter-spacing: .2em; color: var(--muted) }
+.ln { display: flex; justify-content: space-between; margin-top: 8px; font-size: 15px }
+.ln.first { margin-top: 10px; padding-top: 12px; border-top: 2px dashed var(--line) }
+.receipt h4 { margin-top: 12px; padding-top: 12px; border-top: 2px dashed var(--line); color: var(--ink) }
 
-/* tiket: takik dipotong dengan mask */
-.early { background: var(--paper2) }
-.early .wrap { display: grid; grid-template-columns: 320px 1fr; gap: 52px; align-items: center }
-.early h2 { color: var(--navy); font-size: clamp(52px, 6vw, 76px) }
-.tickets { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px }
-.ticket { --cut: 236px; padding: 12px 12px 16px; -webkit-mask: radial-gradient(circle 12px at 0 var(--cut), #0000 98%, #000) left / 51% 100% no-repeat, radial-gradient(circle 12px at 100% var(--cut), #0000 98%, #000) right / 51% 100% no-repeat; mask: radial-gradient(circle 12px at 0 var(--cut), #0000 98%, #000) left / 51% 100% no-repeat, radial-gradient(circle 12px at 100% var(--cut), #0000 98%, #000) right / 51% 100% no-repeat; filter: drop-shadow(0 10px 12px rgba(20, 22, 18, .2)); box-shadow: none }
-.ticket hr { border: 0; border-top: 2px dashed var(--line); margin: 13px 0 0 }
-.ticket h3 { font-family: 'Unbounded'; font-size: 16px; margin-top: 14px }
+/* early set, tiket bertakik (lingkaran r12 di y 239, sama dengan Figma) */
+.early { padding: 110px 0; background: var(--paper2) }
+.early .wrap { display: flex; gap: 52px; align-items: center }
+.early-text { width: 330px; flex: none; color: var(--navy) }
+.early h2.disp { margin-top: 16px; font-size: 76px; line-height: .95 }
+.tag.lg { height: 40px; padding: 0 16px; font-size: 16px; margin-top: 16px }
+.early .sub { margin-top: 24px; font-size: 18px; line-height: 1.55; color: var(--ink) }
+.early .hand { margin-top: 18px; font-size: 26px }
+.tickets { display: flex; gap: 20px; align-items: flex-start }
+.ticket { width: 300px; flex: none; filter: drop-shadow(0 8px 6px rgba(39, 41, 36, .2)) drop-shadow(0 2px 1.5px rgba(39, 41, 36, .12)) }
+.tk { --cut: 239px; padding: 12px 12px 16px; box-shadow: inset 0 2px 0 #fff; -webkit-mask: radial-gradient(circle 12px at 0 var(--cut), #0000 98%, #000) left / 51% 100% no-repeat, radial-gradient(circle 12px at 100% var(--cut), #0000 98%, #000) right / 51% 100% no-repeat; mask: radial-gradient(circle 12px at 0 var(--cut), #0000 98%, #000) left / 51% 100% no-repeat, radial-gradient(circle 12px at 100% var(--cut), #0000 98%, #000) right / 51% 100% no-repeat }
+.tk .slot { height: 210px }
+.tk .slot.food img { left: -6%; top: 10px; width: 112% }
+.tk hr { height: 2px; border: 0; border-top: 2px dashed var(--line); margin-top: 16px }
+.tk h3 { margin-top: 14px; font-family: 'Unbounded'; font-weight: 700; font-size: 16px }
+.tk p { margin-top: 4px; font-size: 14px; color: var(--muted); white-space: nowrap }
+.tk .row { justify-content: flex-end; margin-top: 14px }
 
 /* daily step */
-.daily { background: var(--ink); color: var(--paper2); text-align: center }
-.daily .tex { background-image: url(/img/ig10.webp); opacity: .09; filter: grayscale(1) }
-.big { font-family: 'Unbounded'; font-weight: 900; font-size: clamp(90px, 16vw, 220px); line-height: .95; color: var(--butter); text-shadow: 0 7px 0 #B9A23A, 0 12px 0 #7C6C1E, 0 26px 34px rgba(0, 0, 0, .55) }
-.bar { width: min(640px, 100%); margin: 36px auto 0; height: 30px; padding: 5px; border-radius: 10px; background: #1B1C18; box-shadow: inset 0 4px 8px rgba(0, 0, 0, .6) }
-.bar i { display: block; height: 100%; width: 0; border-radius: 6px; background: linear-gradient(180deg, var(--green-hi), var(--green)); transition: width 2s var(--ease) .3s }
-.in .bar i, .bar.in i { width: 100% }
-.daily .sticker { position: absolute; right: 8%; top: 140px }
+.daily { height: 760px; padding-top: 96px; text-align: center; background: var(--ink); color: var(--paper2) }
+.tex.photo { background-image: url(/img/ig10.webp); opacity: .09; filter: grayscale(1) }
+.tex.vignette { background: radial-gradient(circle at 50% 40%, rgba(39, 41, 36, .35), rgba(39, 41, 36, .9) 70%) }
+.daily .eyebrow { justify-content: center }
+.big { margin-top: 22px; font-family: 'Unbounded'; font-weight: 900; font-size: 220px; line-height: .95; letter-spacing: -.02em; color: var(--butter); text-shadow: 0 7px 0 #B9A23A, 0 12px 0 #7C6C1E, 0 26px 34px rgba(0, 0, 0, .55) }
+.steps { margin-top: 6px; font-size: 46px; font-weight: 700; text-shadow: var(--fx-dark) }
+.bar { width: min(640px, 100%); height: 30px; margin: 36px auto 0; padding: 5px; border-radius: 10px; background: #1B1C18; box-shadow: inset 0 4px 8px rgba(0, 0, 0, .6), 0 1px 0 rgba(255, 255, 255, .1) }
+.bar i { display: block; width: 0; height: 100%; border-radius: 6px; background: linear-gradient(180deg, var(--green-hi), var(--green)); box-shadow: inset 0 2px 0 rgba(255, 255, 255, .5); transition: width 2s var(--ease) .3s }
+.in .bar i { width: 100% }
+.ticks { display: flex; justify-content: space-between; width: min(640px, 100%); margin: 12px auto 0; font-weight: 700; font-size: 14px; letter-spacing: .14em; color: #B9BCB4 }
+.ticks span:last-child { color: var(--green-soft) }
+.daily p { width: min(600px, 100%); margin: 30px auto 0; font-size: 20px; line-height: 1.55; color: #D5D8D0 }
+.sticker.free { --rot: 10deg; right: 150px; top: 150px; height: 130px }
 
 /* rtd */
-.rtd { background: linear-gradient(170deg, #3AD236, var(--green) 45%, #14A811) }
-.rtd .wrap { display: grid; grid-template-columns: 600px 1fr; gap: 60px; align-items: center }
-.rows { display: grid; gap: 10px; margin-top: 26px }
-.rows div { display: flex; align-items: center; justify-content: space-between; height: 64px; padding: 0 12px 0 20px; border-radius: 10px; background: rgba(255, 255, 255, .2); box-shadow: inset 0 2px 0 rgba(255, 255, 255, .35), inset 0 -3px 0 rgba(0, 90, 0, .25); transition: transform .25s var(--ease) }
-.rows div:hover { transform: translateX(6px) }
-.fridge { position: relative; height: 600px }
-.fridge::before { content: ''; position: absolute; left: 0; right: 0; top: 110px; bottom: 0; border-radius: 10px; background: linear-gradient(180deg, #0B6E09, #0A5A08); box-shadow: inset 0 22px 40px rgba(0, 0, 0, .45), var(--shadow) }
-.fridge img { position: absolute; bottom: 84px; height: 470px; filter: drop-shadow(0 14px 16px rgba(0, 0, 0, .35)); animation: float 6s ease-in-out infinite }
-.fridge img + img { left: 52%; height: 490px; animation-delay: -3s }
-.fridge img:first-of-type { left: 12% }
+.rtd { padding: 110px 0; background: linear-gradient(170deg, #3AD236, var(--green) 45%, #14A811) }
+.rtd .wrap { display: grid; grid-template-columns: 610px 1fr; column-gap: 60px; align-items: center }
+.rtd-text { grid-column: 1; align-self: end }
+.badge { display: flex; align-items: center; gap: 20px }
+.rtdb { width: 50px; height: 72px }
+.rtd h2.disp { margin-top: 20px; font-size: 64px }
+.rtd .sub { margin-top: 18px; width: 520px; font-size: 19px; line-height: 1.55 }
+.rows { grid-column: 1; align-self: start; display: grid; gap: 10px; margin-top: 26px }
+.rows > div { display: flex; align-items: center; justify-content: space-between; height: 64px; padding: 0 12px 0 20px; border-radius: 10px; background: rgba(255, 255, 255, .2); box-shadow: inset 0 2px 0 rgba(255, 255, 255, .35), inset 0 -3px 0 rgba(0, 90, 0, .25); transition: transform .25s var(--ease) }
+.rows > div:hover { transform: translateX(6px) }
+.rows > div > span:first-child > b { font-weight: 800; font-size: 18px }
+.rows > div > span:first-child > b + span { margin-left: 12px; font-size: 15px; color: #1E4A1B }
+.fridge { position: relative; grid-column: 2; grid-row: 1 / 3; height: 640px }
+.fridge::before { content: ''; position: absolute; left: 20px; right: 0; top: 110px; bottom: 0; border-radius: 10px; background: linear-gradient(180deg, #0B6E09, #0A5A08); box-shadow: inset 0 22px 40px rgba(0, 0, 0, .45), inset 0 -4px 0 rgba(255, 255, 255, .12) }
+.shelf { position: absolute; left: 50px; right: 30px; bottom: 70px; height: 16px; border-radius: 6px; background: linear-gradient(180deg, rgba(255, 255, 255, .55), rgba(255, 255, 255, .15)); box-shadow: 0 8px 14px rgba(0, 0, 0, .35) }
+.fridge img { position: absolute; bottom: 84px; max-width: none; animation: float 6s ease-in-out infinite }
+.fridge .decaf { left: 90px; height: 470px }
+.fridge .sunset { left: 350px; height: 490px; animation-delay: -3s }
+.fridge .hand { position: absolute; right: 10px; top: 40px; font-size: 28px; line-height: 1; transform: rotate(6deg) }
 
 /* inside */
-.inside { background: #D9C6A4 url(/img/tex-ply.webp) center / cover }
-.photos { display: grid; grid-template-columns: 1.1fr 1fr; gap: 30px; margin-top: 56px; align-items: start }
-.pola { position: relative; padding: 10px 10px 12px; background: #FFFFFC; border-radius: 10px; border-bottom: 5px solid #D9DCD3; box-shadow: var(--shadow); transition: transform .4s var(--ease) }
-.pola::before { content: ''; position: absolute; left: 50%; top: -14px; width: 70px; height: 26px; margin-left: -35px; border-radius: 5px; background: rgba(91, 227, 87, .85) }
-.pola img { width: 100%; aspect-ratio: 4/3; object-fit: cover; border-radius: 8px }
-.pola:hover { rotate: 0deg; transform: scale(1.03) }
-.info { display: grid; grid-template-columns: 1fr 200px; margin-top: 28px }
-.info > div:last-child { border-left: 2px dashed var(--line); display: grid; place-content: center; gap: 14px; justify-items: center }
+.inside { padding: 110px 0 120px; background: #D9C6A4 url(/img/tex-ply.webp) center / cover }
+.inside h2.disp { margin-top: 16px; font-size: 68px }
+.inside .head .sub { width: 440px; font-size: 19px; line-height: 1.55 }
+.photos { position: relative; display: flex; gap: 30px; align-items: flex-start; margin-top: 56px }
+.pola { --r: 0deg; position: relative; display: block; padding: 10px 10px 12px; background: #FFFFFC; border-radius: 10px; border-bottom: 5px solid #D9DCD3; box-shadow: 0 22px 32px -16px rgba(0, 0, 0, .45); transform: rotate(var(--r)); transition: transform .4s var(--ease) }
+.pola:hover { transform: rotate(0) scale(1.03) }
+.pola::after { content: ''; position: absolute; inset: 10px 10px 12px; border-radius: 10px; box-shadow: inset 0 16px 20px -6px rgba(0, 0, 0, .28), inset 0 -3px 0 rgba(255, 255, 255, .35); pointer-events: none }
+.pola img { width: 100%; border-radius: 10px; object-fit: cover }
+.tape { position: absolute; z-index: 2; left: 50%; top: -14px; width: 70px; height: 26px; margin-left: -35px; border-radius: 5px; background: rgba(91, 227, 87, .85); transform: rotate(calc(var(--r) * -2)); box-shadow: 0 2px 4px rgba(0, 0, 0, .15) }
+.pola.main { width: 580px; flex: none }
+.pola.main img { aspect-ratio: 560 / 420 }
+.side { display: flex; flex-direction: column; gap: 28px; width: 666px }
+.pair { display: flex; gap: 26px }
+.pair .pola { width: 320px }
+.pair img { aspect-ratio: 300 / 210 }
+.info { display: flex; padding: 0; overflow: hidden }
+.info-main { flex: 1; padding: 26px 28px }
+.info h3 { margin-top: 6px; font-size: 28px }
+.info p { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 16px }
+.info p svg { width: 18px; height: 18px }
+.info .hours { margin-top: 6px; font-weight: 700; color: #14800F }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px }
+.chips span { display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 14px; border-radius: 8px; background: #fff; border-bottom: 3px solid var(--line); font-weight: 700; font-size: 14px }
+.chips .sq { width: 11px; height: 11px }
+.info-act { width: 200px; flex: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 20px; border-left: 2px dashed var(--line) }
+.info-act .btn-green { width: 160px; height: 48px; font-size: 14px }
+.peta { display: flex; align-items: center; gap: 6px; font-weight: 700; font-size: 15px }
+.peta svg { width: 18px; height: 18px }
 
-.feed { display: grid; grid-template-columns: repeat(5, 1fr); gap: 24px; margin-top: 52px }
-.feed .pola img { aspect-ratio: 1 }
-.feed .tag { position: absolute; left: 20px; bottom: 24px; height: 26px; font-size: 11px }
+/* feed */
+.feedsec { padding: 110px 0 120px; background: var(--paper) }
+.feedsec h2.disp { margin-top: 16px; line-height: 1.24 }
+.seg { display: flex; gap: 4px; padding: 5px; border-radius: 10px; background: #D8DBD3; box-shadow: inset 0 3px 6px rgba(0, 0, 0, .18) }
+.seg .btn { height: 44px; font-size: 13px }
+.seg .btn-ink { border-bottom-width: 4px }
+/* tombol sosmed yang disorot atau ditekan jadi hijau; Instagram melepas warna gelapnya selama tombol lain disorot */
+.seg .btn:hover, .seg .btn:focus-visible, .seg .btn:active { color: var(--ink); background: linear-gradient(180deg, var(--green-hi), var(--green) 60%); border-bottom: 4px solid var(--green-lo); box-shadow: inset 0 2px 0 rgba(255, 255, 255, .55), 0 10px 16px -10px rgba(20, 22, 18, .28) }
+.seg:has(.btn:hover) .btn-ink:not(:hover) { color: var(--ink); background: none; border-bottom-width: 0; box-shadow: none }
+.feed { position: relative; display: grid; grid-template-columns: repeat(5, 1fr); gap: 24px; margin-top: 52px }
+.feed img { aspect-ratio: 1 }
+.feed .tag { position: absolute; z-index: 2; left: 20px; bottom: 24px; height: 26px; font-size: 11px }
 
-.cta { background: linear-gradient(170deg, #F7EA8A, var(--butter) 60%, #E6D35C) }
-.cta .wrap { display: flex; justify-content: space-between; align-items: center; gap: 40px }
-.cta h2 { font-size: clamp(40px, 6vw, 88px); max-width: 820px }
-.keychain { position: relative; width: 310px; height: 440px; flex: none; transform-origin: 50% 0; animation: hang 5s ease-in-out infinite }
-.keychain::before { content: ''; position: absolute; left: 90px; top: 0; width: 132px; height: 132px; border-radius: 50%; border: 16px solid #B5B9B1; box-shadow: inset 0 3px 6px rgba(0, 0, 0, .35) }
-.keychain div { position: absolute; left: 0; bottom: 0; width: 310px; height: 270px; border-radius: 10px; display: grid; place-items: center; text-align: center; background: linear-gradient(160deg, var(--green-hi), var(--green) 45%, #14A811); border-bottom: 14px solid var(--green-lo); box-shadow: inset 0 4px 0 rgba(255, 255, 255, .6), var(--shadow) }
-.keychain .emboss { font-size: 50px; line-height: .95 }
-@keyframes hang { 0%, 100% { transform: rotate(8deg) } 50% { transform: rotate(3deg) } }
+/* cta */
+.cta { padding: 110px 0 130px; background: linear-gradient(170deg, #F7EA8A, var(--butter) 60%, #E6D35C) }
+.cta .wrap { display: flex; justify-content: space-between; align-items: center }
+.cta .wrap > div:first-child { width: 820px }
+.cta h2.disp { margin: 0; font-size: 88px }
+.cta .sub { margin-top: 28px; width: 600px; max-width: 100%; font-size: 21px; line-height: 1.55 }
+.chat { margin-top: 34px; height: 62px; padding: 0 30px; font-size: 17px }
+.keychain { --k: .95; position: relative; flex: none; width: calc(330px * var(--k)); height: calc(470px * var(--k)); margin-right: 60px; transform: rotate(8deg); animation: hang 5s ease-in-out infinite }
+.keychain .ring { position: absolute; left: calc(95px * var(--k)); top: 0; width: calc(140px * var(--k)); height: calc(140px * var(--k)); border-radius: 50%; border: calc(16px * var(--k)) solid #B5B9B1; box-shadow: inset 0 3px 6px rgba(0, 0, 0, .35), 0 3px 0 #fff, 0 14px 20px -8px rgba(0, 0, 0, .4) }
+.keychain .link { position: absolute; left: calc(150px * var(--k)); top: calc(126px * var(--k)); width: calc(30px * var(--k)); height: calc(60px * var(--k)); border-radius: 6px; background: linear-gradient(90deg, #9A9E96, #D6D9D2, #9A9E96) }
+.keychain div { position: absolute; left: 0; top: calc(170px * var(--k)); width: calc(330px * var(--k)); height: calc(290px * var(--k)); border-radius: 10px; background: linear-gradient(160deg, var(--green-hi), var(--green) 45%, #14A811); border-bottom: calc(14px * var(--k)) solid var(--green-lo); box-shadow: inset 0 4px 0 rgba(255, 255, 255, .6), inset 0 -30px 40px rgba(0, 80, 0, .25), 0 40px 60px -24px rgba(0, 0, 0, .45) }
+.keychain .emboss { position: absolute; left: 0; right: 0; top: calc(80px * var(--k)); font-size: calc(52px * var(--k)); line-height: .95 }
+@keyframes hang { 0%, 100% { transform: rotate(8deg) } 50% { transform: rotate(4deg) } }
 
-footer { background: var(--ink); color: var(--paper2); border-radius: 10px 10px 0 0; padding: 56px 0 40px }
-footer .wrap { display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; flex-wrap: wrap }
-footer small { color: #B9BCB4; font-size: 14px }
+footer { position: relative; background: var(--ink); color: var(--paper2); border-radius: 10px 10px 0 0; padding: 64px 0 44px }
+footer .wrap { display: flex; justify-content: space-between; align-items: flex-end; gap: 20px }
+footer .logo { font-size: 24px }
+footer .logo i { width: 34px; height: 34px }
+footer .hand { margin-top: 14px; font-size: 24px; color: var(--green-soft) }
+footer .links { display: flex; gap: 28px; font-size: 15px; color: #B9BCB4 }
 
-/* menu */
-.legend { display: flex; flex-wrap: wrap; gap: 14px 26px; align-items: center; padding: 18px 24px; margin-top: 40px }
-.legend b { font-size: 12px; letter-spacing: .2em }
+/* halaman menu */
+.mhero { height: auto; padding-bottom: 40px }
+.mhero .tex.beton { opacity: .38 }
+.mhead { position: relative; display: flex; justify-content: space-between; align-items: flex-end; padding-top: 50px }
+.mhead h1 { margin-top: 18px; font-size: 110px; line-height: .98 }
+.mhead .lead { margin-top: 22px; width: 560px; font-size: 19px; line-height: 1.55 }
+.navy-st { display: flex; align-items: center; justify-content: center; width: 220px; height: 130px; margin: 0 40px 40px 0; border-radius: 10px; color: #fff; text-align: center; background: linear-gradient(160deg, #2D55B0, var(--navy) 60%); border-bottom: 6px solid var(--navy-lo); box-shadow: inset 0 2px 0 rgba(255, 255, 255, .35), 0 18px 26px -12px rgba(0, 0, 0, .45); transform: rotate(7deg); animation: bob 4s ease-in-out infinite; --rot: 7deg }
+.navy-st span { font-size: 26px; line-height: 1.05 }
+.legend { display: flex; align-items: center; gap: 26px; margin-top: 40px; padding: 18px 24px; white-space: nowrap }
+.legend > b { font-weight: 800; font-size: 12px; letter-spacing: .2em }
+.legend > div { display: flex; gap: 16px }
 .legend span { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600 }
-.bean { width: 14px; height: 14px; border-radius: 4px; box-shadow: inset 0 -2px 0 rgba(0, 0, 0, .18) }
-.tabs { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 22px; padding: 5px; border-radius: 10px; background: #D8DBD3; box-shadow: inset 0 3px 6px rgba(0, 0, 0, .18); width: fit-content }
-.tabs a { display: inline-flex; align-items: center; height: 42px; padding: 0 14px; border-radius: 8px; font-weight: 700; transition: background .2s }
-.tabs a:hover { background: #fff }
-.cols { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; align-items: start }
-.cols > div { display: grid; gap: 28px }
-.panel { padding: 26px 28px 14px; scroll-margin-top: 20px }
-.panel h2 { font-family: 'Unbounded'; font-size: 22px; display: flex; align-items: center; gap: 12px; padding-bottom: 14px }
-.item { display: flex; align-items: center; gap: 14px; min-height: 54px; padding: 8px 0; border-top: 1.5px dashed var(--line) }
-.item > span:first-child { width: 24px; font-weight: 700; font-size: 13px; color: #9A9D95 }
-.item b { flex: 1 }
-.item small { display: block; font-weight: 400; color: var(--muted); margin-top: 3px }
-.price { font-family: 'Unbounded'; font-weight: 700; font-size: 14px; padding: 6px 10px; border-radius: 8px; background: linear-gradient(180deg, #fff, var(--paper2)); border-bottom: 3px solid var(--line); white-space: nowrap }
-.ic { display: flex; gap: 2px; width: 34px }
+.legend .bean { width: 16px; height: 16px }
+.legend svg { width: 16px; height: 16px }
+.sep { display: none; width: 2px; height: 28px; border-radius: 1px; background: var(--line); flex: none }
+.bean { display: block; width: 14px; height: 14px; border-radius: 4px; box-shadow: inset 0 -2px 0 rgba(0, 0, 0, .18); flex: none }
+.tabrow { position: relative; display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-top: 22px }
+.tabs { display: flex; flex-wrap: wrap; gap: 2px; padding: 5px; border-radius: 10px; background: #D8DBD3; box-shadow: inset 0 3px 6px rgba(0, 0, 0, .18) }
+.tabs a { display: inline-flex; align-items: center; gap: 8px; height: 42px; padding: 0 14px; border-radius: 8px; font-weight: 700; font-size: 15px; transition: background .2s }
+.tabs a:hover { background: #ffffff8c }
+.tabs small { font-size: 13px; color: #9A9D95 }
+.tabs a.on { padding: 0 16px; gap: 10px; font: 700 13px 'Unbounded'; color: var(--paper2); background: linear-gradient(180deg, #45473F, var(--ink) 70%); border-bottom: 4px solid #111210; box-shadow: inset 0 2px 0 rgba(255, 255, 255, .18), 0 14px 22px -10px rgba(0, 0, 0, .55) }
+.tabs a.on small { color: inherit; opacity: .6; font: inherit }
+.search { display: flex; align-items: center; gap: 10px; width: 200px; height: 48px; padding: 0 14px; border-radius: 10px; background: #fff; box-shadow: inset 0 3px 6px rgba(0, 0, 0, .12); color: var(--muted); font-size: 15px }
+.search svg { width: 18px; height: 18px }
+.search input { width: 100%; border: 0; outline: 0; background: none; font: inherit; color: var(--ink) }
+.mbody { padding: 56px 0 110px; background: var(--paper2) }
+.cols { position: relative; display: grid; grid-template-columns: 1fr 1fr; gap: 28px; align-items: start }
+.cols > div { display: flex; flex-direction: column; gap: 28px }
+.panel { padding: 26px 28px 14px; scroll-margin-top: 84px }
+.ph { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 14px }
+.ph h2 { display: flex; align-items: center; gap: 12px; font-family: 'Unbounded'; font-weight: 700; font-size: 22px; letter-spacing: -.02em }
+.panel .ph h2 i { display: block; width: 16px; height: 16px; border-radius: 4px; box-shadow: inset 0 -3px 0 rgba(0, 0, 0, .2) }
+.ph .hand { font-size: 20px; color: var(--muted) }
+.item { display: flex; align-items: center; gap: 14px; height: 54px; border-top: 1.5px dashed var(--line) }
+.no { width: 24px; flex: none; font-weight: 700; font-size: 13px; color: #9A9D95 }
+.item > b { flex: 1; font-weight: 700; font-size: 17px }
+.beans { display: flex; gap: 4px; width: 50px; flex: none }
+.ic { display: flex; gap: 2px; width: 34px; flex: none }
 .ic svg { width: 16px; height: 16px }
+.price { display: inline-flex; align-items: center; height: 32px; padding: 0 10px; border-radius: 8px; background: linear-gradient(180deg, #fff, var(--paper2)); border-bottom: 3px solid var(--line); font-family: 'Unbounded'; font-weight: 700; font-size: 14px; white-space: nowrap; color: var(--ink); flex: none }
+.item.food { height: auto; align-items: flex-start; padding: 16px 0 }
+.item.food .no { padding-top: 4px }
+.fn { flex: 1 }
+.fn b { font-weight: 700; font-size: 17px }
+.fn p { margin-top: 4px; font-size: 14px; line-height: 1.45; color: var(--muted) }
+.item.food .chip { height: 28px }
+.item.milk { justify-content: space-between; height: 50px }
+.item.milk b { font-size: 16px }
+.cloudp { padding: 26px 28px 24px; border-radius: 10px; scroll-margin-top: 84px; background: linear-gradient(170deg, #3AD236, var(--green) 55%, #14A811); border-bottom: 6px solid var(--green-lo); box-shadow: inset 0 2px 0 rgba(255, 255, 255, .5), 0 10px 16px -18px rgba(20, 22, 18, .28) }
+.cloudp .ph { padding: 0 }
+.cloudp h2, .rtdp h2 { font-size: 24px; font-weight: 800 }
+.cloudp .hand, .rtdp .hand { font-size: 22px; color: inherit }
+.pops { display: grid; grid-template-columns: 270px 270px; gap: 18px }
+.pop { padding: 10px 10px 14px; margin-top: 50px }
+.pop .slot { height: 230px }
+.pop .drink { top: -50px; height: 260px }
+.pop .row, .photo .row { margin-top: 12px }
+.pop .row > b, .photo .row > b { font-size: 15px; font-weight: 700; letter-spacing: -.01em }
+.cloudp .note { position: static; transform: none; display: flex; align-items: center; gap: 10px; margin-top: 16px; font-weight: 700; font-size: 15px }
+.rtdp { padding: 26px 28px 18px; border-radius: 10px; scroll-margin-top: 84px; color: var(--paper2); background: linear-gradient(180deg, #2F312B, var(--ink)); border-bottom: 6px solid #111210; box-shadow: inset 0 2px 0 rgba(255, 255, 255, .1), 0 22px 34px -18px rgba(0, 0, 0, .5) }
+.rtdp .ph { padding: 0 }
+.rtdp h2 { gap: 14px }
+.rtdp .rtdb { width: 30px; height: 43px }
+.rtdp .hand { color: var(--green-soft) }
+.mini-fridge { position: relative; height: 290px; margin-top: 18px; border-radius: 10px; background: linear-gradient(180deg, #0B6E09, #0A5A08); box-shadow: inset 0 18px 30px rgba(0, 0, 0, .45) }
+.mini-fridge .shelf { left: 30px; right: 30px; bottom: 26px; height: 12px; border-radius: 5px; box-shadow: none }
+.mini-fridge img { position: absolute; bottom: 36px; max-width: none }
+.mini-fridge .decaf { left: 110px; height: 250px }
+.mini-fridge .sunset { left: 290px; height: 260px }
+.rtdp .item { border-color: #4A4C44 }
+.foodhead { margin-top: 100px }
+.foodhead h2.disp { font-size: 88px }
+.foodhead .hand { font-size: 26px; transform: rotate(-3deg) }
+.photos4 { position: relative; display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 36px }
+.photo { --r: 0deg; padding: 10px 10px 14px; transform: rotate(var(--r)) }
+.photo:hover { transform: rotate(0) translateY(-6px) }
+.photo .slot { height: 230px }
 
 /* animasi masuk saat discroll */
-.js .reveal { opacity: 0; transform: translateY(40px); transition: opacity .8s var(--ease), transform .8s var(--ease) }
-.js .reveal.in { opacity: 1; transform: none }
+.js .reveal { opacity: 0; translate: 0 40px; transition: opacity .8s var(--ease), translate .8s var(--ease), transform .4s var(--ease) }
+.js .reveal.in { opacity: 1; translate: none }
 .js .reveal:nth-child(2) { transition-delay: .08s } .js .reveal:nth-child(3) { transition-delay: .16s } .js .reveal:nth-child(4) { transition-delay: .24s } .js .reveal:nth-child(5) { transition-delay: .32s }
 
-@media (max-width: 1000px) {
-  nav { display: none; position: absolute; top: 80px; right: 0; flex-direction: column; padding: 8px; border-radius: 10px; background: #fff; box-shadow: var(--shadow) }
-  .menu-toggle { display: inline-flex; width: 46px; padding: 0 }
+/* .d hanya desktop, .m hanya mobile */
+@media (min-width: 761px) { .m { display: none !important } }
+
+/* layar tanggung: susun bertumpuk */
+@media (max-width: 1340px) and (min-width: 761px) {
+  .hero { height: auto; padding-bottom: 120px }
+  .hero-in { height: auto; display: flex; flex-direction: column; align-items: center; gap: 120px; padding-top: 40px }
+  .hero-text, .box { position: relative; left: auto; right: auto; top: auto }
+  .hero-text { width: 100%; max-width: 760px }
+  .grid4, .photos4 { grid-template-columns: 1fr 1fr }
+  .nut, .early .wrap, .photos, .cta .wrap { flex-direction: column; align-items: flex-start }
+  .nut > div:first-child, .early-text, .cta .wrap > div:first-child { width: 100% }
+  .tiles { flex-wrap: wrap; width: 100% } .tile { flex: 1 1 40% }
+  .tickets { overflow-x: auto; max-width: 100%; padding: 20px 4px }
+  .rtd .wrap { grid-template-columns: 1fr }
+  .rtd-text, .rows { grid-column: 1 } .fridge { grid-column: 1; grid-row: auto; width: 640px; max-width: 100% }
+  .pola.main, .side { width: 100% } .side { max-width: 666px }
+  .feed { grid-template-columns: repeat(3, 1fr) }
+  .daily { height: auto; padding-bottom: 90px }
+  .big { font-size: min(220px, 18vw) }
+  .sticker.free { right: 40px }
+  .mhead h1 { font-size: 80px }
+  .legend { flex-wrap: wrap; white-space: normal }
+  .tabrow { flex-wrap: wrap }
+  .cols { grid-template-columns: 1fr }
+  .cta .keychain { align-self: center }
+}
+@media (max-width: 1000px) and (min-width: 761px) {
+  header nav { display: none; position: absolute; top: calc(100% - 4px); right: 0; flex-direction: column; align-items: stretch; padding: 8px; border-radius: 10px; background: #fff; box-shadow: 0 18px 30px -12px rgba(0, 0, 0, .4) }
   .menu-open nav { display: flex }
-  header > .btn-ink { display: none }
-  .hero { min-height: 0 }
-  .hero-grid, .nut, .early .wrap, .rtd .wrap, .photos, .cols { grid-template-columns: 1fr }
-  .box { height: 420px; width: 330px; margin: 40px auto 0 }
-  .box .back { height: 280px } .box .front { height: 150px }
-  .cup { bottom: 140px } .cup.a { left: 20px; height: 240px } .cup.b { left: 130px; height: 270px }
-  .emboss { font-size: 40px }
+  .menu-toggle { display: inline-flex; width: 48px; height: 48px; padding: 0; margin-left: 10px; border-bottom-width: 4px }
+  .menu-toggle svg { width: 22px; height: 22px }
+  .big { font-size: 19vw }
+  .hero h1 { font-size: 64px }
+  .mhead { flex-direction: column; align-items: flex-start }
+}
+
+/* mobile, mengikuti frame Figma 390 */
+@media (max-width: 760px) {
+  .d { display: none !important }
+  .wrap { width: calc(100% - 40px) }
+  .eyebrow { font-size: 11px }
+  .eyebrow .sq { width: 11px; height: 11px }
+  h2.disp { margin-top: 12px; font-size: 34px; line-height: 1.02 }
+  .full { display: flex; width: 100% }
+
+  header, .hbar { height: 68px }
+  .solid header { height: 60px }
+  [id], .panel, .cloudp, .rtdp { scroll-margin-top: 70px }
+  .logo { font-size: 17px } .logo i { width: 24px; height: 24px }
+  .head-cta { display: none }
+  .menu-toggle { display: inline-flex; width: 46px; height: 46px; padding: 0; border-bottom-width: 4px }
+  .menu-toggle svg { width: 22px; height: 22px }
+  header nav { display: none; position: absolute; top: calc(100% - 4px); right: 0; flex-direction: column; align-items: stretch; padding: 8px; border-radius: 10px; background: #fff; box-shadow: 0 18px 30px -12px rgba(0, 0, 0, .4) }
+  .menu-open nav { display: flex }
+
+  .hero { height: 850px }
+  .mhero { height: auto }
+  .hero > .ghost { font-size: 150px !important; left: -20px !important; bottom: -30px !important }
+  .fav .ghost, .early .ghost, .inside .ghost { display: none }
+  .hero-in { height: 782px }
+  .hero-text { top: 20px; width: 100% }
+  .hero h1 { margin-top: 14px; font-size: 44px; line-height: 1.02 }
   .hero h1 i { display: none }
-  .note { left: -10px; top: -60px; font-size: 22px }
-  .box .sticker, .daily .sticker { width: 104px; height: 104px; right: 0; font-size: 12px }
-  .ticker { margin-top: 20px }
-  .grid4 { grid-template-columns: 1fr 1fr; gap: 12px }
-  .prod { padding: 8px 8px 12px; margin-top: 34px } .prod .slot { height: 140px } .prod h3 { font-size: 14px } .prod p { font-size: 12px } .row { flex-wrap: wrap }
-  .tiles { grid-template-columns: 1fr }
-  .tickets { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 10px }
-  .ticket { min-width: 260px; scroll-snap-align: start }
-  .fridge { height: 380px } .fridge img { height: 280px !important; bottom: 40px }
-  .info { grid-template-columns: 1fr } .info > div:last-child { border-left: 0; border-top: 2px dashed var(--line); padding: 16px }
-  .feed { grid-template-columns: 1fr 1fr; gap: 14px }
-  .cta .wrap { flex-direction: column; align-items: flex-start } .keychain { transform: scale(.5); margin: -110px auto -110px }
+  .lead { margin-top: 14px; width: auto; font-size: 16px }
+  .box { right: auto; left: 50%; top: 332px; width: 330px; height: 400px; margin-left: -165px }
+  .box .back { height: 270px }
+  .box .front { top: 250px; height: 150px }
+  .box .emboss { top: 51px; font-size: 42px }
+  .cup.a { left: 30px; top: 38px; height: 220px }
+  .cup.b { left: 130px; top: 8px; height: 250px }
+  .note { left: -4px; top: -38px; transform: rotate(-5deg) }
+  .note p { font-size: 21px }
+  .sticker.new { left: 232px; top: -44px; width: 104px; height: 104px }
+  .sticker.new small { font-size: 10px } .sticker.new b { margin-top: 2px; font-size: 15px } .sticker.new em { margin-top: 6px; padding: 3px 8px; border-radius: 5px; font-size: 11px }
+  .hero-btn { position: relative; z-index: 7; margin-top: -26px; padding: 0 20px }
+  .hero-btn .btn { width: 100% }
+  .bands { height: 90px; margin-top: 0 }
+  .ticker.green { top: 26px; height: 44px; font-size: 13px; transform: rotate(-2.2deg) }
+
+  .fav { padding: 30px 0 56px }
+  .grid4 { grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 0 }
+  .prod { padding: 8px 8px 12px; margin-top: 34px }
+  .prod .slot { height: 130px }
+  .prod .drink { top: -34px; height: 158px }
+  .prod .slot.food img { left: -6%; top: 8px; width: 112% }
+  .prod h3 { margin-top: 12px; font-size: 14px }
+  .prod p { margin-top: 4px; height: 32px; font-size: 12px; line-height: 1.35; white-space: normal }
+  .prod .row { margin-top: 10px; gap: 4px }
+  .prod .lv { gap: 5px; font-size: 11px } .prod .lv .token { --t: 20px !important }
+  .prod .chip { height: 24px; padding: 0 6px; font-size: 11px }
+  .prod .key { --s: .68 !important }
+
+  .nutri { padding: 0 10px }
+  .dark { padding: 44px 18px }
+  .dark .ghost { font-size: 120px !important; bottom: -30px !important; right: -10px !important }
+  .nut { flex-direction: column; align-items: stretch; gap: 0 }
+  .nut > div:first-child { width: auto }
+  .nut h2.disp { margin-top: 12px; font-size: 32px }
+  .nut .sub { margin-top: 14px; font-size: 15px; line-height: 1.55 }
+  .tiles { flex-direction: column; align-items: stretch; gap: 10px; margin-top: 20px }
+  .tile { display: flex; align-items: center; gap: 14px; min-height: 0; padding: 14px; box-shadow: inset 0 8px 14px rgba(0, 0, 0, .35) }
+  .tile .token { --t: 48px !important }
+  .tile h4 { margin-top: 0; font-size: 15px }
+  .tile p { margin-top: 3px; font-size: 13px; line-height: 1.4 }
+  .nut .hand { margin-top: 18px; font-size: 21px }
+
+  .early { padding: 56px 0 }
+  .early .wrap { display: block; width: auto; margin: 0 0 0 20px }
+  .early-text { width: auto }
+  .early h2.disp { margin-top: 12px; font-size: 46px; line-height: .98 }
+  .tag.lg { height: 34px; font-size: 14px; margin-top: 10px }
+  .early .sub { margin-top: 16px; padding-right: 20px; font-size: 15px; line-height: 1.5 }
+  .tickets { gap: 12px; margin-top: 22px; padding: 0 20px 8px 0; overflow-x: auto; scroll-snap-type: x mandatory }
+  .ticket { width: 250px; scroll-snap-align: start }
+  .tk { --cut: 193px; padding: 10px 10px 14px }
+  .tk .slot { height: 170px }
+  .tk .slot.food img { top: 8px }
+  .tk hr { margin-top: 12px }
+  .tk h3 { margin-top: 12px; font-size: 13px }
+  .tk p { margin-top: 2px; font-size: 12px; white-space: normal }
+  .tk .row { margin-top: 10px }
+  .tk .key { --s: .72 !important }
+
+  .daily { height: 540px; padding-top: 64px }
+  .big { margin-top: 14px; font-size: 84px }
+  .steps { margin-top: 0; font-size: 26px }
+  .bar { width: 310px; height: 24px; margin-top: 24px; padding: 4px; border-radius: 8px }
+  .bar i { border-radius: 5px }
+  .daily p { width: 310px; margin-top: 22px; font-size: 15px }
+  .sticker.free { right: 16px; top: 34px; width: 96px; height: 86px }
+  .sticker.free small { font-size: 10px } .sticker.free b { margin-top: 2px; font-size: 14px }
+
+  .rtd { padding: 52px 0 }
+  .rtd .ghost { font-size: 130px !important; right: -20px !important; top: 300px; bottom: auto !important }
+  .rtd .wrap { display: block }
+  .badge { gap: 14px }
+  .rtdb { width: 32px; height: 46px }
+  .rtd h2.disp { margin-top: 14px; font-size: 36px; line-height: 1.02 }
+  .fridge { height: 330px; margin-top: 16px }
+  .fridge::before { left: 0; top: 70px }
+  .shelf { left: 18px; right: 18px; bottom: 24px; height: 10px; border-radius: 5px }
+  .fridge img { bottom: 32px }
+  .fridge .decaf { left: 46px; height: 270px }
+  .fridge .sunset { left: 190px; height: 280px }
+  .rows { gap: 8px; margin-top: 16px }
+  .rows > div { height: 54px; padding: 0 10px 0 16px }
+  .rows > div > span:first-child > b { font-size: 16px }
+  .feedsec h2.disp { line-height: 1.02 }
+  .rows .key { --s: .7 !important }
+
+  .inside { padding: 52px 0 56px }
+  .inside .head { display: block }
+  .inside h2.disp { font-size: 34px }
+  .inside .head .sub { width: auto; margin-top: 12px; font-size: 15px; line-height: 1.5 }
+  .photos { display: block; margin-top: 26px }
+  .pola.main { width: 350px; max-width: 100% }
+  .pola.main img { aspect-ratio: 330 / 230 }
+  .side { width: auto; gap: 0 }
+  .pair { gap: 12px; margin-top: 20px }
+  .pair .pola { width: 160px }
+  .pair img { aspect-ratio: 140 / 120 }
+  .info { display: block; margin-top: 22px; padding: 20px }
+  .info-main { padding: 0 }
+  .info .lbl { font-size: 11px }
+  .info h3 { margin-top: 4px; font-size: 22px }
+  .info p { align-items: flex-start; margin-top: 8px; font-size: 14px; line-height: 1.45 }
+  .info .hours { margin-top: 6px }
+  .chips { gap: 6px; margin-top: 12px }
+  .chips span { gap: 6px; height: 30px; padding: 0 10px; font-size: 12px }
+  .chips .sq { width: 9px; height: 9px }
+  .info-act { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: auto; margin-top: 16px; padding: 16px 0 0; border-left: 0; border-top: 2px dashed var(--line) }
+  .info-act .btn { width: auto; height: 48px; padding: 0; font-size: 13px }
+
+  .feedsec { padding: 52px 0 60px }
+  .feedsec .head { display: block }
+  .seg { margin-top: 18px }
+  .seg .btn { flex: 1; height: 42px; padding: 0 8px; gap: 6px; font-size: 11px }
+  .feed { grid-template-columns: 1fr 1fr; gap: 20px 12px; margin-top: 26px }
+  .feed .pola:nth-child(4) { display: none }
+  .feed .tag { left: 16px; bottom: 20px; height: 22px; padding: 0 7px; font-size: 9px }
+
+  .cta { padding: 56px 0 60px }
+  .cta .ghost { font-size: 110px !important; bottom: -24px !important; left: -10px !important }
+  .cta .wrap { display: block }
+  .cta .wrap > div:first-child { width: auto }
+  .cta h2.disp { width: 230px; font-size: 34px; line-height: 1.04 }
+  .cta .sub { margin-top: 18px; font-size: 15px }
+  .chat { display: flex; width: 100%; height: 54px; margin-top: 20px; padding: 0; font-size: 14px }
+  .keychain { --k: .3; position: absolute; right: -8px; top: -12px; margin: 0 }
+  .keychain .ring { border-width: 5px }
+
+  footer { padding: 36px 0 28px }
+  footer .wrap { display: block }
+  footer .logo { font-size: 17px } footer .logo i { width: 24px; height: 24px }
+  footer .hand { margin-top: 10px; font-size: 20px }
+  footer .links { flex-wrap: wrap; gap: 10px 20px; margin-top: 20px; font-size: 13px }
+
+  .mhead { display: block; padding-top: 20px }
+  .mhead h1 { font-size: 46px }
+  .mhead .lead { width: auto; font-size: 16px }
+  .navy-st { width: 160px; height: 96px; margin: 20px 0 0 auto }
+  .navy-st span { font-size: 20px }
+  .legend { flex-wrap: wrap; gap: 12px 18px; white-space: normal }
+  .legend .sep { display: none }
+  .legend > div { flex-wrap: wrap; gap: 10px 14px }
+  .tabrow { display: block }
+  .tabs { flex-wrap: nowrap; overflow-x: auto; width: 100% }
+  .tabs a { flex: none }
+  .search { width: 100%; margin-top: 12px }
+  .cols { grid-template-columns: 1fr; gap: 20px }
+  .cols > div { gap: 20px }
+  .panel { padding: 20px 16px 10px }
+  .ph { flex-wrap: wrap }
+  .item { gap: 8px }
+  .item > b { font-size: 15px }
+  .beans { width: auto }
+  .cloudp { padding: 20px 16px }
+  .pops { grid-template-columns: 1fr 1fr; gap: 10px }
+  .pop .slot { height: 140px } .pop .drink { top: -30px; height: 170px }
+  .pop .row { flex-wrap: wrap } .pop .key { --s: .68 !important }
+  .rtdp { padding: 20px 16px }
+  .mini-fridge { height: 220px }
+  .mini-fridge .decaf { left: 12%; height: 180px } .mini-fridge .sunset { left: 52%; height: 188px }
+  .foodhead { margin-top: 60px } .foodhead h2.disp { font-size: 54px }
+  .photos4 { grid-template-columns: 1fr 1fr; gap: 12px }
+  .photo .slot { height: 130px }
+  .photo .row { flex-wrap: wrap } .photo .key { --s: .68 !important }
+  .item.food { flex-wrap: wrap }
+  .item.food .fn { flex-basis: calc(100% - 32px) }
+  .item.food .chip { margin-left: 32px }
+  .item.food .price { margin-left: auto }
+}
+/* favorit: kurang dari empat produk tetap selebar kolom biasa (hanya desktop lebar) */
+@media (min-width: 1341px) { .grid4.few { width: calc((100% - 72px) / 4 * var(--n) + 24px * (var(--n) - 1)) } }
+.key.butter b { background: linear-gradient(160deg, #FFF39A, var(--butter) 60%); border-color: var(--butter-lo); color: var(--ink) }
+
+/* member: Greenbox Key */
+.member { padding: 110px 0 120px; background: var(--paper2) }
+.member h2.disp { margin-top: 16px; font-size: 68px }
+.member .head .sub { width: 460px; font-size: 19px; line-height: 1.55 }
+.keys { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 24px; margin-top: 40px }
+.tier { display: flex; flex-direction: column; min-height: 300px; padding: 22px 24px 26px }
+.tier.t0 { margin-top: 28px }
+.tier.t1 { margin-top: 14px; background: linear-gradient(180deg, #F7FCF4, #DDF3D8); border-bottom-color: #A9D8A4 }
+.tier.t2 { color: var(--paper2); background: radial-gradient(circle at 15% 0%, #3A3D35, var(--ink) 60%); border-bottom-color: #111210; box-shadow: inset 0 2px 0 rgba(255, 255, 255, .14), 0 22px 34px -18px rgba(39, 41, 36, .55) }
+.tier:hover { transform: translateY(-6px) }
+.tier-top { display: flex; align-items: center; justify-content: space-between; gap: 10px }
+.tier.t2 .lbl { color: #B9BCB4 }
+.tier h3 { margin-top: 22px; font-size: 30px }
+.tier p { margin-top: 10px; font-size: 16px; line-height: 1.5; color: var(--muted) }
+.tier.t1 p { color: #3F4A3C }
+.tier.t2 p { color: #C3C6BE }
+.tier-key { display: flex; align-items: center; gap: 14px; margin-top: auto; padding-top: 24px }
+.tier-key small { font-weight: 700; font-size: 12px; letter-spacing: .2em; text-transform: uppercase; color: var(--muted) }
+.tier.t2 .tier-key small { color: #B9BCB4 }
+.tier.t1 .tier-key small { color: #3F4A3C }
+.mrule { display: flex; align-items: flex-start; gap: 12px; margin-top: 30px; padding: 16px 20px; border-radius: 10px; background: #fff; border: 1.5px dashed #B9BDB3; font-size: 16px; line-height: 1.5 }
+.mrule .sq { margin-top: 5px }
+.mgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 24px; align-items: start }
+.mcard { padding: 30px 32px 34px }
+.mcard h3 { margin-top: 10px; font-size: 28px }
+.mdesc { margin-top: 10px; font-size: 16px; line-height: 1.5; color: var(--muted) }
+.fld { margin-top: 18px }
+.fld label { display: block; margin-bottom: 8px; font-weight: 700; font-size: 13px; letter-spacing: .14em; text-transform: uppercase }
+.fld input { width: 100%; height: 54px; padding: 0 16px; border: 0; border-bottom: 3px solid var(--line); border-radius: 10px; background: #fff; font: 600 16px 'Bricolage Grotesque', system-ui, sans-serif; color: var(--ink); box-shadow: inset 0 3px 6px rgba(0, 0, 0, .14) }
+.fld input::placeholder { color: #8A8D85 }
+.fld input:focus-visible { outline: 3px solid var(--navy); outline-offset: 2px }
+.mcard .btn { margin-top: 22px }
+.mmsg { min-height: 24px; margin-top: 16px; font-weight: 600; font-size: 15px; line-height: 1.5 }
+.mmsg.ok { color: #0F6E0C }
+.mmsg.err { color: #B3261E }
+.mcard > .hand { margin-top: 8px; font-size: 26px; color: var(--green-lo); transform: rotate(-2deg); transform-origin: left }
+.mcheck { color: var(--paper2); background: radial-gradient(circle at 15% 0%, #3A3D35, var(--ink) 60%); border-bottom-color: #111210; box-shadow: inset 0 2px 0 rgba(255, 255, 255, .14), 0 22px 34px -18px rgba(39, 41, 36, .55) }
+.mcheck .lbl, .mcheck .mdesc { color: #C3C6BE }
+.mout { margin-top: 16px }
+.mnote { margin-top: 4px; font-size: 15px; font-weight: 600; line-height: 1.5; color: #E6E8E2 }
+.mres { padding: 18px 18px 20px; border-radius: 10px; background: #2F312B; box-shadow: inset 0 10px 18px rgba(0, 0, 0, .35), inset 0 -2px 0 rgba(255, 255, 255, .06) }
+.mres .lbl { color: #B9BCB4 }
+.mres h4 { margin-top: 8px; font-size: 22px; color: var(--paper2) }
+.mstats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 14px }
+.mstats > div { padding: 10px 12px; border-radius: 8px; background: #3A3D35; border-bottom: 3px solid #1B1C18 }
+.mstats small { display: block; font-weight: 700; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: #B9BCB4 }
+.mstats b { display: block; margin-top: 4px; font-family: 'Unbounded'; font-weight: 700; font-size: 15px; color: var(--butter) }
+.mres .mnote { margin-top: 14px }
+.mbar { height: 22px; margin-top: 16px; padding: 4px; border-radius: 8px; background: #1B1C18; box-shadow: inset 0 4px 8px rgba(0, 0, 0, .6), 0 1px 0 rgba(255, 255, 255, .1) }
+.mbar i { display: block; height: 100%; border-radius: 5px; transform-origin: left; background: linear-gradient(180deg, var(--green-hi), var(--green)); box-shadow: inset 0 2px 0 rgba(255, 255, 255, .5); animation: grow 1s var(--ease) both }
+@keyframes grow { from { transform: scaleX(0) } }
+.mnext { margin-top: 10px; font-size: 15px; line-height: 1.5; color: #D5D8D0 }
+.mnext b { color: var(--green-soft) }
+
+@media (max-width: 1000px) and (min-width: 761px) {
+  .mgrid { grid-template-columns: 1fr }
+  .tier.t0, .tier.t1 { margin-top: 0 }
+}
+@media (max-width: 760px) {
+  .member { padding: 52px 0 56px }
+  .member .ghost { font-size: 130px !important; top: -4px !important }
+  .member h2.disp { margin-top: 12px; font-size: 34px }
+  .member .head { display: block }
+  .member .head .sub { width: auto; margin-top: 12px; font-size: 15px; line-height: 1.5 }
+  .keys { grid-template-columns: 1fr; gap: 12px; margin-top: 26px }
+  .tier, .tier.t0, .tier.t1 { margin-top: 0; min-height: 0; padding: 16px 16px 18px }
+  .tier h3 { margin-top: 12px; font-size: 22px }
+  .tier p { margin-top: 6px; font-size: 14px }
+  .tier-key { padding-top: 14px }
+  .mrule { margin-top: 18px; padding: 12px 14px; font-size: 14px }
+  .mgrid { grid-template-columns: 1fr; gap: 14px; margin-top: 14px }
+  .mcard { padding: 20px 16px 22px }
+  .mcard h3 { font-size: 22px }
+  .mdesc { font-size: 14px }
+  .fld { margin-top: 14px }
+  .mcard .btn { width: 100%; height: 54px; margin-top: 18px; font-size: 14px }
+  .mstats b { font-size: 13px }
+  .mstats > div { padding: 8px 8px }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important }
-  .js .reveal { opacity: 1; transform: none }
+  .js .reveal { opacity: 1; translate: none }
+  .bar i { width: 100% }
 }
