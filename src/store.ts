@@ -66,6 +66,12 @@ const rupiah = (p: string) => Math.round(parseFloat(p.replace(',', '.')) * 1000)
 const PHOTO: Record<string, [string, Mat]> = {
   'Coffee Cloud': ['p-coffee-cloud', 'green'], 'Oolong Cloud': ['p-oolong-cloud', 'concrete'], 'RTD Decaf': ['p-rtd-decaf', 'steel'], 'Sunset Soother': ['p-rtd-sunset', 'steel'],
   'Easy-Nasgor': ['c-easy-nasgor', 'steel'], 'Beef-Sando': ['c-beef-sando', 'ply'], 'Pad Kra Pao': ['c-pad-kra-pao', 'concrete'], 'Real Potato Fries': ['c-fries', 'green'],
+  'RTD Classic': ['p-rtd-classic', 'green'], 'RTD Fruity': ['p-rtd-fruity', 'concrete'], 'Sunrise Booster': ['p-sunrise-booster', 'ply'],
+  'Mont Blanc': ['p-mont-blanc', 'steel'], 'Dirty Latte': ['p-dirty-latte', 'concrete'], 'Matcha Latte': ['p-matcha-latte', 'ply'],
+  'Iced Shaken Honey Lemon Tea': ['p-iced-shaken-honey-lemon-tea', 'steel'],
+  'Nanban Chicken With Rice': ['c-nanban-chicken-with-rice', 'steel'], 'Coffee Parfait': ['c-coffee-parfait', 'concrete'], 'Sweet Waffle': ['c-sweet-waffle', 'green'],
+  'Salad With Pan-seared Chicken': ['c-salad-with-pan-seared-chicken', 'steel'], 'Sesame-Pasta': ['c-sesame-pasta', 'ply'],
+  'Enoki Fries': ['c-enoki-fries', 'concrete'], 'Soft-Panna': ['c-soft-panna', 'ply'],
 }
 const LINE: Record<string, string> = {
   'Coffee Cloud': 'Kopi susu di bawah, awan di atas.', 'Easy-Nasgor': 'Nasi goreng mentega plus telur. Beres.',
@@ -133,10 +139,18 @@ export function seed(): Store {
 }
 
 const KEY = 'gb-store-v2'
+// Simpanan lama belum tahu foto baru. Sekali per browser, isi foto produk bawaan yang masih kosong
+// (foto unggahan admin tidak disentuh, dan foto yang sengaja dihapus admin tidak dipasang lagi sesudahnya).
+const PHOTO_V = 'gb-photo-v1'
+function fillPhotos(items: Item[]): Item[] {
+  try { if (localStorage.getItem(PHOTO_V)) return items; localStorage.setItem(PHOTO_V, '1') } catch { return items }
+  return items.map(p => { const f = !p.img && PHOTO[p.name]; return f ? { ...p, img: f[0], mat: f[1] } : p })
+}
+
 function load(): Store {
   try {
     const s = JSON.parse(localStorage.getItem(KEY) ?? '')
-    if (Array.isArray(s.items)) return { ...seed(), ...s }
+    if (Array.isArray(s.items)) return { ...seed(), ...s, items: fillPhotos(s.items) }
   } catch { /* belum ada simpanan atau isinya rusak: pakai data bawaan */ }
   return seed()
 }
