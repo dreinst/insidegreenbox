@@ -451,9 +451,14 @@ const ServeIcon = ({ s }: { s: Serve }) => <span className="ic">{s !== 'ice' && 
 const Beans = ({ code }: { code: string }) => <span className="beans">{[...code].map(c => <i key={c} className="bean" style={{ background: BEANS[c][1] }} title={BEANS[c][0]} />)}</span>
 const Price = ({ p }: { p: string }) => <span className="price">{p}</span>
 
-const DrinkRows = ({ items, beans }: { items: Drink[]; beans: boolean }) => <>{items.map((it, i) => (
+// Kolom kiri baris menu: foto produk kalau ada, kalau belum ada tampil nomor urut.
+const Pic = ({ it, n }: { it?: Item; n: number }) => it?.img
+  ? <span className={`mpic slot ${it.mat}`}><img src={imgSrc(it.img)} alt="" /></span>
+  : <span className="no">{String(n).padStart(2, '0')}</span>
+
+const DrinkRows = ({ items, beans, by }: { items: Drink[]; beans: boolean; by: Record<string, Item> }) => <>{items.map((it, i) => (
   <div key={it.name} className="item">
-    <span className="no">{String(i + 1).padStart(2, '0')}</span><b>{it.name}</b>
+    <Pic it={by[it.name]} n={i + 1} /><b>{it.name}</b>
     {beans && <Beans code={it.beans ?? ''} />}<Token l={it.level} /><ServeIcon s={it.serve} /><Price p={it.price} />
   </div>
 ))}</>
@@ -467,6 +472,7 @@ const FOOD_PHOTOS = [['Easy-Nasgor', 'Easy-Nasgor', -1], ['Beef-Sando', 'Beef-Sa
 function Menu({ anchor }: { anchor: string }) {
   const { items } = useStore()
   const dGroups = menuDrinks(items), fGroups = menuFoods(items)
+  const by = Object.fromEntries(items.map(i => [i.name, i]))
   const total = countOf(dGroups) + countOf(fGroups)
   const catCount = (ids: readonly string[]) => items.filter(i => i.on && ids.includes(i.cat)).length
   const [q, setQ] = useState('')
@@ -480,13 +486,13 @@ function Menu({ anchor }: { anchor: string }) {
   const D = Object.fromEntries(dGroups.map(g => [g.id, g]))
   const drinks = (id: string) => {
     const g = D[id]; const items = g.items.filter(it => has(it.name))
-    return panel(g.id, g.title, g.note, g.color, <DrinkRows items={items} beans={!!g.items[0]?.beans} />, items.length)
+    return panel(g.id, g.title, g.note, g.color, <DrinkRows items={items} beans={!!g.items[0]?.beans} by={by} />, items.length)
   }
   const foods = (g: typeof fGroups[number]) => {
     const items = g.items.filter(it => has(it.name))
     return panel(g.id, g.title, g.note, g.color, items.map((it, i) => (
       <div key={it.name} className="item food">
-        <span className="no">{String(i + 1).padStart(2, '0')}</span><div className="fn"><b>{it.name}</b>{it.desc && <p>{it.desc}</p>}</div>
+        <Pic it={by[it.name]} n={i + 1} /><div className="fn"><b>{it.name}</b>{it.desc && <p>{it.desc}</p>}</div>
         {it.kcal && <span className="chip">{it.kcal}</span>}<Price p={it.price} />
       </div>
     )), items.length)
@@ -540,7 +546,7 @@ function Menu({ anchor }: { anchor: string }) {
             {rtd.length > 0 && <div id="rtd" className="rtdp reveal">
               <div className="ph"><h2 className="disp"><RtdBadge c="#F4F5F1" />RTD</h2><span className="hand">kaleng 300 ml</span></div>
               <div className="mini-fridge"><i className="shelf" />{live(items, 'RTD Decaf') && <img className="decaf" src="/img/p-rtd-decaf.webp" alt="RTD Decaf" />}{live(items, 'Sunset Soother') && <img className="sunset" src="/img/p-rtd-sunset.webp" alt="RTD Sunset Soother" />}</div>
-              <div style={{ marginTop: 8 }}><DrinkRows items={rtd} beans={false} /></div>
+              <div style={{ marginTop: 8 }}><DrinkRows items={rtd} beans={false} by={by} /></div>
             </div>}
           </div>
         </div>

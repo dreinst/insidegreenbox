@@ -313,7 +313,10 @@ footer .links { display: flex; gap: 28px; font-size: 15px; color: #B9BCB4 }
 .panel .ph h2 i { display: block; width: 16px; height: 16px; border-radius: 4px; box-shadow: inset 0 -3px 0 rgba(0, 0, 0, .2) }
 .ph .hand { font-size: 20px; color: var(--muted) }
 .item { display: flex; align-items: center; gap: 14px; height: 54px; border-top: 1.5px dashed var(--line) }
-.no { width: 24px; flex: none; font-weight: 700; font-size: 13px; color: #9A9D95 }
+.no { width: 44px; flex: none; text-align: center; font-weight: 700; font-size: 13px; color: #9A9D95 }
+/* foto kecil di baris menu, menempati kolom yang sama dengan nomor urut */
+.item .mpic { display: block; width: 44px; height: 44px; flex: none; border-radius: 8px; overflow: hidden; box-shadow: inset 0 4px 6px -2px rgba(0, 0, 0, .28), inset 0 -2px 0 rgba(255, 255, 255, .35) }
+.item .mpic img { position: absolute; inset: 3px; width: calc(100% - 6px); height: calc(100% - 6px); object-fit: contain }
 .item > b { flex: 1; font-weight: 700; font-size: 17px }
 .beans { display: flex; gap: 4px; width: 50px; flex: none }
 .ic { display: flex; gap: 2px; width: 34px; flex: none }
@@ -591,8 +594,8 @@ footer .links { display: flex; gap: 28px; font-size: 15px; color: #B9BCB4 }
   .photo .slot { height: 130px }
   .photo .row { flex-wrap: wrap } .photo .key { --s: .68 !important }
   .item.food { flex-wrap: wrap }
-  .item.food .fn { flex-basis: calc(100% - 32px) }
-  .item.food .chip { margin-left: 32px }
+  .item.food .fn { flex-basis: calc(100% - 52px) }
+  .item.food .chip { margin-left: 52px }
   .item.food .price { margin-left: auto }
 }
 /* favorit: kurang dari empat produk tetap selebar kolom biasa (hanya desktop lebar) */
