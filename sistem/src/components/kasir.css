@@ -152,6 +152,8 @@
 /* Struk */
 .struk { max-width: 360px; margin: 0 auto; padding: 18px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; line-height: 1.5; background: #fff; border-radius: 6px; box-shadow: 0 10px 24px -16px rgba(0, 0, 0, .5) }
 .struk hr { margin: 10px 0; border: 0; border-top: 1px dashed #9EA29A }
+/* tahap 6A: logo struk dari Profil Usaha */
+.struk-logo { display: block; max-width: 160px; max-height: 72px; margin: 0 auto 6px; object-fit: contain }
 .struk-judul { margin: 0; text-align: center; font-weight: 800; font-size: 16px }
 .struk-tengah { margin: 4px 0 0; text-align: center; color: #4A4D47 }
 .struk-dl { margin: 0 }

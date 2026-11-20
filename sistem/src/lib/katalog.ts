@@ -101,9 +101,13 @@ const BARIS: [string, string, string, string, string, string][] = [
 // Baris ini tambahan atas RANCANGAN 8.2 (KONTRAK 11).
 const BARIS_3B: [string, string, string, string, string, string][] = [['kasir.pin', 'Kasir', 'PIN kasir', 'LU', 'LU', '-']]
 
+// tahap 6A: Piutang Pelanggan (baca saja) dipisah dari b2b.penerimaan seperti Hutang Pemasok (kas.hutang). Baris ini
+// tambahan atas RANCANGAN 8.2 (KONTRAK 11).
+const BARIS_6A: [string, string, string, string, string, string][] = [['kas.piutang', 'Keuangan', 'Piutang pelanggan', 'L', 'L', '-']]
+
 const bersih = (s: string) => (s === '-' ? '' : s)
 
-export const MENU_IZIN: MenuIzin[] = [...BARIS, ...BARIS_3B].map(([kode, grup, nama, owner, admin, kasir]) => ({
+export const MENU_IZIN: MenuIzin[] = [...BARIS, ...BARIS_3B, ...BARIS_6A].map(([kode, grup, nama, owner, admin, kasir]) => ({
   kode,
   grup,
   nama,
@@ -205,6 +209,16 @@ const SIDEBAR_BELI: ItemSidebar[] = [
   { href: '/hutang', label: 'Hutang Pemasok', menu: 'kas.hutang', ikon: 'hutang' },
 ]
 
+// tahap 6A: penjualan B2B (RANCANGAN 8.2 grup B2B, izinnya sudah ada di matriks) dan piutang pelanggan (kas.piutang).
+const SIDEBAR_B2B: ItemSidebar[] = [
+  { href: '/pelanggan', label: 'Pelanggan', menu: 'b2b.pelanggan', ikon: 'pelanggan' },
+  { href: '/pesanan-jual', label: 'Pesanan Penjualan', menu: 'b2b.pesanan', ikon: 'pesanan' },
+  { href: '/faktur-jual', label: 'Faktur Penjualan', menu: 'b2b.faktur', ikon: 'faktur' },
+  { href: '/terima-pelanggan', label: 'Terima Pembayaran', menu: 'b2b.penerimaan', ikon: 'pembayaran' },
+  { href: '/retur-jual', label: 'Retur Penjualan', menu: 'b2b.retur', ikon: 'retur' },
+]
+const SIDEBAR_PIUTANG: ItemSidebar = { href: '/piutang', label: 'Piutang Pelanggan', menu: 'kas.piutang', ikon: 'piutang' }
+
 // Item tampil bila pengguna memegang Lihat di kode menunya (KONTRAK 8).
 export const itemTampil = (i: ItemSidebar, boleh: (menu: string) => boolean) => i.menu === null || (Array.isArray(i.menu) ? i.menu.some(boleh) : boleh(i.menu))
 
@@ -252,8 +266,10 @@ export const SIDEBAR_GRUP: GrupSidebar[] = [
   },
   // tahap 4C: pembelian (RANCANGAN 3); Hutang Pemasok di grup Keuangan.
   { judul: 'Pembelian', item: SIDEBAR_BELI.filter((i) => i.href !== '/hutang') },
+  // tahap 6A: penjualan B2B sesudah Pembelian; Piutang Pelanggan di grup Keuangan.
+  { judul: 'Penjualan B2B', item: SIDEBAR_B2B },
   // tahap 5A: rekening bank dan laporan penjualan.
-  { judul: 'Keuangan', item: [...SIDEBAR_REKENING, ...SIDEBAR_BELI.filter((i) => i.href === '/hutang')] },
+  { judul: 'Keuangan', item: [...SIDEBAR_REKENING, ...SIDEBAR_BELI.filter((i) => i.href === '/hutang'), SIDEBAR_PIUTANG] },
   // tahap 5B: akuntansi inti (RANCANGAN 8.2). Admin hanya melihat Akun dan Pemetaan; sisanya Owner.
   {
     judul: 'Akuntansi',
@@ -271,6 +287,8 @@ export const SIDEBAR_GRUP: GrupSidebar[] = [
     judul: 'Pengaturan',
     item: [
       { href: '/lokasi', label: 'Lokasi', menu: 'atur.lokasi', ikon: 'lokasi' },
+      // tahap 6A: profil usaha per cabang (atur.lokasi, Owner mengubah, Admin melihat).
+      { href: '/profil-usaha', label: 'Profil Usaha', menu: 'atur.lokasi', ikon: 'profil' },
       { href: '/pengguna', label: 'Pengguna', menu: 'atur.pengguna', ikon: 'pengguna' },
       { href: '/peran', label: 'Peran dan Izin', menu: 'atur.peran', ikon: 'peran' },
       { href: '/saklar', label: 'Saklar Fitur', menu: 'atur.saklar', ikon: 'saklar' },

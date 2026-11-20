@@ -59,5 +59,7 @@ BASE_URL="http://127.0.0.1:$PORT" E2E_DATABASE_URL="$DB_E2E" node tests/e2e/prod
 BASE_URL="http://127.0.0.1:$PORT" E2E_DATABASE_URL="$DB_E2E" node tests/e2e/pembelian.mjs || HASIL=1
 # tahap 5B: akuntansi (jual lalu buku besar, memorial, laporan keuangan, tutup periode, akses).
 BASE_URL="http://127.0.0.1:$PORT" E2E_DATABASE_URL="$DB_E2E" node tests/e2e/akuntansi.mjs || HASIL=1
+# tahap 6A: penjualan B2B dan profil usaha, sesudah pembelian.mjs (konversi kg biji kopi) dan kasir.mjs (struk), sebelum klik.mjs.
+BASE_URL="http://127.0.0.1:$PORT" E2E_DATABASE_URL="$DB_E2E" node tests/e2e/b2b.mjs || HASIL=1
 BASE_URL="http://127.0.0.1:$PORT" E2E_DATABASE_URL="$DB_E2E" node tests/e2e/klik.mjs || HASIL=1
 exit $HASIL
