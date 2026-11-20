@@ -54,6 +54,10 @@
 .lk-alat { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 10px }
 .pil { display: flex; gap: 6px; flex-wrap: wrap }
 .pil.gulir { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; margin-bottom: 12px; scrollbar-width: thin }
+/* Sejak kategori diambil dari menu_category jumlahnya belasan; di layar lebar semua pilihan dilipat supaya terlihat. */
+@media (min-width: 641px) {
+  .pil.gulir { flex-wrap: wrap; overflow-x: visible }
+}
 .pil button { flex: none; min-height: 42px; padding: 0 16px; border: 0; border-radius: 999px; font: inherit; font-weight: 700; font-size: 14px; color: var(--ink); background: var(--paper2); box-shadow: inset 0 0 0 1px #D5D9D0; cursor: pointer; white-space: nowrap }
 .pil button.aktif { color: #fff; background: var(--ink); box-shadow: none }
 .lk-meja, .lk-cari { display: flex; align-items: center; gap: 8px; min-height: 42px; padding: 0 12px; border-radius: 10px; background: #fff; box-shadow: inset 0 0 0 1px #D9DCD4 }
