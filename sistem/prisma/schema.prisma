@@ -369,22 +369,117 @@ model BomLine {
 }
 
 model MenuItem {
+  id          Int                @id @default(autoincrement())
+  bomId       Int?               @map("bom_id")
+  bom         Bom?               @relation(fields: [bomId], references: [id])
+  name        String
+  // Kode kategori (menu_category.code). Teks dipertahankan supaya kode yang membaca kolom ini tetap jalan.
+  category    String
+  categoryRef MenuCategory       @relation(fields: [category], references: [code])
+  price       BigInt
+  active      Boolean            @default(true)
+  featured    Boolean            @default(false)
+  // Foto: nama berkas di public/img situs (tanpa .webp) atau "unggahan/<berkas>" untuk foto unggahan.
+  image       String?
+  description String             @default("")
+  kcal        Int?
+  sort        Int                @default(0)
+  createdBy   Int?               @map("created_by")
+  createdAt   DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedBy   Int?               @map("updated_by")
+  updatedAt   DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+  saleLines   SaleLine[]
+  priceRows   MenuPriceHistory[]
+  setsAsMain  MenuSet[]          @relation("PaketUtama")
+  setsAsDrink MenuSet[]          @relation("PaketMinuman")
+  promoGifts  Promo[]
+
+  @@map("menu_item")
+}
+
+// tahap 3A: kategori menu dengan urutan.
+model MenuCategory {
   id        Int        @id @default(autoincrement())
-  bomId     Int?       @map("bom_id")
-  bom       Bom?       @relation(fields: [bomId], references: [id])
+  code      String     @unique
   name      String
-  category  String
-  price     BigInt
+  sort      Int        @default(0)
   active    Boolean    @default(true)
-  featured  Boolean    @default(false)
-  image     String?
   createdBy Int?       @map("created_by")
   createdAt DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedBy Int?       @map("updated_by")
   updatedAt DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
-  saleLines SaleLine[]
+  items     MenuItem[]
 
-  @@map("menu_item")
+  @@map("menu_category")
+}
+
+// tahap 3A: satu kali perubahan harga (satu menu atau massal) dan baris harga lama dan barunya.
+model MenuPriceBatch {
+  id        Int                @id @default(autoincrement())
+  label     String
+  rule      String             @default("")
+  createdBy Int?               @map("created_by")
+  createdAt DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  rows      MenuPriceHistory[]
+
+  @@map("menu_price_batch")
+}
+
+model MenuPriceHistory {
+  id         Int            @id @default(autoincrement())
+  batchId    Int            @map("batch_id")
+  batch      MenuPriceBatch @relation(fields: [batchId], references: [id])
+  menuItemId Int            @map("menu_item_id")
+  menuItem   MenuItem       @relation(fields: [menuItemId], references: [id])
+  oldPrice   BigInt         @map("old_price")
+  newPrice   BigInt         @map("new_price")
+
+  @@index([batchId])
+  @@index([menuItemId])
+  @@map("menu_price_history")
+}
+
+// tahap 3A: paket set (padanan EarlySet): satu menu utama dan satu minuman dengan harga paket.
+model MenuSet {
+  id           Int      @id @default(autoincrement())
+  name         String
+  mainItemId   Int      @map("main_item_id")
+  mainItem     MenuItem @relation("PaketUtama", fields: [mainItemId], references: [id])
+  drinkItemId  Int      @map("drink_item_id")
+  drinkItem    MenuItem @relation("PaketMinuman", fields: [drinkItemId], references: [id])
+  normalPrice  BigInt   @map("normal_price")
+  price        BigInt
+  image        String?
+  sort         Int      @default(0)
+  active       Boolean  @default(true)
+  createdBy    Int?     @map("created_by")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedBy    Int?     @map("updated_by")
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("menu_set")
+}
+
+// tahap 3A: promo dengan masa berlaku. kind: persen (percent), nominal (amount), atau hadiah (giftItemId).
+model Promo {
+  id         Int       @id @default(autoincrement())
+  name       String
+  kind       String
+  percent    Decimal?  @db.Decimal(6, 3)
+  amount     BigInt?
+  giftItemId Int?      @map("gift_item_id")
+  giftItem   MenuItem? @relation(fields: [giftItemId], references: [id])
+  condition  String    @default("")
+  minSpend   BigInt    @default(0) @map("min_spend")
+  startsOn   DateTime? @map("starts_on") @db.Date
+  endsOn     DateTime? @map("ends_on") @db.Date
+  active     Boolean   @default(true)
+  createdBy  Int?      @map("created_by")
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedBy  Int?      @map("updated_by")
+  updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("promo")
 }
 
 model StockReason {
@@ -1244,6 +1339,7 @@ model MemberTier {
   minVisits   Int      @default(0) @map("min_visits")
   discountPct Decimal  @default(0) @map("discount_pct") @db.Decimal(6, 3)
   perk        String   @default("")
+  active      Boolean  @default(true)
   members     Member[]
 
   @@map("member_tier")
@@ -1257,6 +1353,7 @@ model Member {
   wa         String      @unique
   visits     Int         @default(0)
   discountOn Boolean     @default(false) @map("discount_on")
+  active     Boolean     @default(true)
   joinedAt   DateTime    @default(now()) @map("joined_at") @db.Timestamptz(6)
   note       String      @default("")
   createdBy  Int?        @map("created_by")

@@ -2,6 +2,8 @@
 // Dijalankan ulang, sandinya disetel ulang ke nilai env dan penggunanya diaktifkan lagi.
 import 'dotenv/config'
 import { buatKlien } from '../src/lib/db'
+import { isiMemberContoh } from '../src/lib/impor-menu'
+import { normalisasiWa } from '../src/lib/member'
 import { isiPeranDanIzin, pastikanPengguna } from '../src/lib/seed-inti'
 
 if (process.env.NODE_ENV === 'production') throw new Error('seed:contoh hanya untuk lokal dan uji.')
@@ -19,6 +21,8 @@ async function main() {
     const baru = await pastikanPengguna(db, { username: x.u, password: x.p, name: x.name, roleCode: x.roleCode }, true)
     console.log(`${x.name} ${x.u} ${baru ? 'dibuat' : 'disetel ulang'}.`)
   }
+  // tahap 3A: member contoh dari admin lama. Tingkatnya ikut dihitung bila tingkat sudah diimpor (npm run impor:menu).
+  console.log(`Member contoh baru: ${await isiMemberContoh(db, normalisasiWa)}.`)
 }
 
 main()
