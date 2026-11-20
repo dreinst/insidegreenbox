@@ -159,11 +159,11 @@ Semua cek lewat `src/lib/izin.ts`:
 ### 4.6 Pengaman
 
 - Peran `owner` selalu memegang semua aksi yang berlaku di `atur.pengguna`, `atur.peran`, `atur.saklar`, dan `atur.audit`, serta saklar `log.lihat_semua`. Penyimpanan matriks yang mencabutnya ditolak.
-- Peran sistem (`owner`, `admin`, `kasir`) tidak bisa dinonaktifkan dan kodenya tidak bisa diubah.
+- Peran sistem (`owner`, `admin`, `kasir`) tidak bisa dinonaktifkan. Kode peran apa pun tidak bisa diubah sesudah disimpan, karena kode dipakai di audit dan di kode program. Peran nonaktif membuat penggunanya tidak bisa masuk sampai diaktifkan lagi.
 - Owner aktif terakhir tidak bisa dinonaktifkan dan perannya tidak bisa diganti.
 - Pengguna tidak bisa menonaktifkan dirinya sendiri dan tidak bisa mengganti perannya sendiri.
 - Hanya pengguna berperan Owner yang bisa membuat atau mengubah pengguna berperan Owner, memberi peran Owner, atau mengatur ulang sandi Owner.
-- Pengguna bukan Owner tidak bisa mengubah matriks izin atau saklar perannya sendiri.
+- Pengguna bukan Owner tidak bisa mengubah matriks izin atau saklar perannya sendiri, dan tidak bisa memberi izin atau menyalakan saklar yang tidak ia miliki (termasuk lewat salin izin saat membuat peran).
 
 ## 5. Audit trail
 
