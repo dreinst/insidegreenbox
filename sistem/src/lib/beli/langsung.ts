@@ -61,10 +61,12 @@ export const skemaKepalaLangsung = z.object({
 })
 
 export const skemaBarisLangsung = z.object({
-  jenis: z.enum(['barang', 'biaya']).default('barang'),
+  // Kosong: baris biaya bila keterangan diisi tanpa produk.
+  jenis: z.enum(['barang', 'biaya']).optional(),
   item: z.string().optional(),
   qty: z.string().optional(),
   price: uangOpsional('Harga'),
+  amount: uangOpsional('Jumlah'),
   description: z.string().trim().max(120, 'Keterangan paling panjang 120 huruf.').default(''),
 })
 
@@ -170,13 +172,15 @@ export async function tambahBarisLangsung(db: Db, k: Konteks, aktor: Aktor, id: 
     if ((await tx.directPurchaseLine.count({ where: { directPurchaseId: id } })) >= BATAS_BARIS_BELI) throw new GalatAturan(`Satu dokumen paling banyak ${BATAS_BARIS_BELI} baris.`)
     let ringkas: string
     let after: Record<string, unknown>
-    if (d.jenis === 'biaya') {
+    const jenis = d.jenis ?? (!d.item && d.description ? 'biaya' : 'barang')
+    if (jenis === 'biaya') {
       if (!saklarNyala(aktor, 'beli.langsung_biaya')) throw new GalatAturan('Baris hanya biaya butuh saklar Baris hanya biaya.', 'jenis')
       if (d.description.length < 3) throw new GalatAturan('Keterangan biaya minimal 3 huruf.', 'description')
-      if (d.price <= 0n) throw new GalatAturan('Jumlah biaya harus lebih dari 0.', 'price')
-      const b = await tx.directPurchaseLine.create({ data: { directPurchaseId: id, description: d.description, qty: 1, price: d.price } })
-      ringkas = `biaya ${d.description} ${formatRupiah(d.price)}`
-      after = { lineId: b.id, jenis: 'biaya', description: d.description, price: d.price }
+      const jumlah = d.amount || d.price
+      if (jumlah <= 0n) throw new GalatAturan('Jumlah biaya harus lebih dari 0.', 'amount')
+      const b = await tx.directPurchaseLine.create({ data: { directPurchaseId: id, description: d.description, qty: 1, price: jumlah } })
+      ringkas = `biaya ${d.description} ${formatRupiah(jumlah)}`
+      after = { lineId: b.id, jenis: 'biaya', description: d.description, price: jumlah }
     } else {
       const it = skemaBarang.safeParse(d.item ?? '')
       if (!it.success) throw new GalatAturan('Pilih produk dan satuannya.', 'item')

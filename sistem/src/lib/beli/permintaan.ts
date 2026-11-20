@@ -48,7 +48,7 @@ export const skemaKepalaPermintaan = z.object({
 export const skemaBarisPermintaan = z.object({
   item: skemaBarang,
   qty: skemaQty({ label: 'Qty' }),
-  note: z.string().trim().max(120, 'Catatan paling panjang 120 huruf.').default(''),
+  lineNote: z.string().trim().max(120, 'Catatan paling panjang 120 huruf.').default(''),
 })
 
 function periksaKepala(aktor: Aktor, d: z.infer<typeof skemaKepalaPermintaan>) {
@@ -104,14 +104,14 @@ export async function tambahBarisPermintaan(db: Db, k: Konteks, aktor: Aktor, id
     await faktorSatuan(tx, p.id, d.item.unitId)
     if ((await tx.purchaseRequestLine.count({ where: { purchaseRequestId: id } })) >= BATAS_BARIS_BELI) throw new GalatAturan(`Satu dokumen paling banyak ${BATAS_BARIS_BELI} baris.`)
     const u = await tx.unit.findUniqueOrThrow({ where: { id: d.item.unitId } })
-    const b = await tx.purchaseRequestLine.create({ data: { purchaseRequestId: id, productId: p.id, unitId: u.id, qty: d.qty, note: d.note } })
+    const b = await tx.purchaseRequestLine.create({ data: { purchaseRequestId: id, productId: p.id, unitId: u.id, qty: d.qty, note: d.lineNote } })
     await tx.purchaseRequest.update({ where: { id }, data: { updatedBy: aktor.id } })
     await catatAudit(tx, k, {
       action: 'permintaan.baris_tambah',
       docType: JENIS,
       docId: id,
       summary: `Menambah baris ${pr.no}: ${formatQty(d.qty)} ${u.symbol} ${p.name}`,
-      after: { lineId: b.id, produk: p.code, satuan: u.symbol, qty: d.qty, note: d.note },
+      after: { lineId: b.id, produk: p.code, satuan: u.symbol, qty: d.qty, note: d.lineNote },
     })
     return b
   })
