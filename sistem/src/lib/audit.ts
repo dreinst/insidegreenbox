@@ -355,6 +355,32 @@ export const NAMA_PERISTIWA: Record<string, string> = {
   'retur_jual.posting': 'Posting retur penjualan',
   'retur_jual.batal': 'Batalkan retur penjualan',
   'profil.ubah': 'Ubah profil usaha',
+  // tahap 6B
+  'kategori_aset.tambah': 'Tambah kategori aset',
+  'kategori_aset.ubah': 'Ubah kategori aset',
+  'kategori_aset.aktifkan': 'Aktifkan kategori aset',
+  'kategori_aset.nonaktifkan': 'Nonaktifkan kategori aset',
+  'aset.tambah': 'Buat draf aset',
+  'aset.ubah': 'Ubah aset',
+  'aset.hapus': 'Hapus draf aset',
+  'aset.aktifkan': 'Setujui dan aktifkan aset',
+  'aset.batal': 'Batalkan aset',
+  'penyusutan.hitung': 'Hitung penyusutan',
+  'penyusutan.batal': 'Batalkan penyusutan',
+  'pelepasan.tambah': 'Buat pelepasan aset',
+  'pelepasan.ubah': 'Ubah pelepasan aset',
+  'pelepasan.hapus': 'Hapus draf pelepasan aset',
+  'pelepasan.posting': 'Posting pelepasan aset',
+  'pelepasan.batal': 'Batalkan pelepasan aset',
+  'anggaran.tambah': 'Buat anggaran',
+  'anggaran.ubah': 'Ubah kepala anggaran',
+  'anggaran.akun_tambah': 'Tambah akun anggaran',
+  'anggaran.akun_hapus': 'Hapus akun anggaran',
+  'anggaran.rincian': 'Ubah angka anggaran',
+  'anggaran.hapus': 'Hapus draf anggaran',
+  'anggaran.setujui': 'Setujui anggaran',
+  'anggaran.batal': 'Batalkan anggaran',
+  'anggaran.revisi': 'Buat revisi anggaran',
 }
 
 export const NAMA_ENTITAS: Record<string, string> = {
@@ -410,4 +436,10 @@ export const NAMA_ENTITAS: Record<string, string> = {
   customer_payment: 'Penerimaan pelanggan',
   sales_return: 'Retur penjualan',
   branch: 'Profil usaha',
+  // tahap 6B
+  asset_category: 'Kategori aset',
+  fixed_asset: 'Aset tetap',
+  asset_depreciation_run: 'Penyusutan aset',
+  asset_disposal: 'Pelepasan aset',
+  budget: 'Anggaran',
 }

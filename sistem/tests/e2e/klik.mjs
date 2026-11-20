@@ -31,11 +31,14 @@ const BELI_4C = ['Pemasok', 'Permintaan', 'Pesanan', 'Penerimaan', 'Faktur', 'Re
 const AKUNTANSI_5B = ['Akun dan Pemetaan', 'Jurnal Umum', 'Buku Besar', 'Laporan Keuangan', 'Tutup Periode']
 // tahap 6A: grup Penjualan B2B sesudah Pembelian, Piutang Pelanggan di grup Keuangan, Profil Usaha di grup Pengaturan.
 const B2B_6A = ['Pelanggan', 'Pesanan Penjualan', 'Faktur Penjualan', 'Terima Pembayaran', 'Retur Penjualan']
+// tahap 6B: grup Aset dan Anggaran sesudah Akuntansi. Admin hanya melihat Aset Tetap, Anggaran, dan Realisasi Anggaran.
+const ASET_6B = ['Aset Tetap', 'Penyusutan', 'Pelepasan Aset', 'Anggaran', 'Realisasi Anggaran']
+const ASET_6B_ADMIN = ['Aset Tetap', 'Anggaran', 'Realisasi Anggaran']
 const SIDEBAR_HARAP = {
   // tahap 5A: Setoran POS di grup Kasir, Rekening Bank di grup Keuangan, Laporan di grup Laporan (Owner dan Admin).
   // tahap 5B: grup Akuntansi sesudah Keuangan; Admin hanya Akun dan Pemetaan.
-  owner: ['Beranda', ...KASIR_3B, 'PIN Kasir', 'Setoran POS', 'Metode Bayar', 'Menu dan Harga', 'Promo', 'Member', ...STOK_4A, ...PRODUKSI_4B, ...BELI_4C, ...B2B_6A, 'Rekening Bank', 'Hutang Pemasok', 'Piutang Pelanggan', ...AKUNTANSI_5B, 'Laporan', 'Lokasi', 'Profil Usaha', 'Pengguna', 'Peran dan Izin', 'Saklar Fitur', 'Jejak Audit'],
-  admin: ['Beranda', ...KASIR_3B, 'PIN Kasir', 'Setoran POS', 'Metode Bayar', 'Menu dan Harga', 'Promo', 'Member', ...STOK_4A, ...PRODUKSI_4B, ...BELI_4C, ...B2B_6A, 'Rekening Bank', 'Hutang Pemasok', 'Piutang Pelanggan', 'Akun dan Pemetaan', 'Laporan', 'Lokasi', 'Profil Usaha', 'Jejak Audit'],
+  owner: ['Beranda', ...KASIR_3B, 'PIN Kasir', 'Setoran POS', 'Metode Bayar', 'Menu dan Harga', 'Promo', 'Member', ...STOK_4A, ...PRODUKSI_4B, ...BELI_4C, ...B2B_6A, 'Rekening Bank', 'Hutang Pemasok', 'Piutang Pelanggan', ...AKUNTANSI_5B, ...ASET_6B, 'Laporan', 'Lokasi', 'Profil Usaha', 'Pengguna', 'Peran dan Izin', 'Saklar Fitur', 'Jejak Audit'],
+  admin: ['Beranda', ...KASIR_3B, 'PIN Kasir', 'Setoran POS', 'Metode Bayar', 'Menu dan Harga', 'Promo', 'Member', ...STOK_4A, ...PRODUKSI_4B, ...BELI_4C, ...B2B_6A, 'Rekening Bank', 'Hutang Pemasok', 'Piutang Pelanggan', 'Akun dan Pemetaan', ...ASET_6B_ADMIN, 'Laporan', 'Lokasi', 'Profil Usaha', 'Jejak Audit'],
   kasir: ['Beranda', ...KASIR_3B, 'Menu dan Harga', 'Member'],
 }
 const LEBAR = [

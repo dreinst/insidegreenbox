@@ -174,4 +174,4 @@ export async function daftarPenyusutan(db: Db, s: { hal?: string }) {
 }
 
 export const muatPenyusutan = (db: DbAtauTx, id: number) =>
-  db.assetDepreciationRun.findUnique({ where: { id }, include: { assetDepreciations: { include: { fixedAsset: { select: { id: true, code: true, name: true, cost: true } } }, orderBy: { fixedAssetId: 'asc' } } } })
+  db.assetDepreciationRun.findUnique({ where: { id }, include: { assetDepreciations: { include: { fixedAsset: { select: { id: true, code: true, name: true, cost: true, status: true } } }, orderBy: { fixedAssetId: 'asc' } } } })

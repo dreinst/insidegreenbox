@@ -27,8 +27,8 @@ const LEBAR = [
 ]
 const GRUP_HARAP = {
   // Grup sesudah gabungan tahap 4C, 5B, dan 6A.
-  owner: ['Kasir', 'Menu', 'Persediaan', 'Produksi', 'Pembelian', 'Penjualan B2B', 'Keuangan', 'Akuntansi', 'Laporan', 'Pengaturan'],
-  admin: ['Kasir', 'Menu', 'Persediaan', 'Produksi', 'Pembelian', 'Penjualan B2B', 'Keuangan', 'Akuntansi', 'Laporan', 'Pengaturan'],
+  owner: ['Kasir', 'Menu', 'Persediaan', 'Produksi', 'Pembelian', 'Penjualan B2B', 'Keuangan', 'Akuntansi', 'Aset dan Anggaran', 'Laporan', 'Pengaturan'],
+  admin: ['Kasir', 'Menu', 'Persediaan', 'Produksi', 'Pembelian', 'Penjualan B2B', 'Keuangan', 'Akuntansi', 'Aset dan Anggaran', 'Laporan', 'Pengaturan'],
   kasir: ['Kasir', 'Menu'],
 }
 const tanda = Date.now().toString(36).slice(-4).toUpperCase()
