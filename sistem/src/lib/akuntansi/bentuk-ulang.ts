@@ -20,9 +20,10 @@ import {
 import { tanggalJurnal, type HasilJurnal } from './jurnal'
 import { cocokkanPersediaan } from './laporan'
 import { pasangBawaanAkuntansi } from './pemetaan'
+import { DOK_B2B_STOK, bentukUlangB2b, cocokkanPiutang } from './bentuk-ulang-b2b'
 
 export type Rekap = { dibuat: number; kosong: number; gagal: { dok: string; pesan: string }[] }
-export type HasilBentukUlang = { per: Record<string, Rekap>; belumDidukung: { docType: string; dokumen: number }[]; persediaan: Awaited<ReturnType<typeof cocokkanPersediaan>>; pemetaanBaru: number }
+export type HasilBentukUlang = { per: Record<string, Rekap>; belumDidukung: { docType: string; dokumen: number }[]; persediaan: Awaited<ReturnType<typeof cocokkanPersediaan>>; piutang: Awaited<ReturnType<typeof cocokkanPiutang>>; pemetaanBaru: number }
 
 const BELUM = (jenis: string, balik = false) =>
   Prisma.sql`NOT EXISTS (SELECT 1 FROM journal j WHERE j.source_type = ${jenis} AND j.source_id = x.id AND ${balik ? Prisma.sql`j.reversal_of_id IS NOT NULL` : Prisma.sql`j.reversal_of_id IS NULL`})`
@@ -81,12 +82,16 @@ export async function bentukUlangJurnal(db: Db, opsi: { oleh?: number | null; lo
   for (const { id } of await db.$queryRaw<{ id: number }[]>`SELECT x.id FROM production_order x WHERE x.closed_at IS NOT NULL AND x.wip_writeoff <> 0 AND ${BELUM('production_order')} ORDER BY x.id`)
     await jalan('tutup_perintah', `production_order#${id}`, (tx) => jurnalTutupPerintah(tx, id, oleh))
 
+  // tahap 6B: penjualan B2B yang diposting sebelum jurnalnya disambungkan, lalu jurnal balik yang dibatalkan sesudahnya.
+  await bentukUlangB2b(db, jalan, oleh)
+
   // Gerak stok dari dokumen yang jurnalnya belum disambungkan (misalnya pembelian sebelum penggabungan).
   const belumDidukung = (
     await db.$queryRaw<{ doc_type: string; n: bigint }[]>`
-      SELECT doc_type, COUNT(DISTINCT doc_id)::bigint AS n FROM stock_ledger WHERE doc_type NOT IN (${jenisStok}, 'sale') GROUP BY 1 ORDER BY 1`
+      SELECT doc_type, COUNT(DISTINCT doc_id)::bigint AS n FROM stock_ledger WHERE doc_type NOT IN (${jenisStok}, 'sale', ${Prisma.join(DOK_B2B_STOK)}) GROUP BY 1 ORDER BY 1`
   ).map((b) => ({ docType: b.doc_type, dokumen: Number(b.n) }))
   const persediaan = await cocokkanPersediaan(db)
+  const piutang = await cocokkanPiutang(db)
   opsi.log?.(`Selesai: ${Object.entries(per).map(([k, r]) => `${k} ${r.dibuat}`).join(', ') || 'tidak ada yang perlu dibentuk'}`)
-  return { per, belumDidukung, persediaan, pemetaanBaru }
+  return { per, belumDidukung, persediaan, piutang, pemetaanBaru }
 }

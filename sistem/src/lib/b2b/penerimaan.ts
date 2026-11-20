@@ -27,6 +27,7 @@ import {
   type KepalaBeli,
 } from '../beli/dokumen'
 import { pelangganAktif, saringJual, type SaringJual } from './umum'
+import { balikJurnalTerimaPelanggan, jurnalTerimaPelanggan } from '../akuntansi/dokumen-b2b'
 
 const JENIS = 'customer_payment' as const
 const INFO = DOK_BELI[JENIS]
@@ -195,14 +196,20 @@ export const KAIT_TERIMA: KaitBeli<KepalaTerima> = {
       if (!r || !r.active) throw new GalatAturan('Rekening tujuan sudah nonaktif. Pilih kas atau rekening lain.')
     }
   },
-  posting: async (tx, d) => {
+  posting: async (tx, d, asal) => {
     const h = await prosesAlokasi(tx, d, 1)
-    return { ringkas: `${h.dokumen} dokumen, diterima ${formatRupiah(d.amount)}${h.kredit ? ` sesudah nota kredit ${formatRupiah(h.kredit)}` : ''}`, sesudah: { jumlah: d.amount, faktur: h.tagihan, notaKredit: h.kredit } }
+    // tahap 6B: jurnal kas atau bank lawan piutang usaha (KONTRAK 11 butir 96).
+    const j = await jurnalTerimaPelanggan(tx, d.id, asal.oleh)
+    return { ringkas: `${h.dokumen} dokumen, diterima ${formatRupiah(d.amount)}${h.kredit ? ` sesudah nota kredit ${formatRupiah(h.kredit)}` : ''}`, sesudah: { jumlah: d.amount, faktur: h.tagihan, notaKredit: h.kredit, jurnal: j?.no ?? null } }
   },
   batal: async (tx, d, _a, dari) => {
     if (dari !== 'Diposting') return
     const h = await prosesAlokasi(tx, d, -1)
     return { sesudah: { dikembalikan: h.tagihan, notaKreditDikembalikan: h.kredit } }
+  },
+  sesudahBalik: async (tx, d, aktor, tanggal) => {
+    const b = await balikJurnalTerimaPelanggan(tx, d.id, tanggal, aktor.id)
+    return { sesudah: { jurnalBalik: b?.no ?? null } }
   },
 }
 

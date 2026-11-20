@@ -20,7 +20,10 @@ async function main() {
   const p = h.persediaan
   console.log(`Persediaan di buku ${rp(p.buku)}, nilai stok ${rp(p.stok)}: ${p.cocok ? 'cocok' : `selisih ${rp(p.buku - p.stok)}`}.`)
   console.log(`Barang dalam proses di buku ${rp(p.bdpBuku)}, di perintah produksi ${rp(p.bdpProduksi ?? 0)}.`)
-  if (!p.cocok || kelompok.some(([, r]) => r.gagal.length)) process.exitCode = 1
+  const pu = h.piutang
+  console.log(`Piutang usaha di buku ${rp(Number(pu.buku))}, halaman Piutang Pelanggan ${rp(Number(pu.halaman))}: ${pu.cocok ? 'cocok' : `selisih ${rp(Number(pu.buku - pu.halaman))}`}.`)
+  for (const s of pu.selisih.slice(0, 10)) console.log(`  ${s.pelanggan}: buku ${rp(Number(s.buku))}, halaman ${rp(Number(s.halaman))}`)
+  if (!p.cocok || !pu.cocok || kelompok.some(([, r]) => r.gagal.length)) process.exitCode = 1
 }
 
 main()

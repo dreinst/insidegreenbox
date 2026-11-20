@@ -10,6 +10,7 @@ import { formatRupiah } from '../master'
 import { ambilNomor } from '../nomor'
 import { Desimal, NOL, des, formatQty, isianQty, keRupiah, skemaQtyOpsional } from '../stok/angka'
 import { catatGerak } from '../stok/mesin'
+import { balikJurnalReturJual, jurnalReturJual } from '../akuntansi/dokumen-b2b'
 import {
   BATAS_BARIS_BELI,
   DOK_BELI,
@@ -169,7 +170,9 @@ export const KAIT_RETUR_JUAL: KaitBeli<KepalaReturJual> = {
     const nilai = gerak.reduce((n, g) => n + g.nilai, 0n)
     const kredit = [...hasil.values()].reduce((n, h) => n + h.kredit, 0n)
     await tx.salesReturn.update({ where: { id: d.id }, data: { subtotal: kredit, tax: 0n, total: kredit, value: nilai, creditUsed: 0n } })
-    return { ringkas: `${baris.length} baris, HPP kembali ${formatRupiah(nilai)}, nota kredit ${formatRupiah(kredit)}`, sesudah: { baris: baris.length, hppKembali: nilai, notaKredit: kredit } }
+    // tahap 6B: jurnal nota kredit dan persediaan kembali (KONTRAK 11 butir 96).
+    const j = await jurnalReturJual(tx, d.id, asal.oleh)
+    return { ringkas: `${baris.length} baris, HPP kembali ${formatRupiah(nilai)}, nota kredit ${formatRupiah(kredit)}`, sesudah: { baris: baris.length, hppKembali: nilai, notaKredit: kredit, jurnal: j?.no ?? null } }
   },
   batal: async (tx, d, _a, dari) => {
     if (dari !== 'Diposting') return
@@ -182,6 +185,10 @@ export const KAIT_RETUR_JUAL: KaitBeli<KepalaReturJual> = {
       const g = await tx.salesInvoiceLine.findUniqueOrThrow({ where: { id: b.salesInvoiceLineId } })
       await tx.salesInvoiceLine.update({ where: { id: g.id }, data: { qtyReturned: Desimal.max(0, des(g.qtyReturned).minus(des(b.qty))) } })
     }
+  },
+  sesudahBalik: async (tx, d, aktor, tanggal) => {
+    const b = await balikJurnalReturJual(tx, d.id, tanggal, aktor.id)
+    return { sesudah: { jurnalBalik: b?.no ?? null } }
   },
 }
 

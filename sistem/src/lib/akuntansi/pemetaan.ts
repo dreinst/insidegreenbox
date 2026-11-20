@@ -42,6 +42,15 @@ export const KUNCI_UMUM: KunciUmum[] = [
   { kunci: 'beban_bank', nama: 'Beban administrasi bank', jenis: ['Beban'], keterangan: 'Biaya bank di pembayaran pembelian.' },
   { kunci: 'laci_masuk', nama: 'Asal kas masuk laci', jenis: ['Aset', 'Kewajiban', 'Ekuitas', 'Pendapatan'], keterangan: 'Lawan kas masuk laci di luar penjualan (misalnya uang receh dari kas besar).' },
   { kunci: 'laci_keluar', nama: 'Tujuan kas keluar laci', jenis: ['Beban', 'Aset', 'HPP'], keterangan: 'Lawan kas keluar laci (misalnya beli es atau belanja kecil).' },
+  // tahap 6B: penjualan B2B, aset tetap, dan pelepasan aset.
+  { kunci: 'piutang_usaha', nama: 'Piutang usaha', jenis: ['Aset'], keterangan: 'Faktur penjualan B2B sampai dilunasi; nota kredit retur mengurangi.' },
+  { kunci: 'penjualan_b2b', nama: 'Penjualan B2B', jenis: ['Pendapatan'], keterangan: 'Subtotal faktur penjualan B2B.' },
+  { kunci: 'retur_penjualan', nama: 'Retur penjualan B2B', jenis: ['Pendapatan'], keterangan: 'Nota kredit retur penjualan B2B (mengurangi pendapatan).' },
+  { kunci: 'aset_tetap', nama: 'Aset tetap (bawaan)', jenis: ['Aset'], keterangan: 'Nilai perolehan aset yang kategorinya tidak punya pemetaan sendiri.' },
+  { kunci: 'akumulasi_penyusutan', nama: 'Akumulasi penyusutan (bawaan)', jenis: ['Aset'], keterangan: 'Penyusutan aset yang kategorinya tidak punya pemetaan sendiri (mengurangi aset tetap).' },
+  { kunci: 'beban_penyusutan', nama: 'Beban penyusutan (bawaan)', jenis: ['Beban'], keterangan: 'Beban penyusutan bulanan aset yang kategorinya tidak punya pemetaan sendiri.' },
+  { kunci: 'laba_lepas_aset', nama: 'Laba pelepasan aset', jenis: ['Pendapatan'], keterangan: 'Hasil penjualan aset di atas nilai bukunya.' },
+  { kunci: 'rugi_lepas_aset', nama: 'Rugi pelepasan aset', jenis: ['Beban'], keterangan: 'Nilai buku aset yang dilepas di atas hasil penjualannya.' },
 ]
 
 export const KUNCI_PER_KODE = new Map(KUNCI_UMUM.map((k) => [k.kunci, k]))
@@ -52,11 +61,17 @@ export const TURUNAN = {
   bank: { awalan: 'bank', nama: 'Rekening bank', jenis: ['Aset'] as AccountKind[] },
   persediaan: { awalan: 'persediaan', nama: 'Lokasi stok', jenis: ['Aset'] as AccountKind[] },
   alasan: { awalan: 'alasan', nama: 'Alasan penyesuaian', jenis: ['HPP', 'Beban', 'Ekuitas', 'Pendapatan'] as AccountKind[] },
+  // tahap 6B: tiga akun per kategori aset tetap (id asset_category).
+  aset_tetap: { awalan: 'aset_tetap', nama: 'Aset tetap per kategori', jenis: ['Aset'] as AccountKind[] },
+  akumulasi_penyusutan: { awalan: 'akumulasi_penyusutan', nama: 'Akumulasi penyusutan per kategori', jenis: ['Aset'] as AccountKind[] },
+  beban_penyusutan: { awalan: 'beban_penyusutan', nama: 'Beban penyusutan per kategori', jenis: ['Beban'] as AccountKind[] },
 } as const
 
 export const kunciKliring = (metodeId: number) => [`kliring.${metodeId}`, 'kliring']
 export const kunciBank = (rekeningId: number) => [`bank.${rekeningId}`, 'bank']
 export const kunciPersediaan = (lokasiId: number) => [`persediaan.${lokasiId}`, 'persediaan']
+// tahap 6B: akun aset tetap per kategori, jatuh ke kunci umumnya.
+export const kunciAset = (jenis: 'aset_tetap' | 'akumulasi_penyusutan' | 'beban_penyusutan', kategoriId: number) => [`${jenis}.${kategoriId}`, jenis]
 // Alasan Saldo awal (kode sistem) jatuh ke ekuitas saldo awal; alasan lain ke selisih persediaan.
 export const kunciAlasan = (alasan: { id: number; code: string | null } | null) =>
   alasan ? [`alasan.${alasan.id}`, ...(alasan.code === 'saldo_awal' ? ['saldo_awal'] : []), 'selisih_persediaan'] : ['selisih_persediaan']

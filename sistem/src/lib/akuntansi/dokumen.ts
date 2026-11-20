@@ -23,6 +23,10 @@ const NAMA_DOK: Record<string, string> = {
   quick_production: 'Produksi cepat',
   production_order: 'Tutup perintah produksi',
   memorial: 'Jurnal memorial',
+  // tahap 6B
+  sales_invoice: 'Faktur penjualan',
+  customer_payment: 'Penerimaan pelanggan',
+  sales_return: 'Retur penjualan',
 }
 export const namaSumber = (t: string) => NAMA_DOK[t] ?? t
 
@@ -240,6 +244,10 @@ const JALUR_SUMBER: Record<string, string> = {
   quick_production: '/produksi-cepat',
   production_order: '/perintah-produksi',
   memorial: '/jurnal',
+  // tahap 6B
+  sales_invoice: '/faktur-jual',
+  customer_payment: '/terima-pelanggan',
+  sales_return: '/retur-jual',
 }
 
 export function tautanSumber(sourceType: string, sourceId: number | null, docNo = '') {

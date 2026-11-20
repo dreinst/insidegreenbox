@@ -90,6 +90,9 @@ export type KaitBeli<K extends KepalaBeli> = {
   posting?: (tx: Tx, d: K, dok: DokumenAsal, aktor: Aktor) => Promise<HasilKait>
   // Dijalankan sebelum status menjadi Batal: memeriksa dokumen turunan dan mengembalikan penghitung.
   batal?: (tx: Tx, d: K, aktor: Aktor, dari: DocStatus) => Promise<HasilKait | void>
+  // tahap 6B: pembatalan dari Diposting, dijalankan sesudah gerak balik stok ditulis (jurnal balik dibentuk dari gerak
+  // balik, KONTRAK 14.2 aturan 3). tanggal = hari pembatalan.
+  sesudahBalik?: (tx: Tx, d: K, aktor: Aktor, tanggal: Date) => Promise<HasilKait | void>
   // Dokumen rencana: syarat tambahan Tutup sisa.
   tutup?: (tx: Tx, d: K, aktor: Aktor) => Promise<void>
 }
@@ -205,8 +208,10 @@ export async function ubahStatusBeli<K extends KepalaBeli>(db: Db, k: Konteks, a
         if (alasan.length < 5) throw new GalatAturan('Tulis alasan pembatalan, minimal 5 huruf.', 'alasan')
         tambahHasil(await kait.batal?.(tx, kini, aktor, kini.status))
         const balik = await balikDokumen(tx, { docType: kait.jenis, docId: kini.id, docNo: kini.no, tanggal: hariIni(sekarang), oleh: aktor.id })
+        const sesudahBalik = await kait.sesudahBalik?.(tx, kini, aktor, hariIni(sekarang))
         ringkas = `Membatalkan ${nama} ${kini.no} yang sudah Diposting${balik.length ? ` dengan ${balik.length} gerak balik` : ''}. Alasan: ${alasan}`
         if (balik.length) sesudah = { ...sesudah, gerakBalik: balik.map((g) => ({ productId: g.productId, locationId: g.locationId, qty: g.qty.toString(), nilai: g.nilai })) }
+        if (sesudahBalik?.sesudah) sesudah = { ...sesudah, ...sesudahBalik.sesudah }
       } else {
         pastikanIzin(aktor, inf.menu, 'U')
         if (!transisiSah(gol, kini.status, 'Batal')) tolak()
