@@ -320,8 +320,14 @@ for (const [w, h] of [
       })
     if (w > 820) {
       await p.goto(`${BASE}/`)
+      // Sesudah tahap 4A dan 5A digabung, item Owner lebih dari yang muat di 900 px. Sidebar digulir sendiri, jadi
+      // syaratnya item terakhir bisa dicapai lewat gulir tanpa menggulir halaman.
+      await p.mouse.move(120, 400)
+      await p.mouse.wheel(0, 3000)
+      await p.waitForTimeout(300)
       const s = await ukur()
-      cek(`${w}px owner: semua item sidebar terlihat di ${w} x ${h}`, s.n >= 13 && s.bawah <= s.tinggi, JSON.stringify(s))
+      cek(`${w}px owner: semua item sidebar bisa dicapai di ${w} x ${h}`, s.n >= 13 && s.bawah <= s.tinggi && s.atas >= 0 && (s.gulir === 0 || s.oy === 'auto'), JSON.stringify(s))
+      await p.evaluate(() => document.querySelector('.samping').scrollTo(0, 0))
       await p.screenshot({ path: `${POTRET}${w}-owner-sidebar.png` })
       await p.setViewportSize({ width: w, height: 640 })
       await p.mouse.move(120, 400)
