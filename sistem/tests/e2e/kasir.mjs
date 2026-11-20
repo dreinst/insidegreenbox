@@ -67,6 +67,9 @@ const luapan = (page) => page.evaluate(() => document.documentElement.scrollWidt
 // Potret satu halaman penuh dan cek tidak ada luapan horizontal.
 async function potret(page, nama) {
   await page.waitForLoadState('networkidle')
+  // Gulir ke atas dulu supaya header dan bilah yang menempel tidak tercetak di tengah potret satu halaman.
+  await page.evaluate(() => window.scrollTo(0, 0))
+  await page.waitForTimeout(150)
   await page.screenshot({ path: `${POTRET}${nama}.png`, fullPage: true })
   const lebih = await luapan(page)
   cek(`potret ${nama} tanpa luapan horizontal`, lebih <= 1, `lebih ${lebih}px`)
@@ -128,7 +131,7 @@ for (const [w, h] of [
   const idShift = idDariUrl(page)
   const sh = await satu('select open_cash, status from shift where id=$1', [idShift])
   cek(`${w}px kasir: shift dibuka dengan modal`, sh?.open_cash === '200000' && sh.status === 'Buka', JSON.stringify(sh))
-  cek(`${w}px kasir: kas seharusnya tidak tampil sebelum tutup`, !(await teks(page)).includes('Kas seharusnya'))
+  cek(`${w}px kasir: kas seharusnya tidak tampil sebelum tutup`, (await page.$$('#j-kas, #j-rekap')).length === 0)
 
   await page.fill('#k-jumlah', '5000')
   await page.fill('#k-alasan', 'Beli es batu')
@@ -169,13 +172,14 @@ for (const [w, h] of [
   await page.selectOption('#k-metode-0', { label: 'QRIS' })
   cek(`${w}px kasir: QRIS terisi sebesar total`, (await page.inputValue('#k-jumlah-0')) === '33.264', await page.inputValue('#k-jumlah-0'))
   await potret(page, `${w}-kasir-member-qris`)
-  await Promise.all([page.waitForURL(/\/kasir\?selesai=\d+/, { timeout: 20000 }), page.click('button.lk-tombol-bayar')])
+  await Promise.all([page.waitForURL((u) => Number(u.searchParams.get('selesai')) > idJual1, { timeout: 20000 }), page.click('button.lk-tombol-bayar')])
   const idJual2 = Number(new URL(page.url()).searchParams.get('selesai'))
   const j2 = await satu("select s.total, s.disc, s.member_id, m.name metode from sale s join sale_payment p on p.sale_id=s.id join payment_method m on m.id=p.payment_method_id where s.id=$1", [idJual2])
   cek(`${w}px kasir: penjualan QRIS dengan potongan member tersimpan`, j2?.total === '33264' && j2.disc === '3200' && j2.metode === 'QRIS' && j2.member_id, JSON.stringify(j2))
 
   await Promise.all([page.waitForURL(`**/struk/${idJual2}`), page.click('.lk-selesai a:text-is("Cetak struk")')])
-  cek(`${w}px kasir: struk memuat total dan potongan`, (await teks(page)).includes('Potongan member') || (await page.textContent('.struk'))?.includes('Potongan member'))
+  const isiStruk = await page.textContent('.struk')
+  cek(`${w}px kasir: struk memuat potongan, total, dan QRIS`, isiStruk?.includes('Potongan member') && isiStruk.includes('33.264') && isiStruk.includes('QRIS'), isiStruk?.slice(0, 120))
   await potret(page, `${w}-struk`)
 
   // Void penjualan 1 dengan PIN Admin; tanpa PIN ditolak dan alasan tetap terisi.
@@ -197,7 +201,7 @@ for (const [w, h] of [
 
   // Tutup buta lewat pecahan: 3 x 50.000 = 150.000. Seharusnya 200.000 - 5.000 = 195.000 (penjualan tunai di-void).
   await page.goto(`${BASE}/shift/${idShift}`)
-  cek(`${w}px kasir: kas seharusnya tetap tersembunyi sebelum tutup`, !(await teks(page)).includes('Kas seharusnya'))
+  cek(`${w}px kasir: kas seharusnya tetap tersembunyi sebelum tutup`, (await page.$$('#j-kas, #j-rekap')).length === 0)
   await page.click('details.pecahan summary')
   await page.fill('input[name="pecahan_50000"]', '3')
   cek(`${w}px kasir: total pecahan dihitung di layar`, (await page.textContent('.pecahan-total'))?.includes('150.000'))
@@ -206,16 +210,17 @@ for (const [w, h] of [
   await Promise.all([page.waitForURL(/\?pesan=shift-tutup/), page.click('button:text-is("Tutup shift")')])
   const t = await satu('select status, expected_cash, counted_cash, cash_diff from shift where id=$1', [idShift])
   cek(`${w}px kasir: tutup shift dengan selisih di atas batas perlu persetujuan`, t.status === 'PerluPersetujuan' && t.expected_cash === '195000' && t.counted_cash === '150000' && t.cash_diff === '-45000', JSON.stringify(t))
-  cek(`${w}px kasir: sesudah tutup kas seharusnya tampil`, (await teks(page)).includes('Kas seharusnya'))
+  cek(`${w}px kasir: sesudah tutup kas seharusnya tampil`, (await page.textContent('#j-kas + dl'))?.includes('195.000'))
   await potret(page, `${w}-kasir-shift-tutup`)
 
+  // Galat konsol dicek sebelum kunjungan yang sengaja ditolak, karena 403 dan 404 tercatat sebagai galat sumber daya.
+  cek(`${w}px kasir: tanpa galat konsol`, kasir.galat.length === 0, kasir.galat.slice(0, 3).join(' | '))
   for (const jalur of ['/pin', `/pin/${idKasir}`, '/pengguna', '/saklar']) {
     const r = await page.goto(`${BASE}${jalur}`)
     cek(`${w}px kasir: ${jalur} ditolak`, r.status() === 403, `status ${r.status()}`)
   }
   await page.goto(`${BASE}/kasir`)
   cek(`${w}px kasir: layar kasir kembali meminta buka shift`, (await teks(page)).includes('Buka shift dulu'))
-  cek(`${w}px kasir: tanpa galat konsol`, kasir.galat.length === 0, kasir.galat.slice(0, 3).join(' | '))
   await kasir.ctx.close()
 
   // Admin: tidak bisa menyetujui selisih, tidak bisa void sesudah shift ditutup, tidak bisa membuka PIN Owner.
@@ -226,11 +231,12 @@ for (const [w, h] of [
   await potret(admin.page, `${w}-admin-shift-rincian`)
   await admin.page.goto(`${BASE}/transaksi/${idJual2}`)
   cek(`${w}px admin: void sesudah shift ditutup ditolak`, (await teks(admin.page)).includes('hanya bisa oleh Owner') && (await admin.page.$$('button:text-is("Void transaksi")')).length === 0)
-  const r = await admin.page.goto(`${BASE}/pin/${idOwner}`)
-  cek(`${w}px admin: PIN Owner tidak bisa dibuka`, r.status() === 404, `status ${r.status()}`)
   await admin.page.goto(`${BASE}/pin`)
   await potret(admin.page, `${w}-admin-pin`)
+  cek(`${w}px admin: daftar PIN tanpa Owner`, !(await admin.page.$(`a[href="/pin/${idOwner}"]`)))
   cek(`${w}px admin: tanpa galat konsol`, admin.galat.length === 0, admin.galat.slice(0, 3).join(' | '))
+  const r = await admin.page.goto(`${BASE}/pin/${idOwner}`)
+  cek(`${w}px admin: PIN Owner tidak bisa dibuka`, r.status() === 404, `status ${r.status()}`)
   await admin.ctx.close()
 
   // Owner menyetujui shift dari antrean.

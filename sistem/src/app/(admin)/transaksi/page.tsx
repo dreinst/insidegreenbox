@@ -115,7 +115,9 @@ export default async function DaftarTransaksi({ searchParams }: { searchParams: 
                   </td>
                   <td data-label="Waktu">{formatWaktu(j.at)}</td>
                   <td data-label="Kasir">
-                    {j.shift.user.name} <small className="redup">#{j.shift.id}</small>
+                    <span>
+                      {j.shift.user.name} <small className="redup">shift #{j.shift.id}</small>
+                    </span>
                   </td>
                   <td data-label="Mode">
                     {MODE[j.mode as keyof typeof MODE] ?? j.mode}

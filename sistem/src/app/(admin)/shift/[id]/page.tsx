@@ -42,11 +42,11 @@ export default async function RincianShift({ params, searchParams }: { params: P
       <PesanFlash kode={pesan} />
       {s.status === 'PerluPersetujuan' ? (
         <p className="pesan peringatan" role="status">
-          Selisih kas {selisihTeks(s.cashDiff).toLowerCase()} melewati batas {s.diffLimit === null ? 'yang berlaku' : rupiah(s.diffLimit)}. Shift ini menunggu persetujuan Owner.
+          Kas {Number(s.cashDiff ?? 0) < 0 ? 'kurang' : 'lebih'} {rupiah(Math.abs(Number(s.cashDiff ?? 0)))}, melewati batas {s.diffLimit === null ? 'yang berlaku' : rupiah(s.diffLimit)}. Shift ini menunggu persetujuan Owner.
         </p>
       ) : null}
 
-      <div className="kisi">
+      <div className="kisi rata-atas">
         <section className="kartu" aria-labelledby="j-data">
           <h2 id="j-data">Data shift</h2>
           <dl className="rincian">
@@ -149,7 +149,7 @@ export default async function RincianShift({ params, searchParams }: { params: P
       </div>
 
       {bolehUbah ? (
-        <div className="kisi">
+        <div className="kisi rata-atas">
           <section className="kartu" aria-labelledby="j-laci">
             <h2 id="j-laci">Kas masuk dan keluar laci</h2>
             <FormKas aksi={kasLaciAksi.bind(null, s.id)} />

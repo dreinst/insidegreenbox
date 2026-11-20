@@ -1,7 +1,7 @@
 'use client'
 // Layar kasir (tahap 3B). Keranjang hidup di state klien, jadi tetap utuh saat aksi mengembalikan galat.
 // Angka di layar hanya pratinjau; harga, potongan, pajak, service, dan pembagian bayar dihitung ulang di server.
-import { useActionState, useMemo, useState, useTransition } from 'react'
+import { useActionState, useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { PesanHasil, TombolKirim } from '@/components/form'
 import { HASIL_AWAL, type HasilAksi } from '@/lib/aksi'
 import { bagiBayar, hitungTotal, rupiah } from '@/lib/hitung-kasir'
@@ -37,6 +37,17 @@ export function LayarKasir({ menu, metode, biaya, aksi, cariMember }: Prop) {
   const [mencari, mulaiCari] = useTransition()
   const tunai = metode.find((m) => m.tunai)
   const [bayar, setBayar] = useState<Bayar[]>([{ kunci: 1, metodeId: (tunai ?? metode[0])?.id ?? 0, jumlah: '' }])
+
+  // Bilah total di HP hanya tampil selama panel pesanan belum terlihat, supaya tidak menutupi tombol bayar.
+  const panel = useRef<HTMLElement>(null)
+  const [panelTampak, setPanelTampak] = useState(false)
+  useEffect(() => {
+    const el = panel.current
+    if (!el || typeof IntersectionObserver === 'undefined') return
+    const o = new IntersectionObserver(([e]) => setPanelTampak(e.isIntersecting))
+    o.observe(el)
+    return () => o.disconnect()
+  }, [])
 
   const perId = useMemo(() => new Map(menu.map((m) => [m.id, m])), [menu])
   const daftarKategori = useMemo(() => [...new Set(menu.map((m) => m.category))], [menu])
@@ -148,7 +159,7 @@ export function LayarKasir({ menu, metode, biaya, aksi, cariMember }: Prop) {
           )}
         </section>
 
-        <aside className="lk-keranjang kartu" id="keranjang" aria-labelledby="j-pesanan" tabIndex={-1}>
+        <aside className="lk-keranjang kartu" id="keranjang" aria-labelledby="j-pesanan" tabIndex={-1} ref={panel}>
           <h2 id="j-pesanan">Pesanan {mode === 'dinein' ? (meja.trim() ? `meja ${meja.trim()}` : 'dine in') : 'take away'}</h2>
           <form action={kirim} className="form" noValidate>
             <PesanHasil hasil={hasil} />
@@ -355,7 +366,7 @@ export function LayarKasir({ menu, metode, biaya, aksi, cariMember }: Prop) {
           </form>
         </aside>
       </div>
-      {keranjang.length ? (
+      {keranjang.length && !panelTampak ? (
         <div className="lk-bar-hp">
           <span>
             {jumlahItem} item · <b>{rupiah(t.total)}</b>

@@ -221,7 +221,8 @@ export async function daftarPenjualan(db: Db, aktor: Aktor, s: SaringJual) {
       include: { shift: { select: { id: true, user: { select: { name: true } } } }, salePayments: { include: { paymentMethod: { select: { name: true } } } } },
     }),
     db.sale.count({ where }),
-    db.sale.aggregate({ where: { ...where, status: 'Selesai' }, _sum: { total: true }, _count: { _all: true } }),
+    // Ringkasan hanya menghitung penjualan selesai; saringan status Void membuat ringkasannya nol.
+    s.status === 'Void' ? { _sum: { total: 0n }, _count: { _all: 0 } } : db.sale.aggregate({ where: { ...where, status: 'Selesai' }, _sum: { total: true }, _count: { _all: true } }),
   ])
   return { baris, total, hal, jumlahHal: Math.max(1, Math.ceil(total / PER_HALAMAN_JUAL)), omzet: Number(jumlah._sum.total ?? 0), selesai: jumlah._count._all }
 }
