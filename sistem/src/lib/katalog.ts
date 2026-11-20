@@ -182,27 +182,61 @@ const SIDEBAR_KASIR: ItemSidebar[] = [
   { href: '/pin', label: 'PIN Kasir', menu: 'kasir.pin', ikon: 'pin' },
 ]
 
-export const SIDEBAR: ItemSidebar[] = [
-  { href: '/', label: 'Beranda', menu: null, ikon: 'beranda' },
-  ...SIDEBAR_KASIR,
-  // tahap 3A: modul master.
-  { href: '/menu', label: 'Menu dan Harga', menu: 'menu.menu', ikon: 'hidangan' },
-  { href: '/promo', label: 'Promo', menu: 'menu.promo', ikon: 'promo' },
-  { href: '/member', label: 'Member', menu: 'menu.member', ikon: 'member' },
-  { href: '/metode-bayar', label: 'Metode Bayar', menu: 'akun.metode_bayar', ikon: 'bayar' },
-  // tahap 4A: persediaan (urutan KONTRAK bagian 8) dan master lokasi sederhana (atur.lokasi).
-  { href: '/produk', label: 'Produk dan Satuan', menu: 'stok.produk', ikon: 'produk' },
-  { href: '/stok', label: 'Stok', menu: 'stok.saldo', ikon: 'stok' },
-  { href: '/penyesuaian', label: 'Penyesuaian', menu: 'stok.penyesuaian', ikon: 'penyesuaian' },
-  { href: '/opname', label: 'Opname', menu: 'stok.opname', ikon: 'opname' },
-  { href: '/pindah-stok', label: 'Pindah Stok', menu: 'stok.pindah', ikon: 'pindah' },
-  { href: '/alasan-stok', label: 'Alasan', menu: 'stok.alasan', ikon: 'alasan' },
-  { href: '/lokasi', label: 'Lokasi', menu: 'atur.lokasi', ikon: 'lokasi' },
-  { href: '/pengguna', label: 'Pengguna', menu: 'atur.pengguna', ikon: 'pengguna' },
-  { href: '/peran', label: 'Peran dan Izin', menu: 'atur.peran', ikon: 'peran' },
-  { href: '/saklar', label: 'Saklar Fitur', menu: 'atur.saklar', ikon: 'saklar' },
-  { href: '/audit', label: 'Jejak Audit', menu: 'atur.audit', ikon: 'audit' },
+// tahap 4B: sidebar dikelompokkan dengan judul grup supaya lebih dari 20 item mudah dipindai. Grup tanpa item yang boleh
+// dilihat tidak ditampilkan. judul null berarti tanpa judul (Beranda).
+export type GrupSidebar = { judul: string | null; item: ItemSidebar[] }
+
+export const SIDEBAR_GRUP: GrupSidebar[] = [
+  { judul: null, item: [{ href: '/', label: 'Beranda', menu: null, ikon: 'beranda' }] },
+  // tahap 3B dan 3A: kasir dan metode bayarnya.
+  { judul: 'Kasir', item: [...SIDEBAR_KASIR, { href: '/metode-bayar', label: 'Metode Bayar', menu: 'akun.metode_bayar', ikon: 'bayar' }] },
+  // tahap 3A: modul master menu.
+  {
+    judul: 'Menu',
+    item: [
+      { href: '/menu', label: 'Menu dan Harga', menu: 'menu.menu', ikon: 'hidangan' },
+      { href: '/promo', label: 'Promo', menu: 'menu.promo', ikon: 'promo' },
+      { href: '/member', label: 'Member', menu: 'menu.member', ikon: 'member' },
+    ],
+  },
+  // tahap 4A: persediaan (urutan KONTRAK bagian 8).
+  {
+    judul: 'Persediaan',
+    item: [
+      { href: '/produk', label: 'Produk dan Satuan', menu: 'stok.produk', ikon: 'produk' },
+      // tahap 4B
+      { href: '/resep', label: 'Resep dan BOM', menu: 'stok.resep', ikon: 'resep' },
+      { href: '/stok', label: 'Stok', menu: 'stok.saldo', ikon: 'stok' },
+      { href: '/penyesuaian', label: 'Penyesuaian', menu: 'stok.penyesuaian', ikon: 'penyesuaian' },
+      { href: '/opname', label: 'Opname', menu: 'stok.opname', ikon: 'opname' },
+      { href: '/pindah-stok', label: 'Pindah Stok', menu: 'stok.pindah', ikon: 'pindah' },
+      { href: '/alasan-stok', label: 'Alasan', menu: 'stok.alasan', ikon: 'alasan' },
+    ],
+  },
+  // tahap 4B: produksi (RANCANGAN 5).
+  {
+    judul: 'Produksi',
+    item: [
+      { href: '/perintah-produksi', label: 'Perintah Produksi', menu: 'produksi.perintah', ikon: 'perintah' },
+      { href: '/pengeluaran-bahan', label: 'Pengeluaran Bahan', menu: 'produksi.pengeluaran', ikon: 'pengeluaran' },
+      { href: '/hasil-produksi', label: 'Hasil Produksi', menu: 'produksi.hasil', ikon: 'hasil' },
+      { href: '/produksi-cepat', label: 'Produksi Cepat', menu: 'produksi.cepat', ikon: 'cepat' },
+    ],
+  },
+  // tahap 2, ditambah master lokasi sederhana tahap 4A (atur.lokasi).
+  {
+    judul: 'Pengaturan',
+    item: [
+      { href: '/lokasi', label: 'Lokasi', menu: 'atur.lokasi', ikon: 'lokasi' },
+      { href: '/pengguna', label: 'Pengguna', menu: 'atur.pengguna', ikon: 'pengguna' },
+      { href: '/peran', label: 'Peran dan Izin', menu: 'atur.peran', ikon: 'peran' },
+      { href: '/saklar', label: 'Saklar Fitur', menu: 'atur.saklar', ikon: 'saklar' },
+      { href: '/audit', label: 'Jejak Audit', menu: 'atur.audit', ikon: 'audit' },
+    ],
+  },
 ]
+
+export const SIDEBAR: ItemSidebar[] = SIDEBAR_GRUP.flatMap((g) => g.item)
 
 export const grupMenu = () => {
   const peta = new Map<string, MenuIzin[]>()
