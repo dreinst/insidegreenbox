@@ -164,7 +164,7 @@ for (const [w, h] of [
 
   // Penjualan 2: take away, member 10%, QRIS. 32.000 - 3.200 = 28.800, service 1.440, pajak 3.024.
   await page.click('button:text-is("Take away")')
-  await page.click(ubin('Matcha Latte'))
+  await page.click(ubin('Matcha Susu'))
   await page.fill('#k-wa', '0812-3456-7890')
   await page.click('button:text-is("Cari")')
   await page.waitForSelector('.lk-member-pilih')

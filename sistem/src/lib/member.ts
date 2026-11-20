@@ -6,26 +6,14 @@ import { catatAudit, selisih, type Konteks } from './audit'
 import type { Db, Tx } from './db'
 import { pastikanIzin, type Pengguna } from './izin-inti'
 import { PER_HALAMAN, pesanUnik, sesuaiHalaman, skemaCentang, skemaPersen, skemaTeksOpsional, labelKolom } from './master'
+import { normalisasiWa } from './wa'
+
+// Normalisasi WA ada di wa.ts supaya layar kasir (klien) bisa memakainya tanpa ikut memuat modul server ini.
+export { formatWa, normalisasiWa } from './wa'
 
 type Aktor = Pick<Pengguna, 'id' | 'izin'>
 const MENU = 'menu.member'
 const TINGKAT = 'menu.tingkat'
-
-// Nomor WhatsApp ke format 62: "0812-3456-0001", "+62 812 3456 0001", dan "812..." semuanya menjadi 62812...
-// Hanya nomor seluler Indonesia (62 8xx, 11 sampai 14 angka) yang diterima. Hasil null berarti tidak sah.
-export function normalisasiWa(masukan: string): string | null {
-  let d = masukan.replace(/\D/g, '')
-  if (d.startsWith('00')) d = d.slice(2)
-  if (d.startsWith('0')) d = `62${d.slice(1)}`
-  else if (d.startsWith('8')) d = `62${d}`
-  return /^628\d{8,11}$/.test(d) ? d : null
-}
-
-// Tampilan nomor yang mudah dibaca: 62 812-3456-0001.
-export function formatWa(wa: string) {
-  const s = wa.replace(/^62/, '')
-  return `+62 ${s.slice(0, 3)}-${s.slice(3, 7)}-${s.slice(7)}`
-}
 
 // ===== Tingkat =====
 
@@ -45,6 +33,7 @@ async function hitungUlangTingkat(tx: Tx) {
   await tx.$executeRaw`UPDATE member m SET tier_id = (SELECT t.id FROM member_tier t WHERE t.active AND t.min_visits <= m.visits ORDER BY t.min_visits DESC LIMIT 1) WHERE m.tier_id IS DISTINCT FROM (SELECT t.id FROM member_tier t WHERE t.active AND t.min_visits <= m.visits ORDER BY t.min_visits DESC LIMIT 1)`
 }
 
+// Tingkat aktif dengan syarat kunjungan tertinggi yang sudah dipenuhi, atau null bila belum ada.
 export async function tingkatUntuk(tx: Db | Tx, kunjungan: number) {
   return tx.memberTier.findFirst({ where: { active: true, minVisits: { lte: kunjungan } }, orderBy: { minVisits: 'desc' } })
 }
@@ -217,5 +206,19 @@ export async function daftarMember(db: Db, s: SaringMember) {
   return { baris, total, hal, jumlahHal: Math.max(1, Math.ceil(total / PER_HALAMAN)) }
 }
 
-// Potongan yang berlaku untuk member: 0 bila potongan dimatikan atau member nonaktif.
-export const potonganMember = (m: { active: boolean; discountOn: boolean; tier: { discountPct: { toString(): string } } | null }) => (m.active && m.discountOn && m.tier ? Number(m.tier.discountPct.toString()) : 0)
+// Potongan yang berlaku untuk member, satu-satunya sumber aturan ini (halaman member dan kasir): persen tingkatnya,
+// atau 0 bila member nonaktif, potongannya dimatikan, belum punya tingkat, atau tingkatnya nonaktif.
+// Kasir mengisi tier dengan tingkatUntuk(visits) saat transaksi, jadi tier_id yang tertinggal tidak ikut terpakai.
+export const potonganMember = (m: { active: boolean; discountOn: boolean; tier: { active: boolean; discountPct: { toString(): string } } | null }) =>
+  m.active && m.discountOn && m.tier?.active ? Number(m.tier.discountPct.toString()) : 0
+
+// Menambah atau mengurangi satu kunjungan (penjualan dan void di kasir) sekaligus menghitung ulang tingkatnya,
+// dalam satu pernyataan supaya penjualan bersamaan tidak saling menimpa. Kunjungan tidak pernah di bawah 0.
+export async function catatKunjungan(tx: Tx, memberId: number, arah: 1 | -1) {
+  await tx.$executeRaw`
+    UPDATE member m SET
+      visits = GREATEST(m.visits + ${arah}::int, 0),
+      tier_id = (SELECT t.id FROM member_tier t WHERE t.active AND t.min_visits <= GREATEST(m.visits + ${arah}::int, 0) ORDER BY t.min_visits DESC LIMIT 1),
+      updated_at = now()
+    WHERE m.id = ${memberId}`
+}
