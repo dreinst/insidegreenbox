@@ -13,6 +13,7 @@
     "seed:contoh": "tsx scripts/seed-contoh.ts",
     "impor:menu": "tsx scripts/impor-menu.ts",
     "impor:stok": "tsx scripts/impor-stok.ts",
+    "impor:beli": "tsx scripts/impor-beli.ts",
     "test": "node --import tsx --test --test-concurrency=1 tests/*.test.ts",
     "e2e": "mkdir -p tests/hasil && bash tests/e2e/jalankan.sh"
   },

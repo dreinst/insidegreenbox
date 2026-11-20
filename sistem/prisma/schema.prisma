@@ -171,6 +171,8 @@ model ApprovalRule {
   docType          String   @id @map("doc_type")
   requiresApproval Boolean  @default(true) @map("requires_approval")
   minAmount        BigInt?  @map("min_amount")
+  // tahap 4C: batas persen (selisih harga faktur pembelian terhadap nilai penerimaan).
+  minPct           Decimal? @map("min_pct") @db.Decimal(6, 3)
   updatedBy        Int?     @map("updated_by")
   updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -516,6 +518,8 @@ model Supplier {
   creditDays       Int               @default(0) @map("credit_days")
   bankName         String            @default("") @map("bank_name")
   bankAccountNo    String            @default("") @map("bank_account_no")
+  // tahap 4C: catatan pemasok dari admin lama (jadwal kirim, barang yang dipasok).
+  note             String            @default("")
   active           Boolean           @default(true)
   createdBy        Int?              @map("created_by")
   createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -602,6 +606,8 @@ model PurchaseOrder {
   cancelReason       String?             @map("cancel_reason")
   closeReason        String?             @map("close_reason")
   closedAt           DateTime?           @map("closed_at") @db.Timestamptz(6)
+  // tahap 4C: nomor PO admin lama untuk impor yang idempoten.
+  legacyNo           String?             @unique @map("legacy_no")
   createdBy          Int?                @map("created_by")
   createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedBy          Int?                @map("updated_by")
@@ -624,6 +630,8 @@ model PurchaseOrderLine {
   unitId                Int                  @map("unit_id")
   unit                  Unit                 @relation(fields: [unitId], references: [id])
   qty                   Decimal              @db.Decimal(18, 3)
+  // tahap 4C: faktor satuan beli ke satuan dasar saat baris dibuat.
+  factor                Decimal              @default(1) @db.Decimal(18, 6)
   price                 BigInt
   disc                  BigInt               @default(0)
   taxPct                Decimal              @default(0) @map("tax_pct") @db.Decimal(6, 3)
@@ -690,6 +698,12 @@ model GoodsReceiptLine {
   unitCost             Decimal               @default(0) @map("unit_cost") @db.Decimal(18, 4)
   qtyInvoiced          Decimal               @default(0) @map("qty_invoiced") @db.Decimal(18, 3)
   qtyReturned          Decimal               @default(0) @map("qty_returned") @db.Decimal(18, 3)
+  // tahap 4C: faktor satuan, bagian biaya tambahan, nilai persediaan baris (qty x harga + biaya), dan qty yang
+  // diretur sebelum difakturkan (bagian dari qty_returned).
+  factor               Decimal               @default(1) @db.Decimal(18, 6)
+  extraAlloc           BigInt                @default(0) @map("extra_alloc")
+  value                BigInt                @default(0)
+  qtyRetUninv          Decimal               @default(0) @map("qty_ret_uninv") @db.Decimal(18, 3)
   purchaseInvoiceLines PurchaseInvoiceLine[]
   purchaseReturnLines  PurchaseReturnLine[]
 
@@ -756,6 +770,10 @@ model PurchaseInvoiceLine {
   taxPct             Decimal           @default(0) @map("tax_pct") @db.Decimal(6, 3)
   receiptValue       BigInt            @default(0) @map("receipt_value")
   priceDiff          BigInt            @default(0) @map("price_diff")
+  // tahap 4C: jenis baris (barang, biaya_terima, jasa), keterangan baris jasa, dan jumlah baris.
+  kind               String            @default("barang")
+  description        String            @default("")
+  lineTotal          BigInt            @default(0) @map("line_total")
 
   @@index([purchaseInvoiceId])
   @@map("purchase_invoice_line")
@@ -779,6 +797,8 @@ model PurchaseReturn {
   tax                   BigInt                 @default(0)
   total                 BigInt                 @default(0)
   debitNoteAmount       BigInt                 @default(0) @map("debit_note_amount")
+  // tahap 4C: nota debit yang sudah dipakai pembayaran Diposting.
+  debitNoteUsed         BigInt                 @default(0) @map("debit_note_used")
   status                DocStatus              @default(Draft)
   submittedBy           Int?                   @map("submitted_by")
   submittedAt           DateTime?              @map("submitted_at") @db.Timestamptz(6)
@@ -815,6 +835,9 @@ model PurchaseReturnLine {
   qtyUninvoiced        Decimal             @default(0) @map("qty_uninvoiced") @db.Decimal(18, 3)
   qtyInvoiced          Decimal             @default(0) @map("qty_invoiced") @db.Decimal(18, 3)
   invoicePrice         BigInt              @default(0) @map("invoice_price")
+  // tahap 4C: nilai persediaan yang keluar dan nota debit baris.
+  value                BigInt              @default(0)
+  debitNote            BigInt              @default(0) @map("debit_note")
 
   @@index([purchaseReturnId])
   @@map("purchase_return_line")
@@ -831,6 +854,8 @@ model DirectPurchase {
   no                    String                 @unique
   date                  DateTime               @db.Date
   payMode               String                 @default("tunai") @map("pay_mode")
+  // tahap 4C: rekening pembayar pembelian tunai (bank_account, tanpa kunci asing); kosong berarti kas.
+  bankAccountId         Int?                   @map("bank_account_id")
   supplierInvoiceNo     String                 @default("") @map("supplier_invoice_no")
   dueDate               DateTime?              @map("due_date") @db.Date
   subtotal              BigInt                 @default(0)
@@ -879,6 +904,12 @@ model DirectPurchaseLine {
   taxPct              Decimal              @default(0) @map("tax_pct") @db.Decimal(6, 3)
   unitCost            Decimal              @default(0) @map("unit_cost") @db.Decimal(18, 4)
   qtyReturned         Decimal              @default(0) @map("qty_returned") @db.Decimal(18, 3)
+  // tahap 4C: faktor satuan, keterangan baris biaya, jumlah baris, bagian biaya tambahan, dan nilai persediaan.
+  factor              Decimal              @default(1) @db.Decimal(18, 6)
+  description         String               @default("")
+  lineTotal           BigInt               @default(0) @map("line_total")
+  extraAlloc          BigInt               @default(0) @map("extra_alloc")
+  value               BigInt               @default(0)
   purchaseReturnLines PurchaseReturnLine[]
   fixedAssets         FixedAsset[]
 
@@ -890,8 +921,10 @@ model PurchasePayment {
   id                    Int                    @id @default(autoincrement())
   supplierId            Int                    @map("supplier_id")
   supplier              Supplier               @relation(fields: [supplierId], references: [id])
-  fromAccountId         Int                    @map("from_account_id")
-  fromAccount           Account                @relation("BayarBeliAkunSumber", fields: [fromAccountId], references: [id])
+  // tahap 4C: akun COA belum ada, jadi sumber dana dicatat di bank_account_id (kosong berarti kas).
+  fromAccountId         Int?                   @map("from_account_id")
+  fromAccount           Account?               @relation("BayarBeliAkunSumber", fields: [fromAccountId], references: [id])
+  bankAccountId         Int?                   @map("bank_account_id")
   no                    String                 @unique
   date                  DateTime               @db.Date
   amount                BigInt                 @default(0)

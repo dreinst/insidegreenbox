@@ -21,7 +21,9 @@ export type Gerak = {
   qty: Angka
   // Hanya untuk masuk: harga per satuan dasar. Kosong berarti harga rata-rata lokasi saat ini.
   hargaSatuan?: Angka | null
-  // Hanya untuk masuk: nilai total rupiah. Mengalahkan hargaSatuan (dipakai bila nilai baris sudah pasti).
+  // Masuk: nilai total rupiah, mengalahkan hargaSatuan (dipakai bila nilai baris sudah pasti).
+  // Keluar (tahap 4C): nilai keluar pasti, bertanda minus, misalnya retur pembelian dengan harga penerimaannya.
+  // Harga rata-rata sisa dihitung ulang dari saldo sesudahnya.
   nilai?: bigint | null
   lineId?: number | null
 }
@@ -62,6 +64,7 @@ function periksaLangkah(l: Langkah, i: number) {
   if (q.decimalPlaces() > 3) throw new GalatAturan(`Gerak ke-${i + 1}: qty paling banyak 3 desimal.`)
   if (q.abs().gt(QTY_MAKS)) throw new GalatAturan(`Gerak ke-${i + 1}: qty terlalu besar.`)
   if (q.isNeg() && l.hargaSatuan !== undefined && l.hargaSatuan !== null) throw new GalatAturan(`Gerak ke-${i + 1}: barang keluar selalu memakai harga rata-rata.`)
+  if (q.isNeg() && l.nilai !== undefined && l.nilai !== null && l.nilai > 0n) throw new GalatAturan(`Gerak ke-${i + 1}: nilai barang keluar harus minus.`)
   if (l.hargaSatuan !== undefined && l.hargaSatuan !== null && des(l.hargaSatuan).isNeg()) throw new GalatAturan(`Gerak ke-${i + 1}: harga satuan tidak boleh minus.`)
   if (l.nilaiIkut !== undefined && (l.nilaiIkut >= i || l.nilaiIkut < 0)) throw new GalatAturan(`Gerak ke-${i + 1}: rujukan nilai tidak sah.`)
   return q
@@ -133,11 +136,18 @@ async function terapkan(tx: Tx, dok: DokumenAsal, langkah: Langkah[], opsi: Opsi
         )
       }
       const rataPakai = s.rata.gt(0) ? s.rata : des(p.lastCost)
+      const nilaiPasti = l.nilai !== undefined && l.nilai !== null
       if (qtyBaru.isZero()) nilai = -s.nilai
       else if (l.nilaiTetap !== undefined) nilai = l.nilaiTetap
+      else if (nilaiPasti) nilai = l.nilai!
       else nilai = keRupiah(q.times(rataPakai))
-      harga = l.nilaiTetap !== undefined || qtyBaru.isZero() ? keHarga(new Desimal((-nilai).toString()).div(q.neg())) : rataPakai
+      harga = l.nilaiTetap !== undefined || nilaiPasti || qtyBaru.isZero() ? keHarga(new Desimal((-nilai).toString()).div(q.neg())) : rataPakai
       if (!s.rata.gt(0) && rataPakai.gt(0)) rataBaru = rataPakai
+      if (nilaiPasti && !qtyBaru.isZero()) {
+        // Keluar dengan nilai pasti mengubah harga rata-rata sisa. Nilai sisa tidak boleh minus bila qty masih ada.
+        if (qtyBaru.gt(0) && s.nilai + nilai < 0n) throw new GalatAturan(`Nilai persediaan ${p.name} di ${lokasiIni.name} tidak cukup untuk dikeluarkan dengan harga ini.`)
+        if (qtyBaru.gt(0)) rataBaru = keHarga(new Desimal((s.nilai + nilai).toString()).div(qtyBaru))
+      }
     }
     const saldoNilai = s.nilai + nilai
     // Gerak balik: harga rata-rata dihitung ulang dari saldo sesudahnya (RANCANGAN 2.3 butir 3).

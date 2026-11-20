@@ -184,6 +184,20 @@ const SIDEBAR_SETORAN: ItemSidebar[] = [
 ]
 const SIDEBAR_REKENING: ItemSidebar[] = [{ href: '/rekening', label: 'Rekening Bank', menu: 'kas.rekening', ikon: 'rekening' }]
 
+// tahap 4C: pembelian dan hutang pemasok. Izinnya sudah ada di matriks RANCANGAN 8.2 (beli.* dan kas.hutang), jadi
+// matriks bawaan tidak berubah. Orkestrator memindahkan item ini ke grup Pembelian saat sidebar berkelompok digabung.
+const SIDEBAR_BELI: ItemSidebar[] = [
+  { href: '/pemasok', label: 'Pemasok', menu: 'beli.pemasok', ikon: 'pemasok' },
+  { href: '/permintaan', label: 'Permintaan', menu: 'beli.permintaan', ikon: 'permintaan' },
+  { href: '/pesanan', label: 'Pesanan', menu: 'beli.pesanan', ikon: 'pesanan' },
+  { href: '/penerimaan', label: 'Penerimaan', menu: 'beli.penerimaan', ikon: 'penerimaan' },
+  { href: '/faktur', label: 'Faktur', menu: 'beli.faktur', ikon: 'faktur' },
+  { href: '/retur-beli', label: 'Retur', menu: 'beli.retur', ikon: 'retur' },
+  { href: '/beli-langsung', label: 'Pembelian Langsung', menu: 'beli.langsung', ikon: 'belanja' },
+  { href: '/pembayaran', label: 'Pembayaran', menu: 'beli.pembayaran', ikon: 'pembayaran' },
+  { href: '/hutang', label: 'Hutang Pemasok', menu: 'kas.hutang', ikon: 'hutang' },
+]
+
 // Item tampil bila pengguna memegang Lihat di kode menunya (KONTRAK 8).
 export const itemTampil = (i: ItemSidebar, boleh: (menu: string) => boolean) => i.menu === null || (Array.isArray(i.menu) ? i.menu.some(boleh) : boleh(i.menu))
 
@@ -205,6 +219,8 @@ export const SIDEBAR: ItemSidebar[] = [
   { href: '/pindah-stok', label: 'Pindah Stok', menu: 'stok.pindah', ikon: 'pindah' },
   { href: '/alasan-stok', label: 'Alasan', menu: 'stok.alasan', ikon: 'alasan' },
   { href: '/lokasi', label: 'Lokasi', menu: 'atur.lokasi', ikon: 'lokasi' },
+  // tahap 4C
+  ...SIDEBAR_BELI,
   { href: '/pengguna', label: 'Pengguna', menu: 'atur.pengguna', ikon: 'pengguna' },
   { href: '/peran', label: 'Peran dan Izin', menu: 'atur.peran', ikon: 'peran' },
   { href: '/saklar', label: 'Saklar Fitur', menu: 'atur.saklar', ikon: 'saklar' },
