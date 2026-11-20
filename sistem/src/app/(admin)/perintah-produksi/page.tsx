@@ -19,7 +19,7 @@ export default async function DaftarPerintah({ searchParams }: { searchParams: P
   const [hasil, lokasi] = await Promise.all([daftarPerintah(db, s), pilihanLokasi(db)])
   return (
     <>
-      <KepalaHalaman judul="Perintah Produksi" keterangan="Rencana membuat produk setengah jadi dari BOM assembly yang dikerjakan bertahap. Stok bergerak lewat Pengeluaran Bahan dan Hasil Produksi.">
+      <KepalaHalaman judul="Perintah Produksi" keterangan="Rencana produksi bertahap dari BOM assembly. Stok bergerak lewat Pengeluaran Bahan dan Hasil Produksi.">
         {punyaIzin(p.izin, 'produksi.perintah', 'T') ? (
           <Link href="/perintah-produksi/baru" className="btn">
             Buat perintah

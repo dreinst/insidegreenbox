@@ -7,7 +7,7 @@
 .tanpa-resep ul { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none }
 .tanpa-resep li { display: inline-flex; align-items: center; gap: 8px; min-height: 36px; padding: 4px 6px 4px 12px; border-radius: 999px; background: #fff; box-shadow: inset 0 0 0 1px #EBD9A6; font-size: 14px }
 .tanpa-resep li small { color: var(--muted) }
-.tanpa-resep li a { display: inline-flex; align-items: center; min-height: 28px; padding: 0 10px; border-radius: 999px; background: var(--paper2); font-weight: 700; text-decoration: none }
+.tanpa-resep li a { flex: none; white-space: nowrap; display: inline-flex; align-items: center; min-height: 28px; padding: 0 10px; border-radius: 999px; background: var(--paper2); font-weight: 700; text-decoration: none }
 
 /* Ringkasan HPP dan nilai di rincian. */
 .hpp-total td { font-weight: 800; background: #ECEEE9 }
