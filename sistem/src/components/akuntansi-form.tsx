@@ -21,7 +21,7 @@ export function FormPemetaan({ aksi, kelompok }: { aksi: Aksi; kelompok: Kelompo
             const id = `k-${b.kunci.replace('.', '-')}`
             const g = galatKolom(hasil, b.kunci)
             return (
-              <div key={b.kunci} className={`peta-baris${g ? ' salah' : ''}`}>
+              <div key={b.kunci} className="peta-baris">
                 <label htmlFor={id}>
                   {b.nama}
                   <small>
@@ -29,14 +29,16 @@ export function FormPemetaan({ aksi, kelompok }: { aksi: Aksi; kelompok: Kelompo
                     {b.keterangan ? ` · ${b.keterangan}` : ''}
                   </small>
                 </label>
-                <select id={id} name={b.kunci} defaultValue={nilaiAwal(hasil, b.kunci, b.akunId ? String(b.akunId) : '')} aria-invalid={g ? true : undefined} aria-describedby={g ? `${id}-g` : undefined}>
-                  {!b.wajib || !b.akunId ? <option value="">{b.kosong ?? 'Pilih akun'}</option> : null}
-                  {b.pilihan.map((p) => (
-                    <option key={p.nilai} value={p.nilai}>
-                      {p.label}
-                    </option>
-                  ))}
-                </select>
+                <div className={`kolom${g ? ' salah' : ''}`}>
+                  <select id={id} name={b.kunci} defaultValue={nilaiAwal(hasil, b.kunci, b.akunId ? String(b.akunId) : '')} aria-invalid={g ? true : undefined} aria-describedby={g ? `${id}-g` : undefined}>
+                    {!b.wajib || !b.akunId ? <option value="">{b.kosong ?? 'Pilih akun'}</option> : null}
+                    {b.pilihan.map((p) => (
+                      <option key={p.nilai} value={p.nilai}>
+                        {p.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 {g ? (
                   <small id={`${id}-g`} className="galat-kolom">
                     {g}

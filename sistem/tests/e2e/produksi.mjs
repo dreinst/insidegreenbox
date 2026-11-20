@@ -26,9 +26,9 @@ const LEBAR = [
   { w: 390, h: 844, menu: 'Matcha Susu' },
 ]
 const GRUP_HARAP = {
-  // Gabungan dengan tahap 5A menambah grup Keuangan (Rekening Bank) dan Laporan.
-  owner: ['Kasir', 'Menu', 'Persediaan', 'Produksi', 'Keuangan', 'Laporan', 'Pengaturan'],
-  admin: ['Kasir', 'Menu', 'Persediaan', 'Produksi', 'Keuangan', 'Laporan', 'Pengaturan'],
+  // Gabungan dengan tahap 5A menambah grup Keuangan (Rekening Bank) dan Laporan; tahap 5B menambah Akuntansi.
+  owner: ['Kasir', 'Menu', 'Persediaan', 'Produksi', 'Keuangan', 'Akuntansi', 'Laporan', 'Pengaturan'],
+  admin: ['Kasir', 'Menu', 'Persediaan', 'Produksi', 'Keuangan', 'Akuntansi', 'Laporan', 'Pengaturan'],
   kasir: ['Kasir', 'Menu'],
 }
 const tanda = Date.now().toString(36).slice(-4).toUpperCase()

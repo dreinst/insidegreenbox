@@ -45,6 +45,14 @@ function barisPersediaan(gerak: BarisLedger[], lawan: ((g: BarisLedger) => Kunci
   return hasil
 }
 
+// Untuk modul lain (misalnya pembelian): baris jurnal persediaan dari gerak stok sebuah dokumen, dengan satu lawan untuk
+// semua gerak atau lawan per baris dokumen (line_id). balik: pakai gerak balik (pembatalan). Contoh di KONTRAK 14.2.
+export async function barisDariGerak(tx: DbAtauTx, docType: string, docId: number, opsi: { lawan: KunciAkun | ((lineId: number | null) => KunciAkun); balik?: boolean; memo?: string }) {
+  const gerak = await ledgerDok(tx, docType, docId, opsi.balik ?? false)
+  const lawan = opsi.lawan
+  return barisPersediaan(gerak, (g) => (typeof lawan === 'function' ? lawan(g.line_id) : lawan), opsi.memo ?? '')
+}
+
 // Lawan gerak stok per jenis dokumen (KONTRAK 11 butir 36 dan 57).
 async function lawanStok(tx: DbAtauTx, jenis: JenisStokJurnal, docId: number): Promise<{ lawan: ((g: BarisLedger) => KunciAkun) | null; sisa: KunciAkun | null }> {
   if (jenis === 'stock_adjustment' || jenis === 'stock_opname') {

@@ -86,7 +86,8 @@ export default async function BaganAkun({ searchParams }: { searchParams: Promis
                     </Link>
                   </td>
                   <td data-label="Nama">
-                    <span className="ak-nama" style={{ '--tingkat': disaring ? 0 : a.tingkat } as React.CSSProperties}>
+                    {/* CSP melarang atribut style, jadi jorok anak memakai kelas per tingkat. */}
+                    <span className={`ak-nama ak-t${disaring ? 0 : Math.min(a.tingkat, 5)}`}>
                       {a.name}
                     </span>
                   </td>

@@ -72,7 +72,7 @@ export async function bukaPeriode(db: Db, k: Konteks, aktor: Aktor, bulan: unkno
   })
 }
 
-// Daftar 24 bulan terakhir (atau lebih, bila ada jurnal yang lebih tua) beserta statusnya.
+// Daftar 13 bulan terakhir, ditambah bulan lain yang punya jurnal atau baris periode, beserta statusnya.
 export async function daftarPeriode(db: DbAtauTx, sekarang = new Date()) {
   const ini = bulanIni(sekarang)
   const baris = await db.fiscalPeriod.findMany({ orderBy: { yearMonth: 'desc' }, take: 120, include: { closer: { select: { name: true } } } })
@@ -81,7 +81,7 @@ export async function daftarPeriode(db: DbAtauTx, sekarang = new Date()) {
     FROM journal j JOIN journal_line l ON l.journal_id = j.id WHERE j.posted_at IS NOT NULL GROUP BY 1`
   const perBulan = new Map(jumlah.map((j) => [j.ym, j]))
   const perPeriode = new Map(baris.map((b) => [b.yearMonth, b]))
-  const bulan = new Set<string>([...Array.from({ length: 24 }, (_, i) => geserBulan(ini, -i)), ...perPeriode.keys(), ...perBulan.keys()])
+  const bulan = new Set<string>([...Array.from({ length: 13 }, (_, i) => geserBulan(ini, -i)), ...perPeriode.keys(), ...perBulan.keys()])
   const buka = [...new Set(baris.map((b) => b.reopenedBy).filter((x): x is number => !!x))]
   const nama = new Map((await db.appUser.findMany({ where: { id: { in: buka } }, select: { id: true, name: true } })).map((u) => [u.id, u.name]))
   return [...bulan]

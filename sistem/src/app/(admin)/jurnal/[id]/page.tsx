@@ -172,8 +172,10 @@ export default async function RincianJurnal({ params, searchParams }: { params: 
               </tbody>
               <tfoot>
                 <tr>
-                  <td data-label="">Jumlah</td>
-                  <td data-label="">{selisih ? <span className="lap-merah">Selisih {rp(selisih < 0n ? -selisih : selisih)}</span> : 'Seimbang'}</td>
+                  <td data-label="" className="jr-jumlah">
+                    Jumlah
+                  </td>
+                  <td data-label="Jumlah">{selisih ? <span className="lap-merah">Selisih {rp(selisih < 0n ? -selisih : selisih)}</span> : 'Seimbang'}</td>
                   <td data-label="Debit" className="angka">
                     {rp(j.debit)}
                   </td>
