@@ -39,6 +39,7 @@ sistem/
         promo/, metode-bayar/, member/ (dengan tingkat/)   tahap 3A
         produk/ (kategori/, satuan/), stok/ (kartu/), penyesuaian/, opname/, pindah-stok/,
         alasan-stok/, lokasi/   tahap 4A
+        resep/, perintah-produksi/, pengeluaran-bahan/, hasil-produksi/, produksi-cepat/   tahap 4B
     lib/
       db.ts             klien Prisma dengan pool kecil
       sesi.ts           baca sesi dari cookie dan database (server-only)
@@ -58,6 +59,8 @@ sistem/
       stok/             tahap 4A: mesin.ts (mesin stok, bagian 12), angka.ts, dokumen.ts (alur status),
                         produk.ts, lokasi.ts, alasan.ts, penyesuaian.ts, opname.ts, pindah.ts, posisi.ts,
                         bawaan.ts (isi bawaan), impor.ts (saldo awal admin lama)
+      produksi/         tahap 4B: resep.ts (resep dan BOM, HPP, pemakaian bahan penjualan), perintah.ts,
+                        pengeluaran.ts, hasil.ts, cepat.ts (dokumen produksi), impor.ts (resep admin lama)
     components/         komponen tampilan bersama
   tests/
     *.test.ts           tes unit dengan basis data uji
@@ -133,7 +136,7 @@ Dokumen Diposting tidak diubah dan tidak dihapus. Pembatalannya membuat jurnal d
 - `app_user`: `username` unik huruf kecil, `password_hash`, `pin_hash` (dipakai tahap 3), `active`, `last_login_at`, `role_id`, `location_id` (lokasi bawaan kasir, kosong di tahap 2).
 - `role`: `code` unik (`owner`, `admin`, `kasir`, atau buatan Owner), `name`, `is_system`, `active`. Peran sistem tidak bisa dinonaktifkan.
 - `role_permission`: satu baris per peran per kode menu dengan 6 kolom boolean `can_view`, `can_create`, `can_update`, `can_delete`, `can_approve`, `can_post`.
-- `feature_switch` dan `role_feature_switch`: 24 saklar (bagian 4.4) dengan nilai `enabled` dan `limit_value` per peran.
+- `feature_switch` dan `role_feature_switch`: 25 saklar (bagian 4.4) dengan nilai `enabled` dan `limit_value` per peran.
 - `user_session`: sesi login di database (bagian 7).
 - `login_attempt`: catatan percobaan login untuk rate limit (bagian 7).
 - `audit_log`: bagian 5.
@@ -154,7 +157,7 @@ Katalog lengkap ada di `src/lib/katalog.ts` beserta matriks bawaan Owner, Admin,
 
 ### 4.4 Saklar fitur
 
-23 saklar dari RANCANGAN 8.3 ditambah satu saklar `log.lihat_semua` (Owner Ya, Admin Tidak, Kasir Tidak). Saklar itu menggantikan catatan "Admin: L (aktivitas sendiri)" di matriks: pemegang izin Lihat `atur.audit` tanpa `log.lihat_semua` hanya melihat aktivitasnya sendiri. Saklar yang punya angka (`pos.batas_selisih_kas`, `dok.tanggal_mundur`) memakai `limit_value`; `limit_value` kosong berarti tanpa batas.
+23 saklar dari RANCANGAN 8.3 ditambah saklar `log.lihat_semua` (Owner Ya, Admin Tidak, Kasir Tidak) dan, sejak tahap 4B, `pos.jual_stok_minus` (Owner, Admin, Kasir Ya; bagian 11 butir 39). Saklar itu menggantikan catatan "Admin: L (aktivitas sendiri)" di matriks: pemegang izin Lihat `atur.audit` tanpa `log.lihat_semua` hanya melihat aktivitasnya sendiri. Saklar yang punya angka (`pos.batas_selisih_kas`, `dok.tanggal_mundur`) memakai `limit_value`; `limit_value` kosong berarti tanpa batas.
 
 ### 4.5 Cara cek izin
 
@@ -182,6 +185,7 @@ Semua cek lewat `src/lib/izin.ts`:
 - Isi baris: waktu, `user_id` (boleh kosong untuk login gagal dengan nama tak dikenal), `actor_name` (nama pengguna saat itu atau yang diketik), `action` (misalnya `pengguna.ubah`), `doc_type` (nama tabel), `doc_id` (teks, karena ada kunci gabungan), `summary` (kalimat pendek bahasa Indonesia), `before_json`, `after_json`, `ip`, `user_agent`.
 - `before_json` dan `after_json` dibersihkan oleh `bersihkanUntukAudit`: hash sandi dan PIN tidak pernah disimpan, diganti tanda `"[disembunyikan]"`. BigInt, Decimal, dan tanggal disimpan sebagai teks.
 - Peristiwa yang wajib tercatat sejak tahap 2: `masuk.berhasil`, `masuk.gagal`, `masuk.terkunci`, `keluar`, `izin.ditolak`, `pengguna.tambah`, `pengguna.ubah`, `pengguna.sandi`, `pengguna.aktifkan`, `pengguna.nonaktifkan`, `peran.tambah`, `peran.ubah`, `peran.izin`, `peran.aktifkan`, `peran.nonaktifkan`, `saklar.ubah`. Tahap 3A menambah (semua dengan `before_json` dan `after_json` untuk kolom yang berubah): `kategori.tambah/ubah/aktifkan/nonaktifkan` (`menu_category`), `menu.tambah/ubah/aktifkan/nonaktifkan` (`menu_item`), `harga.massal` (`menu_price_batch`, berisi aturan, jumlah, dan contoh lima menu; riwayat lengkapnya di `menu_price_history`), `paket.tambah/ubah/aktifkan/nonaktifkan` (`menu_set`), `promo.tambah/ubah/aktifkan/nonaktifkan` (`promo`), `metode_bayar.tambah/ubah/aktifkan/nonaktifkan` (`payment_method`), `tingkat.tambah/ubah/aktifkan/nonaktifkan` (`member_tier`), `member.tambah/ubah/aktifkan/nonaktifkan` (`member`), dan `impor.menu` (satu baris per jalan impor yang menambah data). Mengubah satu harga lewat formulir menu menulis `menu.ubah` dan satu baris riwayat harga. Tahap 4A menambah `produk.tambah/ubah/aktifkan/nonaktifkan` (`product`), `produk.satuan_tambah/satuan_ubah/satuan_hapus` (`product_unit`), `kategori_produk.*` (`product_category`), `satuan.*` (`unit`), `lokasi.*` (`location`), `alasan.*` (`stock_reason`), dan untuk tiap dokumen persediaan dengan awalan `penyesuaian` (`stock_adjustment`), `opname` (`stock_opname`), `pindah` (`stock_transfer`): `.tambah` (draf dibuat), `.ubah` (kepala), `.baris_tambah` dan `.baris_hapus` (penyesuaian dan pindah), `.hitung` (opname), `.hapus` (draf), `.ajukan`, `.kembalikan`, `.posting` (berisi jumlah baris dan nilai bersih), `.batal` (berisi gerak balik bila dari Diposting), serta `impor.stok`. Persetujuan dan posting dokumen stok terjadi dalam satu langkah ("Setujui dan posting"), jadi tidak ada peristiwa `.setujui` terpisah; penyetujunya tercatat di `approved_by`. Tahap berikutnya menambah peristiwa per dokumen dengan pola yang sama.
+- Peristiwa tahap 4B: `resep.tambah`, `resep.ubah`, `resep.bahan_tambah`, `resep.bahan_ubah`, `resep.bahan_hapus`, `resep.aktifkan`, `resep.nonaktifkan` (`bom`), `impor.resep`; perintah produksi (`production_order`) `perintah.tambah`, `.ubah`, `.hapus`, `.ajukan`, `.kembalikan`, `.setujui`, `.batal`, `.tutup` (tutup manual, berisi sisa nilai yang dibuang), `.selesai` (otomatis saat hasil terakhir diposting); dan untuk tiap dokumen pelaksana produksi dengan awalan `pengeluaran` (`material_issue`), `hasil` (`production_result`), `produksi_cepat` (`quick_production`): `.tambah`, `.ubah`, `.baris_ubah` (qty bahan, tidak ada untuk hasil), `.hapus`, `.ajukan`, `.kembalikan`, `.posting`, `.batal`. `penjualan.simpan` kini memuat `hpp`, `tanpaResep` (menu tanpa resep di transaksi itu), dan `stokMinus` (bahan yang saldonya minus sesudahnya); `penjualan.void` memuat jumlah gerak balik dan nilai yang kembali.
 - Peristiwa tahap 3B (kasir): `kasir.masuk_pin` (masuk dengan PIN), `pengguna.pin` (pasang, ganti, atau hapus PIN), `shift.buka`, `shift.kas` (kas masuk atau keluar laci), `shift.tutup`, `shift.setujui`, `penjualan.simpan`, `penjualan.void`. PIN salah dan PIN terkunci dicatat sebagai `masuk.gagal` dan `masuk.terkunci` dengan ringkasan yang menyebut tujuannya (masuk kasir atau penyetuju void). Entitas baru di audit: `shift` dan `sale`.
 - Halaman Jejak Audit hanya membaca, dengan saring tanggal, aktor, aksi, dan entitas, serta rincian sebelum dan sesudah.
 
@@ -229,6 +233,8 @@ Syarat dari user: setiap item sidebar yang tampil berfungsi penuh ke database (d
 | 6 | Penjualan B2B, Aset, Anggaran, Lokasi dan Profil Usaha |
 | 7 | Migrasi data dari ekspor resmi ESB, uji paralel, lalu ESB dihentikan |
 
+Tahap 4B sudah tayang: Resep dan BOM (`/resep`, `stok.resep`), Perintah Produksi (`/perintah-produksi`, `produksi.perintah`), Pengeluaran Bahan (`/pengeluaran-bahan`, `produksi.pengeluaran`), Hasil Produksi (`/hasil-produksi`, `produksi.hasil`), dan Produksi Cepat (`/produksi-cepat`, `produksi.cepat`). Sejak tahap 4B sidebar dikelompokkan (`SIDEBAR_GRUP` di `katalog.ts`): tanpa judul (Beranda), Kasir (Layar Kasir, Shift, Transaksi, PIN Kasir, Metode Bayar), Menu (Menu dan Harga, Promo, Member), Persediaan (Produk dan Satuan, Resep dan BOM, Stok, Penyesuaian, Opname, Pindah Stok, Alasan), Produksi (empat menu produksi), dan Pengaturan (Lokasi, Pengguna, Peran dan Izin, Saklar Fitur, Jejak Audit). Grup yang semua itemnya tidak boleh dilihat tidak tampil. Sidebar lebih tinggi dari layar 900 px, jadi sidebar digulir dan item aktif digulir ke dalam pandangan saat halaman berganti.
+
 Urutan tahap 3 sampai 5 mengikuti SERAH-TERIMA. Tahap 3B (kasir) menambah Layar Kasir (`/kasir`, `kasir.layar`), Shift (`/shift`, `kasir.shift`), Transaksi (`/transaksi`, `kasir.transaksi`), dan PIN Kasir (`/pin`, `kasir.pin`). Struk cetak ada di `/struk/[id]` di luar kerangka admin dan memakai izin Lihat `kasir.transaksi`. Daftar sidebar ada di `src/lib/katalog.ts` (`SIDEBAR`) dan hanya berisi halaman yang sudah ada.
 
 ## 9. Batas sumber daya produksi
@@ -245,7 +251,7 @@ Target produksi VPS gugai dalam `greenbox.slice` (1,5 GB untuk situs, app, datab
 
 - PostgreSQL lokal di container `greenbox-pg-dev` (`postgres:18-alpine`, hanya `127.0.0.1:55441`, volume `greenbox-pg-dev-data`). Basis data dev `greenbox`. Tes membuat basis data baru `greenbox_uji_<acak>` per berkas tes, memigrasinya, dan menghapusnya sesudahnya.
 - Server dev di port 3241.
-- Perintah: `npm run db:setup` (migrasi dan seed), `npm run seed:contoh`, `npm run impor:menu`, `npm run impor:stok`, `npm run dev`, `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`, `npm run e2e`.
+- Perintah: `npm run db:setup` (migrasi dan seed), `npm run seed:contoh`, `npm run impor:menu`, `npm run impor:stok`, `npm run impor:resep` (sesudah impor:menu dan impor:stok), `npm run dev`, `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`, `npm run e2e`.
 
 ## 11. Penyimpangan dari ERD dan perubahan kontrak
 
@@ -268,7 +274,7 @@ Tahap 3A (master, migrasi `20261120095737_tahap3a_master`):
 Tahap 3B (kasir, migrasi `20261120130000_tahap3b_kasir`):
 
 13. Kolom tambahan di luar ERD: `shift.closed_by` (penutup shift), `shift.diff_limit` (batas selisih yang berlaku saat ditutup), `shift.approval_note` (catatan persetujuan Owner); `sale.member_pct`, `sale.svc_pct`, `sale.tax_pct` (persen yang berlaku saat transaksi, untuk struk), `sale.void_approved_by` (penyetuju void lewat PIN); `sale_line.name` dan `sale_line.category` (nama dan kategori menu saat dijual, supaya struk lama tidak berubah bila menu diganti).
-14. Jurnal akuntansi dan potong stok dari resep belum dibuat di tahap 3B. `sale.hpp` dan `sale_line.hpp` diisi 0, dan penjualan tidak ditolak walau stok bahan kurang. Jurnal penjualan (RANCANGAN 6.1) dan mutasi `stock_ledger` penjualan akan dibentuk ulang dari data `sale`, `sale_line`, dan `sale_payment` (termasuk status Void dan waktu void) saat modul stok (tahap 4) dan akuntansi (tahap 5) dibangun. Jurnal selisih kas saat tutup shift juga dibentuk ulang dari `shift.cash_diff`.
+14. Jurnal akuntansi belum dibuat di tahap 3B. Sejak tahap 4B potong stok dari resep sudah berjalan (bagian 13.2): penjualan baru memotong bahan dan mengisi `sale.hpp` serta `sale_line.hpp`. Penjualan yang tersimpan sebelum tahap 4B tetap ber-HPP 0 dan tanpa gerak stok; tidak dibentuk ulang, karena stok awalnya diambil dari saldo admin lama sesudah penjualan itu. Jurnal penjualan (RANCANGAN 6.1) dibentuk saat modul akuntansi (tahap 5) dari `sale`, `sale_line`, `sale_payment`, dan gerak `stock_ledger` ber-`doc_type` `sale` (termasuk gerak balik void). Jurnal selisih kas saat tutup shift juga dibentuk dari `shift.cash_diff`.
 15. Kas seharusnya = modal awal + jumlah `sale_payment.amount` metode berjenis `tunai` dari penjualan yang tidak void (sudah bersih dari kembalian) + kas masuk laci - kas keluar laci. Metode tunai dikenali dari `payment_method.kind = 'tunai'`.
 16. Batas selisih kas memakai saklar `pos.batas_selisih_kas` milik peran kasir pemilik shift (bawaan Rp 10.000), diubah Owner lewat Saklar Fitur. Saklar nyala dengan batas: selisih mutlak di atas batas membuat status `PerluPersetujuan`. Saklar nyala tanpa batas: tidak pernah perlu persetujuan. Saklar mati: setiap selisih yang bukan nol perlu persetujuan. Owner (Setujui di `kasir.shift`) menyetujui dengan catatan wajib, lalu status menjadi `Tutup`.
 17. Tutup shift memakai hitung buta: kas seharusnya, rekap per metode, dan selisih baru tampil sesudah shift ditutup. Kas dihitung boleh lewat hitung pecahan (disimpan di `shift.denominations_json`); bila pecahan diisi, totalnya yang dipakai.
@@ -299,6 +305,20 @@ Tahap 4A (persediaan, migrasi `20261120150000_tahap4a_stok`):
 36. Jurnal akuntansi belum dibentuk di tahap 4A. Saat modul jurnal ada (tahap 5), jurnal dokumen persediaan dibentuk dari `stock_ledger` per dokumen (`doc_type`, `doc_id`): penyesuaian dan opname berlawanan dengan akun alasan (`stock_reason.account_id`), pindah stok tidak berjurnal (satu akun persediaan), dan gerak balik membentuk jurnal balik bertanggal hari pembatalan (`reversal_journal_id`). Kolom `account_id` alasan dibiarkan kosong sampai saat itu.
 37. Impor `npm run impor:stok` (`scripts/impor-stok.ts`, logika `src/lib/stok/impor.ts`) memindahkan 28 bahan dari data contoh admin lama (`ING` di `src/admin/contoh.ts`, disalin) menjadi produk berkode `BHN-<id>` dengan kategori Bahan minuman, Bahan makanan, dan Kemasan, lalu stok akhirnya menjadi saldo awal di lokasi Outlet lewat satu Penyesuaian Stok berasalan "Saldo awal" yang langsung Diposting dengan harga rata-rata lama. Idempoten: produk yang kodenya sudah ada dilewati dan bahan yang sudah punya gerak di Outlet tidak diberi saldo awal lagi.
 
+Tahap 4B (resep, potong stok penjualan, produksi; migrasi `20261120160000_tahap4b_produksi`):
+
+38. Skema: `bom_line` unik per (`bom_id`, `product_id`) dan `qty > 0`; CHECK `bom.kind` (`menu` atau `assembly`) dan `bom.output_qty > 0`; `production_order` menambah `closed_by` dan `wip_writeoff` (sisa nilai barang dalam proses yang dibuang saat ditutup manual) dengan CHECK `planned_qty > 0`; `production_order_line` menambah `tol_pct` (salinan toleransi BOM); CHECK `material_issue.kind` (`keluar` atau `kembali`); `quick_production` menambah `value` (nilai hasil yang masuk persediaan).
+39. Penjualan saat stok bahan kurang. RANCANGAN 11.2 butir 5 menulis bawaan sementara "diblokir"; brief tahap 4B (yang merujuk butir 7) menetapkan bawaan sementara lain dan itu yang dipakai: penjualan tetap boleh, stok bahan boleh minus khusus untuk gerak penjualan. Saklar baru `pos.jual_stok_minus` (saklar ke-25, Owner, Admin, Kasir Ya) dibaca dari peran pengguna yang menyimpan penjualan. Saklar mati: penjualan ditolak dengan pesan mesin stok ("Stok X di Outlet tidak cukup ..."), kecuali lokasinya mengizinkan stok minus. Bahan yang saldonya minus sesudah penjualan dicatat di audit `penjualan.simpan` (`stokMinus`). Dokumen lain (pengeluaran bahan, produksi cepat, gerak balik) tetap mengikuti `location.allow_negative_stock`.
+40. Satu menu punya paling banyak satu resep aktif, lewat `menu_item.bom_id` (ERD). Resep menu selalu ber-`output_qty` 1 dan tanpa biaya tambahan. Resep yang dinonaktifkan tetap ditunjuk menunya sampai menu itu diberi resep baru. "Menu tanpa resep" = menu aktif tanpa `bom_id`, dengan resep nonaktif, atau resep tanpa bahan; daftar dan qty terjual 30 hari terakhir tampil di atas halaman Resep dan BOM, dan barisnya ditandai di rincian transaksi. Kode resep dari `doc_sequence` (`doc_type` `bom`): `RM-YYMM-NNNN` untuk resep menu, `BA-YYMM-NNNN` untuk BOM assembly. `bom.version` naik setiap bahan, qty hasil, atau biaya tambahan berubah. `bom_line.waste_pct` tidak dipakai (selalu 0); `tol_pct` hanya berarti untuk BOM assembly.
+41. HPP di halaman Resep dan BOM dihitung dari harga rata-rata lokasi yang dipilih (bawaan Outlet), lalu `product.last_cost` bila lokasi belum punya rata-rata, sama dengan aturan mesin stok saat barang keluar. Nilai per bahan dibulatkan rupiah per baris. HPP yang tercatat di penjualan adalah nilai keluar mesin saat itu, jadi bisa berbeda dari tampilan resep bila harga rata-rata berubah. HPP dan nilai produksi hanya tampil untuk pemegang saklar `stok.lihat_nilai`.
+42. Hasil kumulatif yang melebihi rencana lebih dari 10 persen (RANCANGAN 5.3 "butuh Owner") diterapkan sebagai izin Setujui `produksi.hasil` (bawaan hanya Owner). Menyetujui dan menutup Perintah Produksi memakai izin Setujui `produksi.perintah` (Owner dan Admin, RANCANGAN 8.2). `approval_rule` untuk dokumen produksi belum diisi, jadi perintah bisa langsung disetujui dari Draft dan dokumen pelaksana produksi bisa langsung diposting oleh pemegang P.
+43. Perintah Produksi yang Selesai (otomatis atau ditutup manual) bersifat final: tidak bisa dibuka lagi karena transisi Selesai ke Disetujui tidak ada (bagian 3.2), jadi pengeluaran bahan dan hasil produksinya juga tidak bisa dibatalkan lagi. Pengeluaran bahan jenis keluar tidak bisa dibatalkan selama perintahnya punya hasil produksi Diposting, dan tidak bisa dibatalkan bila bahannya sudah dikembalikan dari proses. Perintah hanya bisa dibatalkan bila semua dokumen turunannya sudah Batal.
+44. Stok tersedia yang dikurangi Pengeluaran Bahan berstatus Diajukan (RANCANGAN 4, Booked Qty) belum diterapkan; `stock_balance.reserved_qty` tetap 0.
+45. Produksi Cepat: `qty` adalah jumlah batch (pengali BOM). Qty sistem bahan = qty BOM x batch, `output_qty` bawaan = qty hasil BOM x batch, `extra_cost` = biaya tambahan BOM x batch saat draf disusun. Qty aktual yang menyimpang dari qty sistem lebih dari `tol_pct` BOM wajib diberi catatan minimal 5 huruf sebelum diposting (RANCANGAN menulis "peringatan dan wajib catatan").
+46. Jurnal belum dibentuk di tahap 4B. Di tahap 5 jurnal dibentuk dari `stock_ledger` per dokumen: penjualan debit HPP kredit Persediaan (void membalik); pengeluaran bahan keluar debit Barang Dalam Proses kredit Persediaan, jenis kembali sebaliknya; hasil produksi debit Persediaan kredit Barang Dalam Proses; tutup manual membuang `wip_writeoff` ke Selisih Produksi; produksi cepat debit Persediaan (hasil) kredit Persediaan (bahan) dan kredit Biaya Produksi Dibebankan sebesar `extra_cost`.
+47. Impor `npm run impor:resep` (`scripts/impor-resep.ts`, logika `src/lib/produksi/impor.ts`) memindahkan 40 resep dari `RESEP` di `src/admin/contoh.ts` (disalin). Menu dicocokkan menurut nama (slug nama `menu_item` sama dengan kunci resep lama), bahan menurut nama produk tanpa peduli huruf besar. Resep yang menunya tidak ditemukan, menunya bernama ganda, atau salah satu bahannya tidak ditemukan dilewati dan dilaporkan, tidak ditebak. Idempoten: menu yang sudah menunjuk resep dilewati. Impor ini tidak dijalankan oleh `jalankan.sh`, supaya uji klik kasir dan stok tidak berubah karena potong stok.
+48. Sidebar berkelompok (bagian 8): Metode Bayar pindah ke grup Kasir dan Lokasi ke grup Pengaturan, sehingga urutan item berbeda dari tahap 4A. Uji kasir yang menuntut semua item sidebar terlihat di 1440 x 900 sudah gagal sejak 4A digabung (20 item), dan diganti uji bahwa item terakhir tercapai dengan menggulir sidebar.
+
 ## 12. Persediaan dan mesin stok (tahap 4A)
 
 ### 12.1 Prinsip
@@ -325,6 +345,9 @@ type HasilGerak = { ledgerId, productId, locationId, lineId, qty, hargaSatuan, n
 catatGerak(tx, dok, gerak[], opsi?): Promise<HasilGerak[]>
 pindahStok(tx, dok, { productId, dari, ke, qty, lineId }[], opsi?): Promise<HasilGerak[]>   // keluar lalu masuk, nilai sama persis
 balikDokumen(tx, dok, opsi?): Promise<HasilGerak[]>    // dok.tanggal = hari pembatalan; gagal bila sudah pernah dibalik
+// tahap 4B: produksi satu langkah. Bahan keluar dengan harga rata-rata, lalu hasil masuk dengan nilai = jumlah nilai bahan
+// + biayaTambahan, dalam satu panggilan (satu putaran kunci). Hasil: gerak bahan dulu, gerak hasil paling akhir.
+olahStok(tx, dok, bahan: Gerak[] /* qty minus */, hasil: { productId, locationId, qty, biayaTambahan?, lineId? }, opsi?): Promise<HasilGerak[]>
 periksaSaldo(db, { productId?, locationId? }?): Promise<SelisihSaldo[]>   // kosong berarti saldo cocok dengan ledger
 periksaRantai(db): Promise<number>                      // baris ledger yang saldo berjalannya putus
 hitungUlangSaldo(tx, { productId?, locationId? }?)      // tulis ulang stock_balance dari ledger, kembalikan yang diperbaiki
@@ -347,11 +370,9 @@ await catatGerak(tx, { docType: 'goods_receipt', docId: gr.id, docNo: gr.no, tan
   baris.map((b) => ({ productId: b.productId, locationId: gr.locationId, qty: des(b.qty).times(b.faktor), nilai: b.nilaiRupiah, lineId: b.id })),
   { hargaBeli: true })
 
-// Produksi cepat: bahan keluar dulu, hasil masuk dengan nilai = jumlah nilai bahan + biaya tambahan.
-const bahan = await catatGerak(tx, dok, resep.map((r) => ({ productId: r.productId, locationId: dari, qty: des(r.qty).neg(), lineId: r.id })))
-const nilaiBahan = bahan.reduce((n, h) => n - h.nilai, 0n)
-await catatGerak(tx, dok, [{ productId: hasil.id, locationId: ke, qty: qtyHasil, nilai: nilaiBahan + biayaTambahan }])
-// (dua panggilan dalam satu transaksi: lihat aturan 2)
+// Produksi cepat (tahap 4B memakai olahStok, satu panggilan): bahan keluar, hasil masuk dengan nilai bahan + biaya tambahan.
+const g = await olahStok(tx, dok, resep.map((r) => ({ productId: r.productId, locationId: dari, qty: des(r.qty).neg(), lineId: r.id })),
+  { productId: hasil.id, locationId: ke, qty: qtyHasil, biayaTambahan })
 
 // Kasir: potong bahan resep per penjualan di lokasi kasir, HPP = jumlah nilai keluar.
 const g = await catatGerak(tx, { docType: 'sale', docId: sale.id, docNo: sale.no, tanggal: hariIni(), oleh: kasir.id },
@@ -369,3 +390,31 @@ const hpp = g.reduce((n, h) => n - h.nilai, 0n)
 - Pindah Stok: satu produk satu baris; keluar dari asal dengan harga rata-rata asal dan masuk ke tujuan dengan nilai sama persis.
 - Baris dokumen menyimpan harga satuan yang benar-benar dipakai mesin saat diposting (`unit_cost`).
 - Nilai rupiah persediaan hanya tampil untuk pemegang saklar `stok.lihat_nilai`.
+- tahap 4B: `DOK_STOK` dan `ubahStatusDok` juga melayani Pengeluaran Bahan (`KB`, `material_issue`), Hasil Produksi (`HP`, `production_result`), dan Produksi Cepat (`PC`, `quick_production`). `KaitDok` mendapat dua kait opsional untuk batal dari Diposting: `periksaBatalPosting` (sebelum gerak balik, misalnya dokumen turunan) dan `sesudahBatalPosting` (sesudahnya, misalnya nilai barang dalam proses), keduanya di transaksi yang sama.
+
+## 13. Resep, potong stok penjualan, dan produksi (tahap 4B)
+
+### 13.1 Resep dan BOM
+
+- Menu `stok.resep` (Owner L T U H, Admin L T U). Halaman `/resep`: daftar dengan saringan jenis, status, dan lokasi harga; peringatan "Menu tanpa resep"; tambah (`/resep/baru?jenis=menu|assembly`); rincian `/resep/[id]` untuk ubah nama, qty hasil, biaya tambahan, bahan (tambah atau ubah qty dan toleransi, hapus), aktif dan nonaktif, serta HPP per porsi atau per batch dan per satuan hasil.
+- Resep menu: `bom.kind = menu`, ditunjuk `menu_item.bom_id`, qty bahan per porsi dalam satuan dasar bahan. BOM assembly: `bom.kind = assembly`, `bom.product_id` produk hasil (biasanya setengah jadi), `output_qty` hasil per batch, `extra_cost` biaya tambahan per batch. Produk hasil menunjuk BOM assembly aktifnya lewat `product.bom_id`.
+- Resep tidak dihapus, hanya dinonaktifkan. Produk hasil tidak boleh menjadi bahannya sendiri. Satu resep paling banyak 60 bahan.
+
+### 13.2 Potong stok penjualan
+
+1. `simpanPenjualan` memanggil mesin stok sekali per penjualan, di transaksi yang sama dengan `sale`, dengan `docType` `sale`, `docNo` nomor penjualan, tanggal hari ini (WIB), dan lokasi shift. Satu gerak per bahan per baris (`line_id` = `sale_line.id`); bahan yang sama dalam satu baris digabung.
+2. Qty bahan = qty resep aktif x qty baris. Baris paket memakai resep menu utama (`menu_item_id`) dan minuman (`set_drink_item_id`) dari baris itu (bagian 11 butir 27).
+3. `sale_line.hpp` = jumlah nilai keluar baris itu, `sale.hpp` = jumlahnya. Menu tanpa resep tidak memotong stok dan ber-HPP 0; penjualannya tetap jalan.
+4. Stok kurang: bagian 11 butir 39 (saklar `pos.jual_stok_minus`).
+5. Void memanggil `balikDokumen` dengan `docType` `sale` dan tanggal hari void: semua bahan kembali dengan qty dan nilai sama persis. `sale.hpp` tidak diubah (tetap catatan saat jual). Penjualan tanpa gerak stok di-void tanpa gerak balik.
+6. Kartu stok menautkan gerak penjualan ke `/transaksi/[id]`. Rincian transaksi menampilkan HPP per baris untuk pemegang `stok.lihat_nilai`.
+
+### 13.3 Produksi dan barang dalam proses
+
+- Barang dalam proses tidak punya lokasi stok. Pengeluaran Bahan jenis keluar mengeluarkan bahan dari lokasinya lewat mesin stok (`docType` `material_issue`), dan nilai keluarnya ditambahkan ke `production_order.wip_value`. Jenis kembali memasukkan bahan ke lokasi dengan harga keluar terakhir perintah itu (RANCANGAN 5.2) dan mengurangi `wip_value`; qty kembali tidak boleh melebihi qty bersih yang sudah keluar, dan nilainya tidak boleh melebihi `wip_value`. `issued_qty` dan `returned_qty` di baris perintah ikut diperbarui. Nilai `wip_value` selalu sama dengan jumlah nilai gerak pengeluaran perintah itu dikurangi nilai hasilnya.
+- Qty keluar kumulatif bersih per bahan paling banyak kebutuhan x (1 + `tol_pct`/100), dibulatkan 3 desimal. Draf pengeluaran keluar diisi sisa kebutuhan; draf kembali diisi 0.
+- Hasil Produksi (`docType` `production_result`) memasukkan produk hasil BOM ke lokasi hasil dengan nilai `wip_value` x qty hasil / sisa qty rencana (dibulatkan rupiah), atau seluruh `wip_value` bila hasil ini mencapai qty rencana. Saat itu perintah Selesai otomatis (`perintah.selesai`). Hasil butuh minimal satu pengeluaran keluar yang Diposting.
+- Tutup manual (`perintah.tutup`, izin S, alasan wajib) memindah sisa `wip_value` ke `wip_writeoff` dan mengosongkan `wip_value`.
+- Batal dari Diposting lewat gerak balik (`dok.batal_posting`, alasan wajib, bagian 3.2): pengeluaran mengembalikan bahan dan nilai keluar dari `wip_value`; hasil mengeluarkan produk hasil lagi dan nilainya kembali ke `wip_value`; produksi cepat membalik bahan dan hasil sekaligus. Batasannya di bagian 11 butir 43.
+- Produksi Cepat (`docType` `quick_production`) memakai `olahStok`: bahan keluar dari lokasi bahan, hasil masuk ke lokasi hasil dengan nilai bahan + `extra_cost`, tanpa barang dalam proses (bagian 11 butir 45).
+- Nomor: Perintah Produksi `PP`, Pengeluaran Bahan `KB`, Hasil Produksi `HP`, Produksi Cepat `PC` (`src/lib/status.ts`). Perintah Produksi adalah dokumen rencana dengan alur `Draft -> (Diajukan ->) Disetujui -> Selesai` dan Batal; tiga dokumen lainnya dokumen pelaksana (bagian 12.3).
