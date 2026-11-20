@@ -17,10 +17,13 @@ import { balikDokumen, type DokumenAsal } from '../stok/mesin'
 export type Aktor = Pick<Pengguna, 'id' | 'izin' | 'saklar'>
 
 export type JenisBeli = 'purchase_request' | 'purchase_order' | 'goods_receipt' | 'purchase_invoice' | 'purchase_return' | 'direct_purchase' | 'purchase_payment'
+// tahap 6A: dokumen penjualan B2B memakai pintu status yang sama (KONTRAK 11).
+export type JenisJual = 'sales_order' | 'sales_invoice' | 'customer_payment' | 'sales_return'
+export type JenisDok = JenisBeli | JenisJual
 
-type InfoBeli = { menu: string; awalan: string; nama: string; jalur: string; audit: string; golongan: GolonganDokumen }
+export type InfoBeli = { menu: string; awalan: string; nama: string; jalur: string; audit: string; golongan: GolonganDokumen }
 
-const info = (jenis: JenisBeli, menu: string, jalur: string, audit: string): InfoBeli => ({
+const info = (jenis: JenisDok, menu: string, jalur: string, audit: string): InfoBeli => ({
   menu,
   jalur,
   audit,
@@ -29,7 +32,7 @@ const info = (jenis: JenisBeli, menu: string, jalur: string, audit: string): Inf
   golongan: JENIS_DOKUMEN[jenis].golongan,
 })
 
-export const DOK_BELI: Record<JenisBeli, InfoBeli> = {
+export const DOK_BELI: Record<JenisDok, InfoBeli> = {
   purchase_request: info('purchase_request', 'beli.permintaan', '/permintaan', 'permintaan'),
   purchase_order: info('purchase_order', 'beli.pesanan', '/pesanan', 'pesanan'),
   goods_receipt: info('goods_receipt', 'beli.penerimaan', '/penerimaan', 'penerimaan'),
@@ -37,6 +40,10 @@ export const DOK_BELI: Record<JenisBeli, InfoBeli> = {
   purchase_return: info('purchase_return', 'beli.retur', '/retur-beli', 'retur_beli'),
   direct_purchase: info('direct_purchase', 'beli.langsung', '/beli-langsung', 'beli_langsung'),
   purchase_payment: info('purchase_payment', 'beli.pembayaran', '/pembayaran', 'pembayaran'),
+  sales_order: info('sales_order', 'b2b.pesanan', '/pesanan-jual', 'pesanan_jual'),
+  sales_invoice: info('sales_invoice', 'b2b.faktur', '/faktur-jual', 'faktur_jual'),
+  customer_payment: info('customer_payment', 'b2b.penerimaan', '/terima-pelanggan', 'terima_pelanggan'),
+  sales_return: info('sales_return', 'b2b.retur', '/retur-jual', 'retur_jual'),
 }
 
 export const BATAS_BARIS_BELI = 200
@@ -70,7 +77,7 @@ export function dataPelaksana(d: DataStatus) {
 export type HasilKait ={ ringkas?: string; sesudah?: Record<string, unknown> }
 
 export type KaitBeli<K extends KepalaBeli> = {
-  jenis: JenisBeli
+  jenis: JenisDok
   muat: (tx: Tx, id: number) => Promise<K | null>
   simpan: (tx: Tx, id: number, data: DataStatus) => Promise<unknown>
   // Dokumen ini terkena approval_rule (tidak boleh melompati Diajukan, dan penyetujunya butuh izin Setujui).
@@ -235,7 +242,7 @@ export type TombolBeli = {
 }
 
 // Tombol yang ditawarkan di layar rincian. Server tetap memeriksa ulang di ubahStatusBeli.
-export function tombolBeli(aktor: Aktor, jenis: JenisBeli, status: DocStatus, butuhSetuju: boolean, submittedBy: number | null, opsi: { bolehTutup?: boolean } = {}): TombolBeli {
+export function tombolBeli(aktor: Aktor, jenis: JenisDok, status: DocStatus, butuhSetuju: boolean, submittedBy: number | null, opsi: { bolehTutup?: boolean } = {}): TombolBeli {
   const { menu, golongan } = DOK_BELI[jenis]
   const iz = (a: 'T' | 'U' | 'H' | 'S' | 'P') => punyaIzin(aktor.izin, menu, a)
   const tu = iz('T') || iz('U')
@@ -270,7 +277,7 @@ export function tombolBeli(aktor: Aktor, jenis: JenisBeli, status: DocStatus, bu
 }
 
 // Hapus draf (izin H). Baris ikut terhapus lewat onDelete Cascade. Nomor yang sudah keluar tidak dipakai ulang.
-export async function hapusDrafBeli(db: Db, k: Konteks, aktor: Aktor, jenis: JenisBeli, id: number, hapus: (tx: Tx) => Promise<{ no: string; status: DocStatus } | null>) {
+export async function hapusDrafBeli(db: Db, k: Konteks, aktor: Aktor, jenis: JenisDok, id: number, hapus: (tx: Tx) => Promise<{ no: string; status: DocStatus } | null>) {
   const inf = DOK_BELI[jenis]
   pastikanIzin(aktor, inf.menu, 'H')
   return db.$transaction(async (tx) => {
@@ -282,7 +289,7 @@ export async function hapusDrafBeli(db: Db, k: Konteks, aktor: Aktor, jenis: Jen
 }
 
 // Aturan persetujuan per jenis dokumen (approval_rule). null berarti tidak ada aturan.
-export async function aturanBeli(db: DbAtauTx, docType: JenisBeli) {
+export async function aturanBeli(db: DbAtauTx, docType: JenisDok) {
   const r = await db.approvalRule.findUnique({ where: { docType } })
   if (!r || !r.requiresApproval) return null
   return { minAmount: r.minAmount, minPct: r.minPct === null ? null : des(r.minPct) }
