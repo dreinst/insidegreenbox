@@ -75,10 +75,12 @@ export default async function DaftarPengguna({ searchParams }: { searchParams: P
               {hasil.baris.map((u) => (
                 <tr key={u.id}>
                   <td data-label="Nama">
-                    <Link href={`/pengguna/${u.id}`} className="tebal">
-                      {u.name}
-                    </Link>
-                    {u.id === p.id ? <small className="redup"> (kamu)</small> : null}
+                    <span>
+                      <Link href={`/pengguna/${u.id}`} className="tebal">
+                        {u.name}
+                      </Link>
+                      {u.id === p.id ? <small className="redup"> (kamu)</small> : null}
+                    </span>
                   </td>
                   <td data-label="Nama pengguna">{u.username}</td>
                   <td data-label="Peran">{u.role.name}</td>

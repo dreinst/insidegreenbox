@@ -1,6 +1,9 @@
 import Link from 'next/link'
+import { connection } from 'next/server'
 
-export default function TidakDitemukan() {
+// Dirender per permintaan supaya skripnya mendapat nonce CSP.
+export default async function TidakDitemukan() {
+  await connection()
   return (
     <main className="masuk">
       <div className="masuk-kartu">

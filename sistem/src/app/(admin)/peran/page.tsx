@@ -37,10 +37,12 @@ export default async function DaftarPeran() {
             {peran.map((r) => (
               <tr key={r.id}>
                 <td data-label="Peran">
-                  <Link href={`/peran/${r.id}`} className="tebal">
-                    {r.name}
-                  </Link>
-                  {r.id === p.peran.id ? <small className="redup"> (peranmu)</small> : null}
+                  <span>
+                    <Link href={`/peran/${r.id}`} className="tebal">
+                      {r.name}
+                    </Link>
+                    {r.id === p.peran.id ? <small className="redup"> (peranmu)</small> : null}
+                  </span>
                 </td>
                 <td data-label="Kode">
                   <code>{r.code}</code>

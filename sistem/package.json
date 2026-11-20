@@ -12,7 +12,7 @@
     "db:setup": "prisma migrate deploy && prisma db seed",
     "seed:contoh": "tsx scripts/seed-contoh.ts",
     "test": "node --import tsx --test --test-concurrency=1 tests/*.test.ts",
-    "e2e": "node tests/e2e/klik.mjs"
+    "e2e": "mkdir -p tests/hasil && bash tests/e2e/jalankan.sh"
   },
   "dependencies": {
     "@prisma/adapter-pg": "7.10.1",

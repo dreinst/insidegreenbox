@@ -15,7 +15,8 @@ export function FormPenggunaBaru({ aksi, peran }: { aksi: Aksi; peran: PilihanPe
         <Kolom nama="name" label="Nama lengkap" hasil={hasil} wajib maxLength={80} autoComplete="off" />
         <Kolom nama="username" label="Nama pengguna" hasil={hasil} wajib maxLength={32} autoComplete="off" bantuan="Huruf kecil, angka, titik, garis bawah, atau tanda hubung." />
         <Pilih nama="roleId" label="Peran" hasil={hasil} pilihan={[{ nilai: '', label: 'Pilih peran' }, ...peran]} wajib />
-        <span />
+      </div>
+      <div className="kisi-form jarak-atas">
         <Kolom nama="sandi" label="Sandi" tipe="password" hasil={hasil} wajib autoComplete="new-password" bantuan="Minimal 8 karakter." />
         <Kolom nama="ulangiSandi" label="Ulangi sandi" tipe="password" hasil={hasil} wajib autoComplete="new-password" />
       </div>

@@ -48,7 +48,8 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
 .btn .ikon { width: 17px; height: 17px }
 
 /* Kerangka */
-.kerangka { display: flex; min-height: 100vh }
+/* Latar kolom sidebar ikut memanjang di halaman yang tinggi. */
+.kerangka { display: flex; min-height: 100vh; background: linear-gradient(to right, var(--ink) var(--side), var(--paper) var(--side)) }
 .samping { position: sticky; top: 0; z-index: 30; display: flex; flex-direction: column; width: var(--side); height: 100vh; flex: none; padding: 22px 14px; background: var(--ink); color: #D9DCD4; overflow-y: auto }
 .samping-atas { display: flex; align-items: center; justify-content: space-between; padding: 0 6px 22px }
 .samping-logo { color: var(--paper2); text-decoration: none }
@@ -111,6 +112,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
 
 /* Formulir */
 .form { margin: 0 }
+.kisi-form.jarak-atas { margin-top: 14px }
 .kisi-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px 18px }
 .kolom { display: flex; flex-direction: column; gap: 6px; min-width: 0 }
 .kolom label { font-weight: 700; font-size: 12px; letter-spacing: .08em; text-transform: uppercase }
@@ -182,6 +184,8 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
 
 /* Masuk dan layar penuh */
 .masuk { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 24px }
+/* Akses ditolak dan 404 yang tampil di dalam kerangka admin tidak perlu setinggi layar. */
+.isi .masuk { min-height: 60vh; padding: 24px 0 }
 .masuk-kartu { width: 100%; max-width: 420px; padding: 32px; background: var(--paper2); border-radius: 16px; box-shadow: inset 0 2px 0 #fff, 0 24px 40px -24px rgba(39, 41, 36, .5) }
 .masuk-kartu .logo { margin-bottom: 26px }
 .masuk-kartu h1 { margin-bottom: 8px }
@@ -198,6 +202,11 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
   .atas-logo { display: inline-flex }
   .atas { padding: 10px 16px; flex-wrap: wrap }
   .isi { padding: 20px 16px 56px }
+  .kerangka { background: var(--paper) }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .samping, .laci-buka .samping { transition: none }
 }
 
 @media (max-width: 640px) {

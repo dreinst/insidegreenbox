@@ -127,7 +127,7 @@ export async function aturUlangSandi(db: Db, k: Konteks, aktor: Aktor, id: numbe
       docType: 'app_user',
       docId: id,
       summary: `Mengatur ulang sandi ${u.username}, ${dicabut.count} sesi dicabut`,
-      after: { sandi: 'diganti', sesiDicabut: dicabut.count },
+      after: { sandiDiganti: true, sesiDicabut: dicabut.count },
     })
   })
 }
