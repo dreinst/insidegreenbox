@@ -93,6 +93,15 @@ export const NAMA_PERISTIWA: Record<string, string> = {
   'peran.aktifkan': 'Aktifkan peran',
   'peran.nonaktifkan': 'Nonaktifkan peran',
   'saklar.ubah': 'Ubah saklar fitur',
+  // tahap 3B
+  'kasir.masuk_pin': 'Masuk dengan PIN',
+  'pengguna.pin': 'Atur PIN',
+  'shift.buka': 'Buka shift',
+  'shift.kas': 'Kas laci',
+  'shift.tutup': 'Tutup shift',
+  'shift.setujui': 'Setujui selisih shift',
+  'penjualan.simpan': 'Simpan penjualan',
+  'penjualan.void': 'Void penjualan',
 }
 
 export const NAMA_ENTITAS: Record<string, string> = {
@@ -101,4 +110,7 @@ export const NAMA_ENTITAS: Record<string, string> = {
   role_permission: 'Izin peran',
   role_feature_switch: 'Saklar peran',
   user_session: 'Sesi',
+  // tahap 3B
+  shift: 'Shift kasir',
+  sale: 'Penjualan',
 }

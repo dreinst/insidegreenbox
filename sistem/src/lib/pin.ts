@@ -178,10 +178,10 @@ async function berhakVoid(db: DbAtauTx, roleId: number) {
 export async function daftarPenyetujuVoid(db: Db, kecuali?: number) {
   const u = await db.appUser.findMany({ where: { active: true, pinHash: { not: null }, role: { active: true }, ...(kecuali ? { NOT: { id: kecuali } } : {}) }, include: { role: true }, orderBy: { name: 'asc' }, take: 200 })
   const peran = new Map<number, boolean>()
-  const hasil: { id: number; name: string; peran: string }[] = []
+  const hasil: { id: number; name: string; peran: string; kodePeran: string }[] = []
   for (const x of u) {
     if (!peran.has(x.roleId)) peran.set(x.roleId, await berhakVoid(db, x.roleId))
-    if (peran.get(x.roleId)) hasil.push({ id: x.id, name: x.name, peran: x.role.name })
+    if (peran.get(x.roleId)) hasil.push({ id: x.id, name: x.name, peran: x.role.name, kodePeran: x.role.code })
   }
   return hasil
 }

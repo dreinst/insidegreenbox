@@ -7,17 +7,23 @@ cd "$(dirname "$0")/../.."
 # .env dibaca lewat dotenv (bukan source) karena nilainya boleh berisi spasi.
 DATABASE_URL="$(node -e "require('dotenv').config({ quiet: true }); process.stdout.write(process.env.DATABASE_URL || '')")"
 PORT="${E2E_PORT:-3241}"
-DB_E2E="${DATABASE_URL%/*}/greenbox_e2e"
+# Nama basis data e2e bisa diganti lewat E2E_DB supaya dua sesi kerja tidak saling menimpa.
+NAMA_DB="${E2E_DB:-greenbox_e2e}"
+DB_E2E="${DATABASE_URL%/*}/$NAMA_DB"
 DB_ADMIN="${DATABASE_URL%/*}/postgres"
 
 node -e "
 const pg = require('pg');
 const c = new pg.Client({ connectionString: process.argv[1] });
-c.connect().then(() => c.query('DROP DATABASE IF EXISTS greenbox_e2e WITH (FORCE)')).then(() => c.query('CREATE DATABASE greenbox_e2e')).then(() => c.end());
-" "$DB_ADMIN"
+const n = process.argv[2];
+if (!/^[a-z0-9_]+$/.test(n)) throw new Error('E2E_DB hanya huruf kecil, angka, dan garis bawah.');
+c.connect().then(() => c.query('DROP DATABASE IF EXISTS ' + n + ' WITH (FORCE)')).then(() => c.query('CREATE DATABASE ' + n)).then(() => c.end());
+" "$DB_ADMIN" "$NAMA_DB"
 DATABASE_URL="$DB_E2E" npx prisma migrate deploy > /dev/null
 DATABASE_URL="$DB_E2E" npx prisma db seed > /dev/null
 DATABASE_URL="$DB_E2E" npx tsx scripts/seed-contoh.ts > /dev/null
+# tahap 3B: menu, metode bayar, dan member uji untuk alur kasir.
+DATABASE_URL="$DB_E2E" npx tsx scripts/seed-kasir-uji.ts > /dev/null
 
 DATABASE_URL="$DB_E2E" TRUST_PROXY=1 HTTPS_AKTIF=0 NODE_OPTIONS=--max-old-space-size=256 \
   node node_modules/next/dist/bin/next start -p "$PORT" > tests/hasil/server-e2e.log 2>&1 &
@@ -32,4 +38,8 @@ for _ in $(seq 1 40); do
   curl -s -o /dev/null "http://127.0.0.1:$PORT/masuk" && break
   sleep 1
 done
-BASE_URL="http://127.0.0.1:$PORT" E2E_DATABASE_URL="$DB_E2E" node tests/e2e/klik.mjs
+# kasir.mjs lebih dulu, karena klik.mjs bagian 6 sengaja mengunci login sandi Admin selama 15 menit.
+HASIL=0
+BASE_URL="http://127.0.0.1:$PORT" E2E_DATABASE_URL="$DB_E2E" node tests/e2e/kasir.mjs || HASIL=1
+BASE_URL="http://127.0.0.1:$PORT" E2E_DATABASE_URL="$DB_E2E" node tests/e2e/klik.mjs || HASIL=1
+exit $HASIL

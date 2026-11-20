@@ -19,10 +19,11 @@ const AKUN = {
   admin: { u: process.env.SEED_ADMIN_USERNAME, p: process.env.SEED_ADMIN_PASSWORD },
   kasir: { u: process.env.SEED_KASIR_USERNAME, p: process.env.SEED_KASIR_PASSWORD },
 }
+// tahap 3B: Layar Kasir, Shift, Transaksi, dan PIN Kasir.
 const SIDEBAR_HARAP = {
-  owner: ['Beranda', 'Pengguna', 'Peran dan Izin', 'Saklar Fitur', 'Jejak Audit'],
-  admin: ['Beranda', 'Jejak Audit'],
-  kasir: ['Beranda'],
+  owner: ['Beranda', 'Layar Kasir', 'Shift', 'Transaksi', 'PIN Kasir', 'Pengguna', 'Peran dan Izin', 'Saklar Fitur', 'Jejak Audit'],
+  admin: ['Beranda', 'Layar Kasir', 'Shift', 'Transaksi', 'PIN Kasir', 'Jejak Audit'],
+  kasir: ['Beranda', 'Layar Kasir', 'Shift', 'Transaksi'],
 }
 const LEBAR = [
   { w: 1440, h: 900 },

@@ -4,6 +4,7 @@ import { z } from 'zod'
 import type { HasilAksi } from '@/lib/aksi'
 import { db } from '@/lib/db'
 import { PESAN_MASUK, cobaMasuk } from '@/lib/masuk'
+import { PESAN_PIN, cobaMasukPin } from '@/lib/pin'
 import { konteksPermintaan, pasangCookieSesi } from '@/lib/sesi'
 
 const skema = z.object({
@@ -29,4 +30,26 @@ export async function masukAksi(sebelum: HasilAksi, fd: FormData): Promise<Hasil
   if (!hasil.ok) return { ok: false, pesan: PESAN_MASUK[hasil.alasan], isian: { username }, n }
   await pasangCookieSesi(hasil.sesiId, hasil.kedaluwarsa)
   redirect(tujuanAman(data.data.ke))
+}
+
+// tahap 3B: masuk kasir dengan nama dan PIN. Rate limit sama dengan login sandi (src/lib/pin.ts).
+const skemaPin = z.object({
+  userId: z.coerce.number({ message: 'Pilih nama kasir.' }).int().positive('Pilih nama kasir.'),
+  pin: z.string().min(1, 'Isi PIN.').max(10, 'PIN terlalu panjang.'),
+})
+
+export async function masukPinAksi(sebelum: HasilAksi, fd: FormData): Promise<HasilAksi> {
+  const n = (sebelum?.n ?? 0) + 1
+  const userId = String(fd.get('userId') ?? '')
+  const data = skemaPin.safeParse(Object.fromEntries(fd))
+  if (!data.success) {
+    const galat: Record<string, string> = {}
+    for (const i of data.error.issues) galat[String(i.path[0])] ??= i.message
+    return { ok: false, pesan: Object.values(galat)[0], galat, isian: { userId }, n }
+  }
+  const k = await konteksPermintaan(null, `#${data.data.userId}`)
+  const hasil = await cobaMasukPin(db, { userId: data.data.userId, pin: data.data.pin, ip: k.ip, userAgent: k.userAgent })
+  if (!hasil.ok) return { ok: false, pesan: PESAN_PIN[hasil.alasan], isian: { userId }, n }
+  await pasangCookieSesi(hasil.sesiId, hasil.kedaluwarsa)
+  redirect('/kasir')
 }
