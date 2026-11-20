@@ -214,6 +214,25 @@ const JALUR: Record<string, React.ReactNode> = {
       <path d="M8 9h8M8 13h8M8 17h4" />
     </>
   ),
+  // tahap 6A
+  pelanggan: (
+    <>
+      <path d="M4 20V9l8-5 8 5v11z" />
+      <path d="M9 20v-6h6v6" />
+    </>
+  ),
+  piutang: (
+    <>
+      <path d="M4 4h16v16H4z" />
+      <path d="M8 9h8M8 13h5M15 15l2 2 3-4" />
+    </>
+  ),
+  profil: (
+    <>
+      <circle cx="12" cy="9" r="3.5" />
+      <path d="M5 20a7 7 0 0114 0" />
+    </>
+  ),
   tutup: <path d="M6 6l12 12M18 6L6 18" />,
   keluar: <path d="M14 4h5v16h-5M10 8l-4 4 4 4M6 12h10" />,
 }

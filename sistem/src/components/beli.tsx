@@ -6,7 +6,7 @@ import '@/app/(admin)/beli.css'
 import Link from 'next/link'
 import type { DocStatus, PayStatus, Progress } from '@/generated/prisma/client'
 import type { HasilAksi } from '@/lib/aksi'
-import { DOK_BELI, NAMA_BAYAR, tombolBeli, type JenisBeli, type SaringBeli } from '@/lib/beli/dokumen'
+import { DOK_BELI, NAMA_BAYAR, tombolBeli, type JenisDok, type SaringBeli } from '@/lib/beli/dokumen'
 import { punyaIzin, type Pengguna } from '@/lib/izin-inti'
 import { formatWaktu } from '@/lib/waktu'
 import { FormAlasan } from './beli-form'
@@ -151,7 +151,7 @@ export function SaringDaftarBeli({
 
 type PropPanel = {
   p: Pengguna
-  jenis: JenisBeli
+  jenis: JenisDok
   d: JejakDok
   butuhSetuju: boolean
   aksi: { ajukan: Aksi; kembalikan: Aksi; setujui: Aksi; posting: Aksi; batal: Aksi; tutup: Aksi; hapus: Aksi }

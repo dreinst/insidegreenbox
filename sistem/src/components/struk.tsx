@@ -1,4 +1,5 @@
 // Isi struk penjualan (tahap 3B), dipakai rincian transaksi dan halaman cetak.
+import { urlFoto } from '@/lib/foto'
 import { rupiah } from '@/lib/hitung-kasir'
 import type { ambilPenjualan } from '@/lib/penjualan'
 import { MODE } from '@/lib/penjualan'
@@ -11,10 +12,18 @@ const persenTeks = (d: { toString(): string }) => `${Number(d.toString()).toLoca
 export function IsiStruk({ j }: { j: Jual }) {
   const cabang = j.shift.location.branch
   const kembali = j.salePayments.reduce((a, b) => a + Number(b.change), 0)
+  // tahap 6A: logo, kepala, alamat, telepon, dan NPWP dari Profil Usaha, dibaca saat struk ditampilkan.
+  const logo = urlFoto(cabang.receiptLogo)
   return (
     <div className={`struk${j.status === 'Void' ? ' struk-void' : ''}`}>
+      {logo ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img className="struk-logo" src={logo} alt={`Logo ${cabang.name}`} />
+      ) : null}
       <p className="struk-judul">{cabang.receiptHeader || cabang.name}</p>
       {cabang.address ? <p className="struk-tengah">{cabang.address}</p> : null}
+      {cabang.phone ? <p className="struk-tengah">Telp. {cabang.phone}</p> : null}
+      {cabang.npwp ? <p className="struk-tengah">NPWP {cabang.npwp}</p> : null}
       <hr />
       <dl className="struk-dl">
         <div>
