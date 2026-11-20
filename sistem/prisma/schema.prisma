@@ -1762,10 +1762,13 @@ model JournalLine {
   credit             BigInt              @default(0)
   memo               String              @default("")
   clearedAt          DateTime?           @map("cleared_at") @db.Date
+  // tahap 5C: rekening bank_account yang digerakkan baris ini (tanpa kunci asing, KONTRAK 11), untuk Rekonsiliasi Bank.
+  bankAccountId      Int?                @map("bank_account_id")
   bankReconcileMatch BankReconcileMatch?
 
   @@index([journalId])
   @@index([accountId, journalId])
+  @@index([bankAccountId])
   @@map("journal_line")
 }
 
@@ -1778,6 +1781,10 @@ model CashTransaction {
   no                   String                @unique
   date                 DateTime              @db.Date
   kind                 String
+  // tahap 5C: rekening sumber dan tujuan (bank_account tanpa kunci asing); kosong berarti Kas Besar. account_id dan
+  // to_account_id berisi akun COA hasil pemetaan, diperbarui saat diposting.
+  bankAccountId        Int?                  @map("bank_account_id")
+  toBankAccountId      Int?                  @map("to_bank_account_id")
   partyName            String                @default("") @map("party_name")
   amount               BigInt                @default(0)
   note                 String                @default("")
@@ -1828,8 +1835,13 @@ model BankStatementLine {
   balance              BigInt?
   importBatch          String               @map("import_batch")
   matchStatus          MatchStatus          @default(BelumCocok) @map("match_status")
+  // tahap 5C: sidik baris untuk melewati baris yang sudah pernah diimpor, dan jejak impor.
+  dedupKey             String               @map("dedup_key")
+  createdBy            Int?                 @map("created_by")
+  createdAt            DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
   bankReconcileMatches BankReconcileMatch[]
 
+  @@unique([bankAccountId, dedupKey])
   @@index([bankAccountId, date])
   @@map("bank_statement_line")
 }
@@ -1844,6 +1856,8 @@ model BankReconcile {
   stmtOpening        BigInt              @default(0) @map("stmt_opening")
   stmtClosing        BigInt              @default(0) @map("stmt_closing")
   bookClosing        BigInt              @default(0) @map("book_closing")
+  // tahap 5C: jurnal bank yang belum cair per akhir periode (book_closing - outstanding = saldo rekening koran).
+  outstanding        BigInt              @default(0)
   diff               BigInt              @default(0)
   note               String              @default("")
   status             DocStatus           @default(Draft)

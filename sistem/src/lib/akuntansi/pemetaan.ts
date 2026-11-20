@@ -40,6 +40,7 @@ export const KUNCI_UMUM: KunciUmum[] = [
   { kunci: 'selisih_kas', nama: 'Selisih kas', jenis: ['Beban'], keterangan: 'Selisih tutup shift dan selisih setoran di luar MDR.' },
   { kunci: 'beban_mdr', nama: 'Beban MDR', jenis: ['Beban'], keterangan: 'Potongan MDR saat setoran non tunai.' },
   { kunci: 'beban_bank', nama: 'Beban administrasi bank', jenis: ['Beban'], keterangan: 'Biaya bank di pembayaran pembelian.' },
+  { kunci: 'beban_beli', nama: 'Beban pembelian non stok', jenis: ['Beban', 'HPP'], keterangan: 'Baris jasa faktur pembelian dan baris hanya biaya pembelian langsung.' },
   { kunci: 'laci_masuk', nama: 'Asal kas masuk laci', jenis: ['Aset', 'Kewajiban', 'Ekuitas', 'Pendapatan'], keterangan: 'Lawan kas masuk laci di luar penjualan (misalnya uang receh dari kas besar).' },
   { kunci: 'laci_keluar', nama: 'Tujuan kas keluar laci', jenis: ['Beban', 'Aset', 'HPP'], keterangan: 'Lawan kas keluar laci (misalnya beli es atau belanja kecil).' },
 ]

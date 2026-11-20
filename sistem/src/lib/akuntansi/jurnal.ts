@@ -17,6 +17,8 @@ export type BarisJurnal = {
   memo?: string
   supplierId?: number | null
   customerId?: number | null
+  // tahap 5C: rekening bank_account yang digerakkan baris ini, untuk Rekonsiliasi Bank (KONTRAK 11).
+  bankAccountId?: number | null
 }
 
 // Dokumen sumber jurnal. tanggal adalah tanggal jurnal (Date UTC tengah malam, sama dengan kolom date).
@@ -55,7 +57,7 @@ export async function pastikanPeriodeTerbuka(tx: DbAtauTx, tanggal: Date, untuk 
   return p.id
 }
 
-type BarisSiap = { accountId: number; debit: bigint; credit: bigint; memo: string; supplierId: number | null; customerId: number | null }
+type BarisSiap = { accountId: number; debit: bigint; credit: bigint; memo: string; supplierId: number | null; customerId: number | null; bankAccountId: number | null }
 
 // Menerjemahkan akun, memeriksa angka, membuang baris nol, dan menggabung baris dengan akun dan sisi yang sama.
 async function susunBaris(tx: DbAtauTx, baris: BarisJurnal[]) {
@@ -70,12 +72,12 @@ async function susunBaris(tx: DbAtauTx, baris: BarisJurnal[]) {
     if (debit === 0n && kredit === 0n) continue
     const a = await akun(b.akun)
     const sisi = debit > 0n ? 'D' : 'K'
-    const kunci = `${a.id}:${sisi}:${b.supplierId ?? ''}:${b.customerId ?? ''}`
+    const kunci = `${a.id}:${sisi}:${b.supplierId ?? ''}:${b.customerId ?? ''}:${b.bankAccountId ?? ''}`
     const ada = gabung.get(kunci)
     if (ada) {
       ada.debit += debit
       ada.credit += kredit
-    } else gabung.set(kunci, { accountId: a.id, debit, credit: kredit, memo: (b.memo ?? '').slice(0, 200), supplierId: b.supplierId ?? null, customerId: b.customerId ?? null })
+    } else gabung.set(kunci, { accountId: a.id, debit, credit: kredit, memo: (b.memo ?? '').slice(0, 200), supplierId: b.supplierId ?? null, customerId: b.customerId ?? null, bankAccountId: b.bankAccountId ?? null })
   }
   const hasil = [...gabung.values()].sort((x, y) => Number(y.debit > 0n) - Number(x.debit > 0n))
   const debit = hasil.reduce((n, b) => n + b.debit, 0n)
@@ -127,6 +129,19 @@ export async function buatJurnal(tx: Tx, k: KepalaJurnal, baris: BarisJurnal[]):
   return tulis(tx, k, s.baris, s.debit, null)
 }
 
+// tahap 5C: baris jurnal yang sudah dicocokkan ke mutasi bank terkunci dari pembatalan dokumen sumbernya (RANCANGAN 7).
+// Pencocokannya dilepas dulu di Rekonsiliasi Bank, atau rekonsiliasinya dibatalkan.
+export async function pastikanBelumDicocokkan(tx: DbAtauTx, journalId: number, dok: string) {
+  const m = await tx.bankReconcileMatch.findFirst({
+    where: { journalLine: { journalId } },
+    select: { bankStatementLine: { select: { date: true, bankReconcile: { select: { no: true } } } } },
+  })
+  if (m) {
+    const rk = m.bankStatementLine.bankReconcile?.no
+    throw new GalatAturan(`${dok} tidak bisa dibatalkan karena baris banknya sudah dicocokkan dengan mutasi rekening ${tanggalIso(m.bankStatementLine.date)}${rk ? ` di ${rk}` : ''}. Lepas pencocokannya dulu di Rekonsiliasi Bank.`)
+  }
+}
+
 // Jurnal maju dokumen yang sudah berlaku, bila ada.
 export const jurnalMaju = (db: DbAtauTx, docType: string, docId: number) =>
   db.journal.findFirst({ where: { sourceType: docType, sourceId: docId, reversalOfId: null, postedAt: { not: null } }, include: { journalLines: true, reversals: { select: { id: true, no: true } } } })
@@ -141,7 +156,9 @@ export async function buatJurnalBalik(tx: Tx, k: KepalaJurnal, baris?: BarisJurn
   if (!asal) return null
   if (asal.reversals.length) throw new GalatAturan(`Jurnal ${asal.no} sudah pernah dibalik.`)
   await pastikanPeriodeTerbuka(tx, asal.date, `Pembatalan dokumen ${k.docNo || k.docType}`)
-  const isi: BarisJurnal[] = baris ?? asal.journalLines.map((l) => ({ akun: l.accountId, debit: l.credit, kredit: l.debit, memo: l.memo, supplierId: l.supplierId, customerId: l.customerId }))
+  await pastikanBelumDicocokkan(tx, asal.id, k.docNo || k.docType)
+  const isi: BarisJurnal[] =
+    baris ?? asal.journalLines.map((l) => ({ akun: l.accountId, debit: l.credit, kredit: l.debit, memo: l.memo, supplierId: l.supplierId, customerId: l.customerId, bankAccountId: l.bankAccountId }))
   const s = await susunBaris(tx, isi)
   if (s.debit !== s.kredit) throw new GalatAturan(`Jurnal balik ${k.docNo || k.docType} tidak seimbang: debit ${rp(s.debit)}, kredit ${rp(s.kredit)}.`)
   if (!s.baris.length) return null

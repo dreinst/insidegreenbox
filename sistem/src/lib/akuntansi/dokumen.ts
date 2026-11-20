@@ -23,12 +23,19 @@ const NAMA_DOK: Record<string, string> = {
   quick_production: 'Produksi cepat',
   production_order: 'Tutup perintah produksi',
   memorial: 'Jurnal memorial',
+  // tahap 5C
+  goods_receipt: 'Penerimaan barang',
+  purchase_invoice: 'Faktur pembelian',
+  purchase_return: 'Retur pembelian',
+  direct_purchase: 'Pembelian langsung',
+  purchase_payment: 'Pembayaran pembelian',
+  cash_transaction: 'Kas dan bank',
 }
 export const namaSumber = (t: string) => NAMA_DOK[t] ?? t
 
-type BarisLedger = { location_id: number; line_id: number | null; value: bigint }
+export type BarisLedger = { location_id: number; line_id: number | null; value: bigint }
 
-const ledgerDok = (tx: DbAtauTx, docType: string, docId: number, balik: boolean) =>
+export const ledgerDok = (tx: DbAtauTx, docType: string, docId: number, balik: boolean) =>
   tx.$queryRaw<BarisLedger[]>`SELECT location_id, line_id, value FROM stock_ledger WHERE doc_type = ${docType} AND doc_id = ${docId} AND is_reversal = ${balik} ORDER BY id`
 
 // Baris persediaan dari gerak stok: setiap gerak mendebit (masuk) atau mengkredit (keluar) akun persediaan lokasinya,
@@ -203,7 +210,7 @@ export async function jurnalSetoran(tx: Tx, id: number, oleh: number | null) {
   const memo = `Setoran ${st.no}`
   const sisa = st.expectedTotal - st.actualTotal - st.mdrFee
   return buatJurnal(tx, { docType: 'pos_settlement', docId: id, docNo: st.no, tanggal: st.date, memo, oleh }, [
-    dk(tujuan, st.actualTotal, memo),
+    { ...dk(tujuan, st.actualTotal, memo), bankAccountId: st.bankAccountId },
     dk('beban_mdr', st.mdrFee, memo),
     dk('selisih_kas', sisa, memo),
     dk(sumber, -st.expectedTotal, memo),
@@ -226,8 +233,7 @@ export async function jurnalTutupPerintah(tx: Tx, id: number, oleh: number | nul
   return buatJurnal(tx, { docType: 'production_order', docId: id, docNo: po.no, tanggal: tanggalJurnal(po.closedAt), memo, oleh }, [dk('selisih_produksi', po.wipWriteOff, memo), dk('bdp', -po.wipWriteOff, memo)])
 }
 
-// Alamat halaman dokumen sumber jurnal, untuk tautan di Jurnal Umum dan Buku Besar. Dokumen pembelian ditambahkan di
-// sini saat jurnalnya disambungkan.
+// Alamat halaman dokumen sumber jurnal, untuk tautan di Jurnal Umum dan Buku Besar.
 const JALUR_SUMBER: Record<string, string> = {
   sale: '/transaksi',
   shift: '/shift',
@@ -240,6 +246,12 @@ const JALUR_SUMBER: Record<string, string> = {
   quick_production: '/produksi-cepat',
   production_order: '/perintah-produksi',
   memorial: '/jurnal',
+  goods_receipt: '/penerimaan',
+  purchase_invoice: '/faktur',
+  purchase_return: '/retur-beli',
+  direct_purchase: '/beli-langsung',
+  purchase_payment: '/pembayaran',
+  cash_transaction: '/kas',
 }
 
 export function tautanSumber(sourceType: string, sourceId: number | null, docNo = '') {
@@ -247,6 +259,7 @@ export function tautanSumber(sourceType: string, sourceId: number | null, docNo 
     const m = /#(\d+)$/.exec(docNo)
     return m ? `/shift/${m[1]}` : null
   }
+  if (sourceType === 'cash_transaction' && docNo.startsWith('PN-') && sourceId) return `/pindah-dana/${sourceId}`
   const jalur = JALUR_SUMBER[sourceType]
   return jalur && sourceId ? `${jalur}/${sourceId}` : null
 }

@@ -1,5 +1,5 @@
 // Bentuk ulang jurnal untuk dokumen lama yang sudah berlaku tetapi belum punya jurnal (janji KONTRAK 11 butir 14, 36,
-// 43, 57). Idempoten: dokumen yang sudah punya jurnal dilewati. Setiap dokumen di transaksinya sendiri, jadi satu
+// 43, 57, dan 71 untuk dokumen pembelian sejak tahap 5C). Idempoten: dokumen yang sudah punya jurnal dilewati. Setiap dokumen di transaksinya sendiri, jadi satu
 // dokumen yang gagal (misalnya periodenya sudah ditutup) tidak menggagalkan yang lain. Tanpa impor Next.
 import { Prisma } from '@/generated/prisma/client'
 import { GalatAturan } from '../aksi'
@@ -17,6 +17,7 @@ import {
   jurnalTutupPerintah,
   type JenisStokJurnal,
 } from './dokumen'
+import { BALIK_JURNAL_BELI, DOK_BELI_JURNAL, JURNAL_BELI } from './beli'
 import { tanggalJurnal, type HasilJurnal } from './jurnal'
 import { cocokkanPersediaan } from './laporan'
 import { pasangBawaanAkuntansi } from './pemetaan'
@@ -81,10 +82,25 @@ export async function bentukUlangJurnal(db: Db, opsi: { oleh?: number | null; lo
   for (const { id } of await db.$queryRaw<{ id: number }[]>`SELECT x.id FROM production_order x WHERE x.closed_at IS NOT NULL AND x.wip_writeoff <> 0 AND ${BELUM('production_order')} ORDER BY x.id`)
     await jalan('tutup_perintah', `production_order#${id}`, (tx) => jurnalTutupPerintah(tx, id, oleh))
 
-  // Gerak stok dari dokumen yang jurnalnya belum disambungkan (misalnya pembelian sebelum penggabungan).
+  // tahap 5C: dokumen pembelian yang pernah Diposting (posted_at terisi), lalu jurnal balik yang dibatalkan sesudahnya
+  // (bertanggal hari pembatalan). Urutan jenis mengikuti alur: penerimaan, faktur, retur, pembelian langsung, pembayaran.
+  for (const jenis of DOK_BELI_JURNAL) {
+    const tabel = Prisma.raw(`"${jenis}"`)
+    for (const { id } of await db.$queryRaw<{ id: number }[]>`SELECT x.id FROM ${tabel} x WHERE x.posted_at IS NOT NULL AND ${BELUM(jenis)} ORDER BY x.date, x.id`)
+      await jalan(jenis, `${jenis}#${id}`, (tx) => JURNAL_BELI[jenis](tx, id, oleh))
+  }
+  for (const jenis of DOK_BELI_JURNAL) {
+    const tabel = Prisma.raw(`"${jenis}"`)
+    for (const { id, cancelled_at } of await db.$queryRaw<{ id: number; cancelled_at: Date }[]>`
+      SELECT x.id, x.cancelled_at FROM ${tabel} x WHERE x.status = 'Batal' AND x.posted_at IS NOT NULL AND x.cancelled_at IS NOT NULL AND ${ADA_MAJU(jenis)} AND ${BELUM(jenis, true)} ORDER BY x.id`)
+      await jalan(`${jenis}_batal`, `${jenis}#${id}`, (tx) => BALIK_JURNAL_BELI[jenis](tx, id, tanggalJurnal(cancelled_at), oleh))
+  }
+
+  // Gerak stok dari dokumen yang jurnalnya belum disambungkan.
+  const jenisBeli = Prisma.join(DOK_BELI_JURNAL.map((j) => Prisma.sql`${j}`))
   const belumDidukung = (
     await db.$queryRaw<{ doc_type: string; n: bigint }[]>`
-      SELECT doc_type, COUNT(DISTINCT doc_id)::bigint AS n FROM stock_ledger WHERE doc_type NOT IN (${jenisStok}, 'sale') GROUP BY 1 ORDER BY 1`
+      SELECT doc_type, COUNT(DISTINCT doc_id)::bigint AS n FROM stock_ledger WHERE doc_type NOT IN (${jenisStok}, ${jenisBeli}, 'sale') GROUP BY 1 ORDER BY 1`
   ).map((b) => ({ docType: b.doc_type, dokumen: Number(b.n) }))
   const persediaan = await cocokkanPersediaan(db)
   opsi.log?.(`Selesai: ${Object.entries(per).map(([k, r]) => `${k} ${r.dibuat}`).join(', ') || 'tidak ada yang perlu dibentuk'}`)

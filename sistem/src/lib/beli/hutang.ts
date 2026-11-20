@@ -1,8 +1,7 @@
 // Hutang Pemasok (tahap 4C, RANCANGAN 9 Mutasi Hutang Pemasok versi saldo). Hanya membaca. Saldo per pemasok = sisa faktur
 // Diposting + sisa pembelian langsung kredit Diposting - nota debit retur yang belum terpakai. Barang diterima belum
 // difakturkan ditampilkan terpisah dan tidak dihitung sebagai hutang. Umur dari jatuh tempo. Tanpa impor Next.
-import type { Db } from '../db'
-import { Desimal, des, keRupiah } from '../stok/angka'
+import type { Db, DbAtauTx } from '../db'
 import { tanggalIso } from '../waktu'
 
 export type BarisDokHutang = {
@@ -36,6 +35,30 @@ export const kelompokUmur = (umur: number) => (umur <= 0 ? KELOMPOK_UMUR[0] : um
 
 export type SaringHutang = { pemasok?: string }
 
+// Barang diterima belum difakturkan per pemasok (tahap 5C): nilai penerimaan Diposting (subtotal + biaya tambahan)
+// dikurangi nilai terima yang sudah difakturkan (receipt_value baris barang dan biaya tambahan faktur Diposting) dan
+// bagian retur sebelum difakturkan (qty x harga terima). Rumus ini sama persis dengan jurnal BDBF (KONTRAK 11 butir 71),
+// jadi saldo akun BDBF di Buku Besar sama dengan totalnya. Pada qty pecahan bisa berbeda 1 rupiah dari qty sisa x harga.
+export async function belumDifakturkan(db: DbAtauTx, supplierId?: number) {
+  const pemasok = supplierId ?? null
+  const baris = await db.$queryRaw<{ supplier_id: number; pemasok: string; n: bigint }[]>`
+    SELECT x.supplier_id, s.name AS pemasok, SUM(x.n)::bigint AS n FROM (
+      SELECT g.supplier_id, g.subtotal + g.extra_cost AS n FROM goods_receipt g WHERE g.status = 'Diposting'
+      UNION ALL
+      SELECT g.supplier_id, -l.receipt_value FROM purchase_invoice_line l
+        JOIN purchase_invoice f ON f.id = l.purchase_invoice_id JOIN goods_receipt g ON g.id = l.goods_receipt_id
+        WHERE f.status = 'Diposting' AND l.kind IN ('barang', 'biaya_terima')
+      UNION ALL
+      SELECT g.supplier_id, -round(rl.qty_uninvoiced * gl.price) FROM purchase_return_line rl
+        JOIN purchase_return r ON r.id = rl.purchase_return_id JOIN goods_receipt_line gl ON gl.id = rl.goods_receipt_line_id
+        JOIN goods_receipt g ON g.id = gl.goods_receipt_id
+        WHERE r.status = 'Diposting' AND rl.qty_uninvoiced > 0
+    ) x JOIN supplier s ON s.id = x.supplier_id
+    WHERE ${pemasok}::int IS NULL OR x.supplier_id = ${pemasok}::int
+    GROUP BY 1, 2 HAVING SUM(x.n) <> 0`
+  return baris.map((b) => ({ supplierId: b.supplier_id, pemasok: b.pemasok, n: BigInt(b.n) }))
+}
+
 export async function hutangPemasok(db: Db, s: SaringHutang = {}, acuan = new Date()) {
   const pemasok = s.pemasok && /^\d+$/.test(s.pemasok) ? Number(s.pemasok) : undefined
   const sp = pemasok ? { supplierId: pemasok } : {}
@@ -43,7 +66,7 @@ export async function hutangPemasok(db: Db, s: SaringHutang = {}, acuan = new Da
     db.purchaseInvoice.findMany({ where: { ...sp, status: 'Diposting', payStatus: { not: 'Lunas' } }, include: { supplier: true }, orderBy: [{ dueDate: 'asc' }, { id: 'asc' }], take: 2000 }),
     db.directPurchase.findMany({ where: { ...sp, status: 'Diposting', payMode: 'kredit', payStatus: { not: 'Lunas' } }, include: { supplier: true }, orderBy: [{ dueDate: 'asc' }, { id: 'asc' }], take: 2000 }),
     db.purchaseReturn.findMany({ where: { ...sp, status: 'Diposting', debitNoteAmount: { gt: 0 } }, include: { supplier: true }, orderBy: [{ date: 'asc' }, { id: 'asc' }], take: 2000 }),
-    db.goodsReceipt.findMany({ where: { ...sp, status: 'Diposting', invoiceProgress: { not: 'Penuh' } }, include: { supplier: true, goodsReceiptLines: true, purchaseInvoiceLines: { where: { kind: 'biaya_terima', purchaseInvoice: { status: 'Diposting' } }, select: { id: true } } }, take: 2000 }),
+    belumDifakturkan(db, pemasok),
   ])
   const dok: BarisDokHutang[] = []
   const tambah = (x: Omit<BarisDokHutang, 'umur' | 'kelompok'>) => {
@@ -56,16 +79,7 @@ export async function hutangPemasok(db: Db, s: SaringHutang = {}, acuan = new Da
     if (r.debitNoteAmount <= r.debitNoteUsed) continue
     tambah({ jenis: 'Nota debit', jalur: '/retur-beli', id: r.id, no: r.no, ref: r.reason, pemasok: r.supplier.name, supplierId: r.supplierId, date: r.date, dueDate: null, total: -r.debitNoteAmount, dibayar: -r.debitNoteUsed, sisa: -(r.debitNoteAmount - r.debitNoteUsed) })
   }
-  // Barang diterima belum difakturkan per pemasok: qty sisa x harga terima, ditambah biaya tambahan yang belum tertagih.
-  const bdbf = new Map<number, bigint>()
-  for (const g of terima) {
-    let n = g.purchaseInvoiceLines.length || g.extraCost === 0n ? 0n : g.extraCost
-    for (const b of g.goodsReceiptLines) {
-      const sisa = Desimal.max(0, des(b.qty).minus(des(b.qtyInvoiced)).minus(des(b.qtyRetUninv)))
-      if (sisa.gt(0)) n += keRupiah(sisa.times(des(b.price)))
-    }
-    if (n) bdbf.set(g.supplierId, (bdbf.get(g.supplierId) ?? 0n) + n)
-  }
+  const bdbf = new Map(terima.map((t) => [t.supplierId, t.n]))
   const peta = new Map<number, { supplierId: number; pemasok: string; tagihan: bigint; nota: bigint; saldo: bigint; jatuhTempo: bigint; dokumen: number; belumFaktur: bigint }>()
   const ambil = (id: number, nama: string) => {
     if (!peta.has(id)) peta.set(id, { supplierId: id, pemasok: nama, tagihan: 0n, nota: 0n, saldo: 0n, jatuhTempo: 0n, dokumen: 0, belumFaktur: 0n })
@@ -81,7 +95,7 @@ export async function hutangPemasok(db: Db, s: SaringHutang = {}, acuan = new Da
     p.saldo += d.sisa
     p.dokumen++
   }
-  for (const g of terima) if (bdbf.get(g.supplierId)) ambil(g.supplierId, g.supplier.name).belumFaktur = bdbf.get(g.supplierId)!
+  for (const t of terima) if (bdbf.get(t.supplierId)) ambil(t.supplierId, t.pemasok).belumFaktur = bdbf.get(t.supplierId)!
   const perPemasok = [...peta.values()].sort((a, b) => a.pemasok.localeCompare(b.pemasok, 'id'))
   const umur = KELOMPOK_UMUR.map((k) => ({ kelompok: k, sisa: dok.filter((d) => d.kelompok === k).reduce((n, d) => n + d.sisa, 0n) }))
   return {

@@ -7,6 +7,7 @@ import Link from 'next/link'
 import type { DocStatus, PayStatus, Progress } from '@/generated/prisma/client'
 import type { HasilAksi } from '@/lib/aksi'
 import { DOK_BELI, NAMA_BAYAR, tombolBeli, type JenisBeli, type SaringBeli } from '@/lib/beli/dokumen'
+import { db } from '@/lib/db'
 import { punyaIzin, type Pengguna } from '@/lib/izin-inti'
 import { formatWaktu } from '@/lib/waktu'
 import { FormAlasan } from './beli-form'
@@ -177,6 +178,7 @@ export async function PanelBeli({ p, jenis, d, butuhSetuju, aksi, catatan, boleh
       </div>
       {catatan ? <p className="catatan">{catatan}</p> : null}
       <JejakStatus d={d} />
+      {(d.status === 'Diposting' || d.status === 'Batal') && punyaIzin(p.izin, 'akun.jurnal', 'L') ? <TautanJurnal jenis={jenis} id={d.id} /> : null}
       {d.status === 'Selesai' && selesai ? (
         <p className="redup kecil">
           Selesai {selesai.at ? formatWaktu(selesai.at) : ''}: {selesai.alasan ? `sisa ditutup. Alasan: ${selesai.alasan}` : 'semua baris terpenuhi.'}
@@ -229,6 +231,24 @@ export async function PanelBeli({ p, jenis, d, butuhSetuju, aksi, catatan, boleh
         </p>
       ) : null}
     </section>
+  )
+}
+
+// tahap 5C: jurnal maju dan jurnal balik dokumen ini, untuk pemegang Lihat Jurnal Umum.
+async function TautanJurnal({ jenis, id }: { jenis: string; id: number }) {
+  const j = await db.journal.findMany({ where: { sourceType: jenis, sourceId: id }, select: { id: true, no: true, reversalOfId: true }, orderBy: { id: 'asc' } })
+  if (!j.length) return null
+  return (
+    <p className="kecil">
+      Jurnal:{' '}
+      {j.map((x, i) => (
+        <span key={x.id}>
+          {i ? ', ' : ''}
+          <Link href={`/jurnal/${x.id}`}>{x.no}</Link>
+          {x.reversalOfId ? ' (balik)' : ''}
+        </span>
+      ))}
+    </p>
   )
 }
 
