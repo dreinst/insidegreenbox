@@ -5,6 +5,7 @@ import { db } from '@/lib/db'
 import { wajibIzin } from '@/lib/izin'
 import { punyaIzin } from '@/lib/izin-inti'
 import { daftarPinBisaDiatur } from '@/lib/pin'
+import '@/components/kasir.css'
 
 export const metadata: Metadata = { title: 'PIN Kasir' }
 
@@ -49,7 +50,7 @@ export default async function DaftarPin() {
                   <td data-label="PIN">
                     <Lencana aktif={u.adaPin} teksAktif="Terpasang" teksMati="Belum ada" />
                   </td>
-                  <td data-label="Pemakaian">{u.masukPin ? 'Masuk kasir dan setujui void' : 'Hanya setujui void'}</td>
+                  <td data-label="Pemakaian">{u.masukPin ? 'Masuk ke layar kasir' : 'Menyetujui void'}</td>
                   <td className="sel-aksi">
                     <Link href={`/pin/${u.id}`}>{bolehUbah ? 'Atur PIN' : 'Lihat'}</Link>
                   </td>

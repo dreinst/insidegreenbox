@@ -9,6 +9,7 @@ import { bolehAturPinUntuk, bolehMasukPin } from '@/lib/pin'
 import { formatWaktu } from '@/lib/waktu'
 import { aturPinAksi, hapusPinAksi } from '../aksi'
 import { FormHapusPin, FormPin } from '../form'
+import '@/components/kasir.css'
 
 export const metadata: Metadata = { title: 'PIN Kasir' }
 
