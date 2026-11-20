@@ -5,6 +5,8 @@
 import type { DocStatus, PayStatus, Progress } from '@/generated/prisma/client'
 import { z } from 'zod'
 import { GalatAturan, GalatIzin } from '../aksi'
+import { BALIK_JURNAL_BELI, JURNAL_BELI, type JenisBeliJurnal } from '../akuntansi/beli'
+import { pastikanPeriodeTerbuka } from '../akuntansi/jurnal'
 import { catatAudit, type Konteks } from '../audit'
 import type { Db, DbAtauTx, Tx } from '../db'
 import { pastikanIzin, punyaIzin, saklarNyala, type Pengguna } from '../izin-inti'
@@ -175,10 +177,15 @@ export async function ubahStatusBeli<K extends KepalaBeli>(db: Db, k: Konteks, a
       const setujuSekaligus = gol === 'pelaksana' && setuju
       if (setujuSekaligus) pastikanIzin(aktor, inf.menu, 'S')
       periksaTanggal(aktor, kini.date)
+      // tahap 5C: periode tertutup menolak posting dokumen pembelian (RANCANGAN 2.3 butir 5, KONTRAK 11 butir 73).
+      await pastikanPeriodeTerbuka(tx, kini.date, `Posting ${kini.no}`)
       await kait.periksaIsi?.(tx, kini, aktor)
       const h = await kait.posting!(tx, kini, { docType: kait.jenis, docId: kini.id, docNo: kini.no, tanggal: kini.date, oleh: aktor.id }, aktor)
       ringkas = `${setujuSekaligus ? 'Menyetujui dan memposting' : 'Memposting'} ${nama} ${kini.no}`
       tambahHasil(h)
+      // Jurnal di transaksi yang sama, sesudah gerak stok dan penghitung turunan (KONTRAK 14.2 aturan 1).
+      const j = kait.jenis in JURNAL_BELI ? await JURNAL_BELI[kait.jenis as JenisBeliJurnal](tx, kini.id, aktor.id) : null
+      if (j) sesudah = { ...sesudah, jurnal: j.no }
       data = {
         status: 'Diposting',
         postedBy: aktor.id,
@@ -203,10 +210,15 @@ export async function ubahStatusBeli<K extends KepalaBeli>(db: Db, k: Konteks, a
         pastikanIzin(aktor, inf.menu, 'P')
         if (!saklarNyala(aktor, 'dok.batal_posting')) throw new GalatAturan('Membatalkan dokumen yang sudah Diposting butuh saklar Batalkan dokumen diposting.')
         if (alasan.length < 5) throw new GalatAturan('Tulis alasan pembatalan, minimal 5 huruf.', 'alasan')
+        // tahap 5C: dokumen bertanggal di periode tertutup tidak bisa dibatalkan, begitu juga bila hari ini tertutup.
+        await pastikanPeriodeTerbuka(tx, kini.date, `Pembatalan ${kini.no}`)
+        await pastikanPeriodeTerbuka(tx, hariIni(sekarang), `Pembatalan ${kini.no}`)
         tambahHasil(await kait.batal?.(tx, kini, aktor, kini.status))
         const balik = await balikDokumen(tx, { docType: kait.jenis, docId: kini.id, docNo: kini.no, tanggal: hariIni(sekarang), oleh: aktor.id })
         ringkas = `Membatalkan ${nama} ${kini.no} yang sudah Diposting${balik.length ? ` dengan ${balik.length} gerak balik` : ''}. Alasan: ${alasan}`
         if (balik.length) sesudah = { ...sesudah, gerakBalik: balik.map((g) => ({ productId: g.productId, locationId: g.locationId, qty: g.qty.toString(), nilai: g.nilai })) }
+        const jb = kait.jenis in BALIK_JURNAL_BELI ? await BALIK_JURNAL_BELI[kait.jenis as JenisBeliJurnal](tx, kini.id, hariIni(sekarang), aktor.id) : null
+        if (jb) sesudah = { ...sesudah, jurnalBalik: jb.no }
       } else {
         pastikanIzin(aktor, inf.menu, 'U')
         if (!transisiSah(gol, kini.status, 'Batal')) tolak()

@@ -269,7 +269,18 @@ export const SIDEBAR_GRUP: GrupSidebar[] = [
   // tahap 6A: penjualan B2B sesudah Pembelian; Piutang Pelanggan di grup Keuangan.
   { judul: 'Penjualan B2B', item: SIDEBAR_B2B },
   // tahap 5A: rekening bank dan laporan penjualan.
-  { judul: 'Keuangan', item: [...SIDEBAR_REKENING, ...SIDEBAR_BELI.filter((i) => i.href === '/hutang'), SIDEBAR_PIUTANG] },
+  // tahap 5C: kas masuk dan keluar, pindah dana, dan rekonsiliasi bank (RANCANGAN 7 dan 8.2).
+  {
+    judul: 'Keuangan',
+    item: [
+      { href: '/kas', label: 'Kas Masuk/Keluar', menu: 'kas.transaksi', ikon: 'kas' },
+      { href: '/pindah-dana', label: 'Pindah Dana', menu: 'kas.pindah', ikon: 'pindahdana' },
+      { href: '/rekonsiliasi', label: 'Rekonsiliasi Bank', menu: 'kas.rekonsiliasi', ikon: 'rekonsiliasi' },
+      ...SIDEBAR_REKENING,
+      ...SIDEBAR_BELI.filter((i) => i.href === '/hutang'),
+      SIDEBAR_PIUTANG,
+    ],
+  },
   // tahap 5B: akuntansi inti (RANCANGAN 8.2). Admin hanya melihat Akun dan Pemetaan; sisanya Owner.
   {
     judul: 'Akuntansi',
