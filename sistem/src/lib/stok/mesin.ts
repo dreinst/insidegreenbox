@@ -195,7 +195,7 @@ export function pindahStok(tx: Tx, dok: DokumenAsal, baris: BarisPindah[], opsi:
   for (const b of baris) {
     if (b.dari === b.ke) throw new GalatAturan('Lokasi asal dan tujuan harus berbeda.')
     const q = des(b.qty)
-    if (!q.isPos()) throw new GalatAturan('Qty pindah harus lebih dari 0.')
+    if (!q.gt(0)) throw new GalatAturan('Qty pindah harus lebih dari 0.')
     langkah.push({ productId: b.productId, locationId: b.dari, qty: q.neg(), lineId: b.lineId })
     langkah.push({ productId: b.productId, locationId: b.ke, qty: q, lineId: b.lineId, nilaiIkut: langkah.length - 1 })
   }

@@ -91,6 +91,7 @@ describe('master produk, satuan, lokasi, alasan', () => {
     assert.equal(pu.factorToBase.toString(), '1000')
     assert.ok(pu.isPurchase && pu.isDefault)
     await galat(() => simpanKonversi(db, k(admin), admin, p.id, { unitId: String(gram), factor: '1' }), /tidak perlu/)
+    await assert.rejects(simpanKonversi(db, k(admin), admin, p.id, { unitId: String(kg), factor: '0' }), /lebih dari 0/)
     await hapusKonversi(db, k(admin), admin, p.id, kg)
     assert.equal(await db.productUnit.count({ where: { productId: p.id } }), 0)
     assert.equal(await audit('produk.satuan_hapus'), 1)

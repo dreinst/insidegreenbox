@@ -20,7 +20,7 @@ export default async function PosisiStok({ searchParams }: { searchParams: Promi
   const disaring = !!(s.q || s.lokasi || s.kategori || s.bawah)
   return (
     <>
-      <KepalaHalaman judul="Stok" keterangan="Posisi stok per lokasi dari kartu stok. Baris merah berada di bawah stok minimum." />
+      <KepalaHalaman judul="Stok" keterangan="Posisi stok per lokasi dari kartu stok. Baris merah berada di bawah stok minimum. Pilih lokasi untuk melihat juga produk yang belum pernah ada di sana." />
       <PesanStok kode={s.pesan} />
 
       <form className="saring" method="get" role="search" aria-label="Saring posisi stok">
@@ -125,7 +125,7 @@ export default async function PosisiStok({ searchParams }: { searchParams: Promi
                     <b>
                       {formatQty(b.qty)} {b.symbol}
                     </b>
-                    {b.bawahMinimum ? <small className="blok keluar">di bawah minimum</small> : null}
+                    {b.bawahMinimum ? <small className="blok gerak-keluar">di bawah minimum</small> : null}
                   </td>
                   <td data-label="Minimum" className="angka">
                     {formatQty(b.min_stock)}

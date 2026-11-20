@@ -142,8 +142,8 @@ export default async function RincianOpname({ params, searchParams }: { params: 
                       <td data-label="Qty fisik" className="angka">
                         {b.countedQty === null ? 'belum dihitung' : formatQty(b.countedQty)}
                       </td>
-                      <td data-label="Selisih" className={`angka ${sel.isPos() ? 'masuk' : sel.isNeg() ? 'keluar' : ''}`}>
-                        {b.countedQty === null ? '-' : `${sel.isPos() ? '+' : ''}${formatQty(sel)}`}
+                      <td data-label="Selisih" className={`angka ${sel.gt(0) ? 'gerak-masuk' : sel.lt(0) ? 'gerak-keluar' : ''}`}>
+                        {b.countedQty === null ? '-' : `${sel.gt(0) ? '+' : ''}${formatQty(sel)}`}
                       </td>
                       <td data-label="Alasan">{b.reason?.name ?? '-'}</td>
                       {lihatNilai && sudahGerak ? (

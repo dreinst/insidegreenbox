@@ -151,7 +151,8 @@ export const skemaKonversi = z.object({
   unitId: z.string().regex(/^\d+$/, 'Pilih satuan.').transform(Number),
   factor: z.string().transform((v, ctx) => {
     const d = bacaAngka(v)
-    if (!d || !d.isPos()) {
+    // isPos() juga benar untuk 0 di decimal.js, jadi pakai gt(0).
+    if (!d || !d.gt(0)) {
       ctx.addIssue({ code: 'custom', message: 'Faktor harus angka lebih dari 0, misalnya 1000 atau 0,5.' })
       return z.NEVER
     }

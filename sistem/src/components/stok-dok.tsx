@@ -100,8 +100,19 @@ export async function PanelTindakan({ p, jenis, d, butuhSetuju, aksi, catatan }:
           {t.hapus ? <TombolAksi aksi={aksi.hapus} label="Hapus draf" kelas="btn bahaya" konfirmasi={`Hapus draf ${d.no}? Nomornya tidak dipakai ulang.`} /> : null}
         </div>
       ) : null}
-      {t.batal ? <FormBatal aksi={aksi.batal} wajibAlasan={false} label={`Batalkan ${nama}`} konfirmasi={`Batalkan ${d.no}?`} /> : null}
-      {t.batalPosting ? <FormBatal aksi={aksi.batal} wajibAlasan label="Batalkan dengan gerak balik" konfirmasi={`Batalkan ${d.no}? Stok dikembalikan lewat gerak balik bertanggal hari ini.`} /> : null}
+      {t.batal ? (
+        <details className="lipat-batal">
+          <summary>Batalkan dokumen</summary>
+          <FormBatal aksi={aksi.batal} wajibAlasan={false} label={`Batalkan ${nama}`} konfirmasi={`Batalkan ${d.no}?`} />
+        </details>
+      ) : null}
+      {t.batalPosting ? (
+        <details className="lipat-batal">
+          <summary>Batalkan dokumen yang sudah Diposting</summary>
+          <p className="redup kecil">Stok dikembalikan lewat gerak balik bertanggal hari ini dengan nilai yang sama. Alasan wajib diisi.</p>
+          <FormBatal aksi={aksi.batal} wajibAlasan label="Batalkan dengan gerak balik" konfirmasi={`Batalkan ${d.no}? Stok dikembalikan lewat gerak balik bertanggal hari ini.`} />
+        </details>
+      ) : null}
       {punyaIzin(p.izin, 'atur.audit', 'L') ? (
         <p>
           <Link href={`/audit?entitas=${jenis}&dok=${d.id}`}>Lihat jejak audit dokumen ini</Link>

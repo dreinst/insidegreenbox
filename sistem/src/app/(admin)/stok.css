@@ -15,8 +15,9 @@
 
 /* Baris tabel */
 .tabel tr.kurang-min td { background: var(--red-tint) }
-.tabel .masuk { color: #0B6B09; font-weight: 700 }
-.tabel .keluar { color: var(--red); font-weight: 700 }
+/* Bukan .masuk atau .keluar: .masuk sudah dipakai layar login di globals.css. */
+.gerak-masuk { color: #0B6B09; font-weight: 700 }
+.gerak-keluar { color: var(--red); font-weight: 700 }
 .tabel tr.baris-balik td { color: var(--muted) }
 .tabel tr.baris-awal td { background: #ECEEE9; font-weight: 700 }
 .tabel-hitung .kolom input, .tabel-hitung .kolom select { min-height: 40px }
@@ -27,7 +28,13 @@
 .lencana.tambah { background: var(--green-tint); color: #0B6B09 }
 .lencana.kurang { background: var(--red-tint); color: var(--red) }
 
+.kartu > h3 { margin: 22px 0 10px }
+.lipat-batal { margin-top: 14px; padding-top: 12px; border-top: 1px solid #E1E4DD }
+.lipat-batal summary { display: inline-flex; align-items: center; min-height: 40px; font-weight: 700; color: var(--red); cursor: pointer }
+.lipat-batal .form-batal { margin-top: 8px; padding-top: 0; border-top: 0 }
+
 @media (max-width: 640px) {
+  .tabel td > .blok { grid-column: 2; margin-top: -8px }
   .ringkas-stok { padding: 12px 14px }
   .ringkas-stok dd { font-size: 16px }
   .tabel-hitung .kolom { min-width: 0 }

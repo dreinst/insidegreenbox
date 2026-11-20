@@ -22,6 +22,8 @@ DATABASE_URL="$DB_E2E" npx prisma db seed > /dev/null
 DATABASE_URL="$DB_E2E" npx tsx scripts/seed-contoh.ts > /dev/null
 # tahap 3A: kategori, menu, paket, tingkat, dan metode bayar untuk uji modul master.
 DATABASE_URL="$DB_E2E" npx tsx scripts/impor-menu.ts > /dev/null
+# tahap 4A: bahan dan saldo awal admin lama untuk uji persediaan.
+DATABASE_URL="$DB_E2E" npx tsx scripts/impor-stok.ts > /dev/null
 
 DATABASE_URL="$DB_E2E" TRUST_PROXY=1 HTTPS_AKTIF=0 NODE_OPTIONS=--max-old-space-size=256 \
   node node_modules/next/dist/bin/next start -p "$PORT" > tests/hasil/server-e2e.log 2>&1 &
@@ -40,5 +42,7 @@ done
 gagal=0
 # master.mjs dulu: klik.mjs menguji penguncian login admin, yang menahan login admin selama 15 menit.
 BASE_URL="http://127.0.0.1:$PORT" E2E_DATABASE_URL="$DB_E2E" node tests/e2e/master.mjs || gagal=1
+# tahap 4A: persediaan, juga sebelum klik.mjs karena butuh login admin.
+BASE_URL="http://127.0.0.1:$PORT" E2E_DATABASE_URL="$DB_E2E" node tests/e2e/stok.mjs || gagal=1
 BASE_URL="http://127.0.0.1:$PORT" E2E_DATABASE_URL="$DB_E2E" node tests/e2e/klik.mjs || gagal=1
 exit $gagal

@@ -35,7 +35,8 @@ type BarisPosisi = {
 
 const angkaId = (v?: string) => (v && /^\d+$/.test(v) ? Number(v) : null)
 
-// Satu baris per produk per lokasi aktif. Produk nonaktif hanya muncul bila masih punya stok.
+// Satu baris per produk per lokasi aktif. Produk nonaktif hanya muncul bila masih punya stok. Tanpa saringan lokasi, hanya
+// pasangan produk-lokasi yang pernah punya gerak yang tampil; dengan lokasi terpilih, semua produk aktif ikut tampil.
 export async function daftarPosisi(db: Db, s: SaringPosisi) {
   const lokasi = angkaId(s.lokasi)
   const kategori = angkaId(s.kategori)
@@ -50,7 +51,7 @@ export async function daftarPosisi(db: Db, s: SaringPosisi) {
              COALESCE(b.qty, 0) AS qty, COALESCE(b.value, 0)::bigint AS value, COALESCE(b.avg_cost, 0) AS avg_cost
       FROM product p JOIN unit u ON u.id = p.base_unit_id CROSS JOIN location l
       LEFT JOIN stock_balance b ON b.product_id = p.id AND b.location_id = l.id
-      WHERE l.active AND (p.active OR COALESCE(b.qty, 0) <> 0)
+      WHERE l.active AND (p.active OR COALESCE(b.qty, 0) <> 0) AND (${lokasi}::int IS NOT NULL OR b.product_id IS NOT NULL)
         AND (${lokasi}::int IS NULL OR l.id = ${lokasi}::int) AND (${kategori}::int IS NULL OR p.category_id = ${kategori}::int)
         AND (${pola}::text IS NULL OR p.name ILIKE ${pola}::text OR p.code ILIKE ${pola}::text)
         AND (NOT ${bawah}::boolean OR COALESCE(b.qty, 0) < p.min_stock)
@@ -59,7 +60,7 @@ export async function daftarPosisi(db: Db, s: SaringPosisi) {
       SELECT count(*) AS n, sum(COALESCE(b.value, 0))::bigint AS nilai, count(*) FILTER (WHERE COALESCE(b.qty, 0) < p.min_stock) AS kurang
       FROM product p CROSS JOIN location l
       LEFT JOIN stock_balance b ON b.product_id = p.id AND b.location_id = l.id
-      WHERE l.active AND (p.active OR COALESCE(b.qty, 0) <> 0)
+      WHERE l.active AND (p.active OR COALESCE(b.qty, 0) <> 0) AND (${lokasi}::int IS NOT NULL OR b.product_id IS NOT NULL)
         AND (${lokasi}::int IS NULL OR l.id = ${lokasi}::int) AND (${kategori}::int IS NULL OR p.category_id = ${kategori}::int)
         AND (${pola}::text IS NULL OR p.name ILIKE ${pola}::text OR p.code ILIKE ${pola}::text)
         AND (NOT ${bawah}::boolean OR COALESCE(b.qty, 0) < p.min_stock)`,

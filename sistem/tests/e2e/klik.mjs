@@ -20,9 +20,11 @@ const AKUN = {
   kasir: { u: process.env.SEED_KASIR_USERNAME, p: process.env.SEED_KASIR_PASSWORD },
 }
 // tahap 3A menambah Menu dan Harga, Promo, Member, dan Metode Bayar sesuai izin tiap peran.
+// tahap 4A: tujuh item persediaan dan lokasi sesudah Metode Bayar.
+const STOK_4A = ['Produk dan Satuan', 'Stok', 'Penyesuaian', 'Opname', 'Pindah Stok', 'Alasan', 'Lokasi']
 const SIDEBAR_HARAP = {
-  owner: ['Beranda', 'Menu dan Harga', 'Promo', 'Member', 'Metode Bayar', 'Pengguna', 'Peran dan Izin', 'Saklar Fitur', 'Jejak Audit'],
-  admin: ['Beranda', 'Menu dan Harga', 'Promo', 'Member', 'Metode Bayar', 'Jejak Audit'],
+  owner: ['Beranda', 'Menu dan Harga', 'Promo', 'Member', 'Metode Bayar', ...STOK_4A, 'Pengguna', 'Peran dan Izin', 'Saklar Fitur', 'Jejak Audit'],
+  admin: ['Beranda', 'Menu dan Harga', 'Promo', 'Member', 'Metode Bayar', ...STOK_4A, 'Jejak Audit'],
   kasir: ['Beranda', 'Menu dan Harga', 'Member'],
 }
 const LEBAR = [

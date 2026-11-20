@@ -153,7 +153,7 @@ export default async function KartuStok({ searchParams }: { searchParams: Promis
                           </small>
                         </td>
                         <td data-label="Lokasi">{b.location.name}</td>
-                        <td data-label="Gerak" className={`angka ${masuk ? 'masuk' : 'keluar'}`}>
+                        <td data-label="Gerak" className={`angka ${masuk ? 'gerak-masuk' : 'gerak-keluar'}`}>
                           {masuk ? '+' : ''}
                           {formatQty(b.qty)} {satuan}
                         </td>
