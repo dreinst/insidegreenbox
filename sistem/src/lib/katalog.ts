@@ -253,7 +253,16 @@ export const SIDEBAR_GRUP: GrupSidebar[] = [
   // tahap 4C: pembelian (RANCANGAN 3); Hutang Pemasok di grup Keuangan.
   { judul: 'Pembelian', item: SIDEBAR_BELI.filter((i) => i.href !== '/hutang') },
   // tahap 5A: rekening bank dan laporan penjualan.
-  { judul: 'Keuangan', item: [...SIDEBAR_REKENING, ...SIDEBAR_BELI.filter((i) => i.href === '/hutang')] },
+  // tahap 5C: kas masuk dan keluar, pindah dana, dan rekonsiliasi bank (RANCANGAN 7 dan 8.2).
+  {
+    judul: 'Keuangan',
+    item: [
+      { href: '/kas', label: 'Kas Masuk dan Keluar', menu: 'kas.transaksi', ikon: 'kas' },
+      { href: '/pindah-dana', label: 'Pindah Dana', menu: 'kas.pindah', ikon: 'pindahdana' },
+      ...SIDEBAR_REKENING,
+      ...SIDEBAR_BELI.filter((i) => i.href === '/hutang'),
+    ],
+  },
   // tahap 5B: akuntansi inti (RANCANGAN 8.2). Admin hanya melihat Akun dan Pemetaan; sisanya Owner.
   {
     judul: 'Akuntansi',

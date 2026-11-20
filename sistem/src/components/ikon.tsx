@@ -249,6 +249,25 @@ const JALUR: Record<string, React.ReactNode> = {
       <path d="M10.5 13.5v-1a1.5 1.5 0 013 0v1" />
     </>
   ),
+  // tahap 5C: kas dan bank.
+  kas: (
+    <>
+      <rect x="2.5" y="6.5" width="19" height="11" rx="2" />
+      <circle cx="12" cy="12" r="2.5" />
+      <path d="M6 9.5v5M18 9.5v5" />
+    </>
+  ),
+  pindahdana: (
+    <>
+      <path d="M4 8h14l-3-3M20 16H6l3 3" />
+    </>
+  ),
+  rekonsiliasi: (
+    <>
+      <path d="M4 4h7v16H4zM13 4h7v16h-7" />
+      <path d="M6.5 9h2M6.5 13h2M15.5 9l1.2 1.2 2-2.4M15.5 14l1.2 1.2 2-2.4" />
+    </>
+  ),
   tutup: <path d="M6 6l12 12M18 6L6 18" />,
   keluar: <path d="M14 4h5v16h-5M10 8l-4 4 4 4M6 12h10" />,
 }
