@@ -20,10 +20,13 @@ const AKUN = {
   kasir: { u: process.env.SEED_KASIR_USERNAME, p: process.env.SEED_KASIR_PASSWORD },
 }
 // tahap 3A dan 3B menambah modul kasir (Layar Kasir, Shift, Transaksi, PIN Kasir) dan master (Menu dan Harga, Promo, Member, Metode Bayar) sesuai izin tiap peran.
+// tahap 4A: tujuh item persediaan dan lokasi sesudah Metode Bayar.
+const KASIR_3B = ['Layar Kasir', 'Shift', 'Transaksi']
+const STOK_4A = ['Produk dan Satuan', 'Stok', 'Penyesuaian', 'Opname', 'Pindah Stok', 'Alasan', 'Lokasi']
 const SIDEBAR_HARAP = {
-  owner: ['Beranda', 'Layar Kasir', 'Shift', 'Transaksi', 'PIN Kasir', 'Menu dan Harga', 'Promo', 'Member', 'Metode Bayar', 'Pengguna', 'Peran dan Izin', 'Saklar Fitur', 'Jejak Audit'],
-  admin: ['Beranda', 'Layar Kasir', 'Shift', 'Transaksi', 'PIN Kasir', 'Menu dan Harga', 'Promo', 'Member', 'Metode Bayar', 'Jejak Audit'],
-  kasir: ['Beranda', 'Layar Kasir', 'Shift', 'Transaksi', 'Menu dan Harga', 'Member'],
+  owner: ['Beranda', ...KASIR_3B, 'PIN Kasir', 'Menu dan Harga', 'Promo', 'Member', 'Metode Bayar', ...STOK_4A, 'Pengguna', 'Peran dan Izin', 'Saklar Fitur', 'Jejak Audit'],
+  admin: ['Beranda', ...KASIR_3B, 'PIN Kasir', 'Menu dan Harga', 'Promo', 'Member', 'Metode Bayar', ...STOK_4A, 'Jejak Audit'],
+  kasir: ['Beranda', ...KASIR_3B, 'Menu dan Harga', 'Member'],
 }
 const LEBAR = [
   { w: 1440, h: 900 },

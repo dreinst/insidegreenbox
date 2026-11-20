@@ -12,6 +12,7 @@
     "db:setup": "prisma migrate deploy && prisma db seed",
     "seed:contoh": "tsx scripts/seed-contoh.ts",
     "impor:menu": "tsx scripts/impor-menu.ts",
+    "impor:stok": "tsx scripts/impor-stok.ts",
     "test": "node --import tsx --test --test-concurrency=1 tests/*.test.ts",
     "e2e": "mkdir -p tests/hasil && bash tests/e2e/jalankan.sh"
   },

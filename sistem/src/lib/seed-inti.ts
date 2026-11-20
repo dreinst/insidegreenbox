@@ -57,7 +57,7 @@ export async function isiPeranDanIzin(db: Db) {
 export async function pastikanLokasiBawaan(db: Db) {
   if (await db.location.count()) return false
   const cabang = (await db.branch.findFirst({ orderBy: { id: 'asc' } })) ?? (await db.branch.create({ data: { code: 'GB', name: 'Greenbox' } }))
-  await db.location.create({ data: { branchId: cabang.id, name: 'Outlet', kind: 'outlet' } })
+  await db.location.create({ data: { branchId: cabang.id, code: 'OUTLET', name: 'Outlet', kind: 'outlet' } })
   return true
 }
 

@@ -4,6 +4,8 @@ import 'dotenv/config'
 import { buatKlien } from '../src/lib/db'
 import { isiMetodeBayar } from '../src/lib/impor-menu'
 import { isiPeranDanIzin, pastikanPengguna } from '../src/lib/seed-inti'
+// tahap 4A
+import { isiBawaanStok } from '../src/lib/stok/bawaan'
 
 const db = buatKlien()
 
@@ -11,6 +13,8 @@ async function main() {
   await isiPeranDanIzin(db)
   // tahap 3A: metode bayar bawaan Tunai, QRIS, Debit (yang sudah ada dilewati).
   await isiMetodeBayar(db)
+  // tahap 4A: cabang dan lokasi bawaan, alasan penyesuaian, satuan, aturan persetujuan opname dan penyesuaian tambah.
+  await isiBawaanStok(db)
   const adaOwner = await db.appUser.count({ where: { role: { code: 'owner' } } })
   if (adaOwner > 0) {
     console.log('Peran, izin, dan saklar siap. Owner sudah ada, tidak dibuat ulang.')

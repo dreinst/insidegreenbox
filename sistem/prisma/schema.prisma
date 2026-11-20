@@ -300,6 +300,8 @@ model Unit {
   id                   Int                   @id @default(autoincrement())
   name                 String                @unique
   symbol               String
+  // tahap 4A: master satuan tidak dihapus, hanya dinonaktifkan.
+  active               Boolean               @default(true)
   productsBase         Product[]             @relation("ProdukSatuanDasar")
   productUnits         ProductUnit[]
   boms                 Bom[]
@@ -488,6 +490,8 @@ model StockReason {
   id                   Int                   @id @default(autoincrement())
   accountId            Int?                  @map("account_id")
   account              Account?              @relation(fields: [accountId], references: [id])
+  // tahap 4A: kode untuk alasan sistem (saldo_awal), kosong untuk alasan buatan pengguna.
+  code                 String?               @unique
   name                 String
   appliesTo            String                @default("sesuai") @map("applies_to")
   active               Boolean               @default(true)
@@ -955,6 +959,8 @@ model Location {
   id                   Int                @id @default(autoincrement())
   branchId             Int                @map("branch_id")
   branch               Branch             @relation(fields: [branchId], references: [id])
+  // tahap 4A: kode tetap untuk lokasi bawaan dan impor (HO, OUTLET).
+  code                 String             @unique
   name                 String
   kind                 String             @default("gudang")
   allowNegativeStock   Boolean            @default(false) @map("allow_negative_stock")
@@ -994,6 +1000,9 @@ model StockBalance {
   location    Location @relation(fields: [locationId], references: [id])
   qty         Decimal  @default(0) @db.Decimal(18, 3)
   reservedQty Decimal  @default(0) @map("reserved_qty") @db.Decimal(18, 3)
+  // tahap 4A: nilai persediaan (rupiah bulat) dan harga rata-rata tertimbang per lokasi (KONTRAK 12).
+  value       BigInt   @default(0)
+  avgCost     Decimal  @default(0) @map("avg_cost") @db.Decimal(18, 4)
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@id([productId, locationId])
@@ -1013,12 +1022,16 @@ model StockLedger {
   value        BigInt
   balanceQty   Decimal  @map("balance_qty") @db.Decimal(18, 3)
   avgCostAfter Decimal  @map("avg_cost_after") @db.Decimal(18, 4)
+  // tahap 4A: saldo nilai sesudah gerak dan nomor dokumen asal untuk kartu stok.
+  balanceValue BigInt   @default(0) @map("balance_value")
   docType      String   @map("doc_type")
   docId        Int      @map("doc_id")
+  docNo        String   @default("") @map("doc_no")
   lineId       Int?     @map("line_id")
   isReversal   Boolean  @default(false) @map("is_reversal")
   createdBy    Int?     @map("created_by")
 
+  @@index([productId, locationId, id])
   @@index([productId, locationId, at])
   @@index([docType, docId])
   @@map("stock_ledger")

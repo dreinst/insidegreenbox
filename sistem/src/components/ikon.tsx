@@ -76,6 +76,47 @@ const JALUR: Record<string, React.ReactNode> = {
       <path d="M3 10h18M7 15h3" />
     </>
   ),
+  // tahap 4A
+  produk: (
+    <>
+      <path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z" />
+      <path d="M4 7.5l8 4.5 8-4.5M12 12v9" />
+    </>
+  ),
+  stok: (
+    <>
+      <rect x="3" y="13" width="8" height="7" rx="1" />
+      <rect x="13" y="13" width="8" height="7" rx="1" />
+      <rect x="8" y="4" width="8" height="7" rx="1" />
+    </>
+  ),
+  penyesuaian: (
+    <>
+      <path d="M5 4v16M12 4v16M19 4v16" />
+      <circle cx="5" cy="15" r="2" />
+      <circle cx="12" cy="8" r="2" />
+      <circle cx="19" cy="13" r="2" />
+    </>
+  ),
+  opname: (
+    <>
+      <rect x="5" y="4" width="14" height="17" rx="2" />
+      <path d="M9 3h6v3H9zM9 11l2 2 4-4M9 17h6" />
+    </>
+  ),
+  pindah: <path d="M4 8h13l-3-3M20 16H7l3 3" />,
+  alasan: (
+    <>
+      <path d="M4 5h16v11H9l-5 4V5z" />
+      <path d="M8 9h8M8 12h5" />
+    </>
+  ),
+  lokasi: (
+    <>
+      <path d="M12 21s-7-6.2-7-11.5A7 7 0 0119 9.5C19 14.8 12 21 12 21z" />
+      <circle cx="12" cy="9.5" r="2.5" />
+    </>
+  ),
   tutup: <path d="M6 6l12 12M18 6L6 18" />,
   keluar: <path d="M14 4h5v16h-5M10 8l-4 4 4 4M6 12h10" />,
 }
