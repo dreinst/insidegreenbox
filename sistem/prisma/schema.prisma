@@ -1383,6 +1383,10 @@ model Shift {
   denominationsJson  Json?               @map("denominations_json")
   note               String              @default("")
   status             ShiftStatus         @default(Buka)
+  // tahap 3B: siapa yang menutup, batas selisih yang berlaku saat ditutup, dan catatan persetujuan Owner.
+  closedBy           Int?                @map("closed_by")
+  diffLimit          BigInt?             @map("diff_limit")
+  approvalNote       String?             @map("approval_note")
   shiftCashMoves     ShiftCashMove[]
   sales              Sale[]
   posSettlementLines PosSettlementLine[]
@@ -1406,28 +1410,33 @@ model ShiftCashMove {
 }
 
 model Sale {
-  id           Int           @id @default(autoincrement())
-  shiftId      Int           @map("shift_id")
-  shift        Shift         @relation(fields: [shiftId], references: [id])
-  memberId     Int?          @map("member_id")
-  member       Member?       @relation(fields: [memberId], references: [id])
-  no           String        @unique
-  at           DateTime      @default(now()) @db.Timestamptz(6)
-  mode         String
-  tableNo      String?       @map("table_no")
-  sub          BigInt        @default(0)
-  disc         BigInt        @default(0)
-  svc          BigInt        @default(0)
-  tax          BigInt        @default(0)
-  total        BigInt        @default(0)
-  hpp          BigInt        @default(0)
-  status       SaleStatus    @default(Selesai)
-  voidBy       Int?          @map("void_by")
-  voidAt       DateTime?     @map("void_at") @db.Timestamptz(6)
-  voidReason   String?       @map("void_reason")
-  createdBy    Int?          @map("created_by")
-  saleLines    SaleLine[]
-  salePayments SalePayment[]
+  id             Int           @id @default(autoincrement())
+  shiftId        Int           @map("shift_id")
+  shift          Shift         @relation(fields: [shiftId], references: [id])
+  memberId       Int?          @map("member_id")
+  member         Member?       @relation(fields: [memberId], references: [id])
+  no             String        @unique
+  at             DateTime      @default(now()) @db.Timestamptz(6)
+  mode           String
+  tableNo        String?       @map("table_no")
+  sub            BigInt        @default(0)
+  disc           BigInt        @default(0)
+  svc            BigInt        @default(0)
+  tax            BigInt        @default(0)
+  total          BigInt        @default(0)
+  hpp            BigInt        @default(0)
+  status         SaleStatus    @default(Selesai)
+  voidBy         Int?          @map("void_by")
+  voidAt         DateTime?     @map("void_at") @db.Timestamptz(6)
+  voidReason     String?       @map("void_reason")
+  createdBy      Int?          @map("created_by")
+  // tahap 3B: persen yang berlaku saat transaksi dan penyetuju void lewat PIN.
+  memberPct      Decimal       @default(0) @map("member_pct") @db.Decimal(6, 3)
+  svcPct         Decimal       @default(0) @map("svc_pct") @db.Decimal(6, 3)
+  taxPct         Decimal       @default(0) @map("tax_pct") @db.Decimal(6, 3)
+  voidApprovedBy Int?          @map("void_approved_by")
+  saleLines      SaleLine[]
+  salePayments   SalePayment[]
 
   @@index([shiftId])
   @@index([at])
@@ -1444,6 +1453,9 @@ model SaleLine {
   price      BigInt
   note       String   @default("")
   hpp        BigInt   @default(0)
+  // tahap 3B: nama dan kategori menu saat dijual, supaya struk lama tidak ikut berubah.
+  name       String   @default("")
+  category   String   @default("")
 
   @@index([saleId])
   @@map("sale_line")

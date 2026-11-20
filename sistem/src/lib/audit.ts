@@ -124,6 +124,15 @@ export const NAMA_PERISTIWA: Record<string, string> = {
   'member.aktifkan': 'Aktifkan member',
   'member.nonaktifkan': 'Nonaktifkan member',
   'impor.menu': 'Impor data menu',
+  // tahap 3B
+  'kasir.masuk_pin': 'Masuk dengan PIN',
+  'pengguna.pin': 'Atur PIN',
+  'shift.buka': 'Buka shift',
+  'shift.kas': 'Kas laci',
+  'shift.tutup': 'Tutup shift',
+  'shift.setujui': 'Setujui selisih shift',
+  'penjualan.simpan': 'Simpan penjualan',
+  'penjualan.void': 'Void penjualan',
 }
 
 export const NAMA_ENTITAS: Record<string, string> = {
@@ -141,4 +150,7 @@ export const NAMA_ENTITAS: Record<string, string> = {
   payment_method: 'Metode bayar',
   member_tier: 'Tingkat member',
   member: 'Member',
+  // tahap 3B
+  shift: 'Shift kasir',
+  sale: 'Penjualan',
 }

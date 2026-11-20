@@ -47,7 +47,18 @@ export async function isiPeranDanIzin(db: Db) {
     ),
     skipDuplicates: true,
   })
+  // tahap 3B
+  await pastikanLokasiBawaan(db)
   return idPeran
+}
+
+// tahap 3B: satu cabang dan satu lokasi outlet bawaan, supaya shift kasir punya lokasi (shift.location_id wajib)
+// sebelum menu Lokasi dan profil usaha dibangun di tahap 6. Pajak dan service bawaan 0 persen, sama dengan admin lama.
+export async function pastikanLokasiBawaan(db: Db) {
+  if (await db.location.count()) return false
+  const cabang = (await db.branch.findFirst({ orderBy: { id: 'asc' } })) ?? (await db.branch.create({ data: { code: 'GB', name: 'Greenbox' } }))
+  await db.location.create({ data: { branchId: cabang.id, name: 'Outlet', kind: 'outlet' } })
+  return true
 }
 
 // Membuat pengguna bila nama penggunanya belum ada. Mengembalikan true bila baru dibuat.

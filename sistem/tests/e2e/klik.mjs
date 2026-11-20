@@ -19,11 +19,11 @@ const AKUN = {
   admin: { u: process.env.SEED_ADMIN_USERNAME, p: process.env.SEED_ADMIN_PASSWORD },
   kasir: { u: process.env.SEED_KASIR_USERNAME, p: process.env.SEED_KASIR_PASSWORD },
 }
-// tahap 3A menambah Menu dan Harga, Promo, Member, dan Metode Bayar sesuai izin tiap peran.
+// tahap 3A dan 3B menambah modul kasir (Layar Kasir, Shift, Transaksi, PIN Kasir) dan master (Menu dan Harga, Promo, Member, Metode Bayar) sesuai izin tiap peran.
 const SIDEBAR_HARAP = {
-  owner: ['Beranda', 'Menu dan Harga', 'Promo', 'Member', 'Metode Bayar', 'Pengguna', 'Peran dan Izin', 'Saklar Fitur', 'Jejak Audit'],
-  admin: ['Beranda', 'Menu dan Harga', 'Promo', 'Member', 'Metode Bayar', 'Jejak Audit'],
-  kasir: ['Beranda', 'Menu dan Harga', 'Member'],
+  owner: ['Beranda', 'Layar Kasir', 'Shift', 'Transaksi', 'PIN Kasir', 'Menu dan Harga', 'Promo', 'Member', 'Metode Bayar', 'Pengguna', 'Peran dan Izin', 'Saklar Fitur', 'Jejak Audit'],
+  admin: ['Beranda', 'Layar Kasir', 'Shift', 'Transaksi', 'PIN Kasir', 'Menu dan Harga', 'Promo', 'Member', 'Metode Bayar', 'Jejak Audit'],
+  kasir: ['Beranda', 'Layar Kasir', 'Shift', 'Transaksi', 'Menu dan Harga', 'Member'],
 }
 const LEBAR = [
   { w: 1440, h: 900 },

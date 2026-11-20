@@ -8,6 +8,14 @@ const PESAN: Record<string, string> = {
   sandi: 'Sandi baru tersimpan dan sesi lama pengguna ini dicabut.',
   aktif: 'Sudah diaktifkan.',
   nonaktif: 'Sudah dinonaktifkan dan sesinya dicabut.',
+  // tahap 3B
+  pin: 'PIN tersimpan. Sesi lain pengguna ini dicabut.',
+  'pin-hapus': 'PIN dihapus. Pengguna ini tidak bisa lagi masuk dengan PIN.',
+  'shift-buka': 'Shift dibuka. Selamat bekerja.',
+  'shift-kas': 'Kas laci tercatat.',
+  'shift-tutup': 'Shift ditutup.',
+  'shift-setuju': 'Selisih kas disetujui dan shift ditutup.',
+  void: 'Transaksi sudah di-void.',
 }
 
 export function PesanFlash({ kode }: { kode?: string }) {
