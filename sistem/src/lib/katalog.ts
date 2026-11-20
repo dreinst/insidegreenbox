@@ -95,9 +95,13 @@ const BARIS: [string, string, string, string, string, string][] = [
   ['atur.audit', 'Pengaturan', 'Jejak audit', 'L', 'L', '-'],
 ]
 
+// tahap 3B: PIN kasir diatur Owner atau Admin dari menu sendiri, karena Admin tidak memegang atur.pengguna.
+// Baris ini tambahan atas RANCANGAN 8.2 (KONTRAK 11).
+const BARIS_3B: [string, string, string, string, string, string][] = [['kasir.pin', 'Kasir', 'PIN kasir', 'LU', 'LU', '-']]
+
 const bersih = (s: string) => (s === '-' ? '' : s)
 
-export const MENU_IZIN: MenuIzin[] = BARIS.map(([kode, grup, nama, owner, admin, kasir]) => ({
+export const MENU_IZIN: MenuIzin[] = [...BARIS, ...BARIS_3B].map(([kode, grup, nama, owner, admin, kasir]) => ({
   kode,
   grup,
   nama,
@@ -161,8 +165,17 @@ export const PERAN_SISTEM: { kode: KodePeranSistem; nama: string }[] = [
 export type ItemSidebar = { href: string; label: string; menu: string | null; ikon: string }
 
 // Hanya halaman yang sudah dibangun (KONTRAK 8). menu null artinya tampil untuk semua pengguna yang masuk.
+// tahap 3B: modul kasir.
+const SIDEBAR_KASIR: ItemSidebar[] = [
+  { href: '/kasir', label: 'Layar Kasir', menu: 'kasir.layar', ikon: 'kasir' },
+  { href: '/shift', label: 'Shift', menu: 'kasir.shift', ikon: 'shift' },
+  { href: '/transaksi', label: 'Transaksi', menu: 'kasir.transaksi', ikon: 'transaksi' },
+  { href: '/pin', label: 'PIN Kasir', menu: 'kasir.pin', ikon: 'pin' },
+]
+
 export const SIDEBAR: ItemSidebar[] = [
   { href: '/', label: 'Beranda', menu: null, ikon: 'beranda' },
+  ...SIDEBAR_KASIR,
   { href: '/pengguna', label: 'Pengguna', menu: 'atur.pengguna', ikon: 'pengguna' },
   { href: '/peran', label: 'Peran dan Izin', menu: 'atur.peran', ikon: 'peran' },
   { href: '/saklar', label: 'Saklar Fitur', menu: 'atur.saklar', ikon: 'saklar' },
