@@ -4,6 +4,8 @@
 /* Foto */
 .foto-mini { display: inline-block; flex: none; border-radius: 8px; object-fit: cover; background: #ECEEE9 }
 .foto-kecil { display: flex; align-items: center; justify-content: center; width: 72px; height: 72px; flex: none; border-radius: 10px; object-fit: cover; background: #ECEEE9; font-size: 11px; color: var(--muted); text-align: center }
+.foto-44 { width: 44px; height: 44px }
+.foto-96 { width: 96px; height: 96px }
 .kosong-foto { box-shadow: inset 0 0 0 1px #D9DCD4 }
 .sel-foto { display: flex; align-items: center; gap: 12px; min-width: 0 }
 .sel-foto > span:last-child { min-width: 0; overflow-wrap: anywhere }
@@ -26,6 +28,7 @@
 .tabel td > .lencana { width: fit-content; justify-self: start }
 
 /* Pratinjau harga */
+.saring-harga .saring-tombol { grid-column: 1 / -1 }
 .tabel .angka { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums }
 .tabel th.angka { text-align: right }
 .naik { color: #0B6B09; font-weight: 700 }

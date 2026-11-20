@@ -5,7 +5,7 @@ import { GalatAturan } from './aksi'
 import { catatAudit, selisih, type Konteks } from './audit'
 import type { Db } from './db'
 import { pastikanIzin, type Pengguna } from './izin-inti'
-import { PER_HALAMAN, formatRupiah, sesuaiHalaman, skemaPersen, skemaTanggal, skemaTeksOpsional, skemaUang } from './master'
+import { PER_HALAMAN, formatRupiah, sesuaiHalaman, skemaPersen, skemaTanggal, skemaTeksOpsional, skemaUang, labelKolom } from './master'
 import { tanggalIso } from './waktu'
 
 type Aktor = Pick<Pengguna, 'id' | 'izin'>
@@ -85,7 +85,7 @@ export async function ubahPromo(db: Db, k: Konteks, aktor: Aktor, id: number, ma
     )
     if (!s.berubah.length) return { p, berubah: 0 }
     const b = await tx.promo.update({ where: { id }, data: { ...baru, updatedBy: aktor.id } })
-    await catatAudit(tx, k, { action: 'promo.ubah', docType: 'promo', docId: id, summary: `Mengubah ${s.berubah.join(', ')} promo ${b.name}`, before: s.sebelum, after: s.sesudah })
+    await catatAudit(tx, k, { action: 'promo.ubah', docType: 'promo', docId: id, summary: `Mengubah ${labelKolom(s.berubah)} promo ${b.name}`, before: s.sebelum, after: s.sesudah })
     return { p: b, berubah: s.berubah.length }
   })
 }

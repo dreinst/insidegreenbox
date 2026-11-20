@@ -38,7 +38,7 @@ export default async function UbahHarga({ searchParams }: { searchParams: Promis
       <KepalaHalaman judul="Ubah harga massal" keterangan="Naikkan atau turunkan harga banyak menu aktif sekaligus. Periksa pratinjau dulu, perubahan baru berlaku setelah kamu menerapkannya." />
       <PesanMaster />
 
-      <form className="saring" method="get" aria-label="Aturan perubahan harga">
+      <form className="saring saring-harga" method="get" aria-label="Aturan perubahan harga">
         <div className={`kolom${kolomSalah('kategori')}`}>
           <label htmlFor="h-kategori">Kategori</label>
           <select id="h-kategori" name="kategori" defaultValue={s.kategori ?? ''}>

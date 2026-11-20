@@ -5,7 +5,7 @@ import { GalatAturan } from './aksi'
 import { catatAudit, selisih, type Konteks } from './audit'
 import type { Db } from './db'
 import { pastikanIzin, type Pengguna } from './izin-inti'
-import { PER_HALAMAN, pesanUnik, sesuaiHalaman, skemaCentang, skemaPersen } from './master'
+import { PER_HALAMAN, pesanUnik, sesuaiHalaman, skemaCentang, skemaPersen, labelKolom } from './master'
 
 type Aktor = Pick<Pengguna, 'id' | 'izin'>
 const MENU = 'akun.metode_bayar'
@@ -59,7 +59,7 @@ export async function ubahMetode(db: Db, k: Konteks, aktor: Aktor, id: number, m
       const s = selisih({ name: m.name, kind: m.kind, mdrPct: m.mdrPct.toString(), openDrawer: m.openDrawer }, { name: d.name, kind: d.kind, mdrPct: Number(d.mdrPct).toString(), openDrawer: d.openDrawer })
       if (!s.berubah.length) return { m, berubah: 0 }
       const b = await tx.paymentMethod.update({ where: { id }, data: { name: d.name, kind: d.kind, mdrPct: d.mdrPct, openDrawer: d.openDrawer } })
-      await catatAudit(tx, k, { action: 'metode_bayar.ubah', docType: 'payment_method', docId: id, summary: `Mengubah ${s.berubah.join(', ')} metode bayar ${b.name}`, before: s.sebelum, after: s.sesudah })
+      await catatAudit(tx, k, { action: 'metode_bayar.ubah', docType: 'payment_method', docId: id, summary: `Mengubah ${labelKolom(s.berubah)} metode bayar ${b.name}`, before: s.sebelum, after: s.sesudah })
       return { m: b, berubah: s.berubah.length }
     })
   } catch (e) {

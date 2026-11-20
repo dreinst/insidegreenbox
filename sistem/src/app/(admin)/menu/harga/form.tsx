@@ -17,7 +17,7 @@ export function FormHargaMassal({ aksi, aturan, jumlah }: { aksi: Aksi; aturan: 
       ))}
       <div className="kisi-form">
         <IsiMedan hasil={hasil} m={{ jenis: 'teks', nama: 'label', label: 'Alasan atau catatan', wajib: true, maxLength: 120, lebar: true, bantuan: 'Muncul di riwayat harga, misalnya "Kenaikan harga bahan Desember".' }} />
-        <IsiMedan hasil={hasil} m={{ jenis: 'centang', nama: 'konfirmasi', label: `Saya sudah memeriksa pratinjau di atas dan siap mengubah harga ${jumlah} menu.` }} />
+        <IsiMedan hasil={hasil} m={{ jenis: 'centang', nama: 'konfirmasi', label: `Saya sudah memeriksa pratinjau di atas dan siap mengubah harga ${jumlah} menu.`, lebar: true }} />
       </div>
       <div className="tombol-baris">
         <TombolKirim>Terapkan perubahan harga</TombolKirim>

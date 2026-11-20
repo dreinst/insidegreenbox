@@ -24,9 +24,9 @@ export function Foto({ image, nama, ukuran = 44 }: { image: string | null | unde
   const url = urlFoto(image)
   return url ? (
     // eslint-disable-next-line @next/next/no-img-element
-    <img src={url} alt={nama} className="foto-mini" width={ukuran} height={ukuran} loading="lazy" style={{ width: ukuran, height: ukuran }} />
+    <img src={url} alt={nama} className={`foto-mini foto-${ukuran}`} width={ukuran} height={ukuran} loading="lazy" />
   ) : (
-    <span className="foto-mini kosong-foto" style={{ width: ukuran, height: ukuran }} aria-hidden="true" />
+    <span className={`foto-mini kosong-foto foto-${ukuran}`} aria-hidden="true" />
   )
 }
 

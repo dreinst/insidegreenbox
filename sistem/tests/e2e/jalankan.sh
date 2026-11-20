@@ -38,6 +38,7 @@ for _ in $(seq 1 40); do
 done
 # Dua berkas uji dijalankan berurutan; keduanya selalu jalan, dan skrip gagal bila salah satunya gagal.
 gagal=0
-BASE_URL="http://127.0.0.1:$PORT" E2E_DATABASE_URL="$DB_E2E" node tests/e2e/klik.mjs || gagal=1
+# master.mjs dulu: klik.mjs menguji penguncian login admin, yang menahan login admin selama 15 menit.
 BASE_URL="http://127.0.0.1:$PORT" E2E_DATABASE_URL="$DB_E2E" node tests/e2e/master.mjs || gagal=1
+BASE_URL="http://127.0.0.1:$PORT" E2E_DATABASE_URL="$DB_E2E" node tests/e2e/klik.mjs || gagal=1
 exit $gagal

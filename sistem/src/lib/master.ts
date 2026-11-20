@@ -96,3 +96,13 @@ export const jadikanKode = (nama: string) =>
     .slice(0, 40)
 
 export const pesanUnik = (e: unknown) => (e as { code?: string })?.code === 'P2002'
+
+const NAMA_KOLOM: Record<string, string> = {
+  name: 'nama', category: 'kategori', price: 'harga', description: 'deskripsi', kcal: 'kalori', featured: 'unggulan', image: 'foto', sort: 'urutan',
+  mainItemId: 'menu utama', drinkItemId: 'minuman', normalPrice: 'harga normal', kind: 'jenis', percent: 'persen', amount: 'potongan', giftItemId: 'hadiah',
+  condition: 'syarat', minSpend: 'belanja minimal', startsOn: 'tanggal mulai', endsOn: 'tanggal berakhir', mdrPct: 'MDR', openDrawer: 'buka laci',
+  minVisits: 'syarat kunjungan', discountPct: 'potongan', perk: 'keterangan', wa: 'nomor WA', visits: 'kunjungan', discountOn: 'potongan member', note: 'catatan',
+}
+
+// Nama kolom yang berubah dalam bahasa Indonesia, untuk ringkasan audit.
+export const labelKolom = (kolom: string[]) => kolom.map((k) => NAMA_KOLOM[k] ?? k).join(', ')

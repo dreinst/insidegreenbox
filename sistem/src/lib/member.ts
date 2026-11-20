@@ -5,7 +5,7 @@ import { GalatAturan } from './aksi'
 import { catatAudit, selisih, type Konteks } from './audit'
 import type { Db, Tx } from './db'
 import { pastikanIzin, type Pengguna } from './izin-inti'
-import { PER_HALAMAN, pesanUnik, sesuaiHalaman, skemaCentang, skemaPersen, skemaTeksOpsional } from './master'
+import { PER_HALAMAN, pesanUnik, sesuaiHalaman, skemaCentang, skemaPersen, skemaTeksOpsional, labelKolom } from './master'
 
 type Aktor = Pick<Pengguna, 'id' | 'izin'>
 const MENU = 'menu.member'
@@ -85,7 +85,7 @@ export async function ubahTingkat(db: Db, k: Konteks, aktor: Aktor, id: number, 
     if (!s.berubah.length) return { t, berubah: 0 }
     const b = await tx.memberTier.update({ where: { id }, data: { name: d.name, minVisits: d.minVisits, discountPct: d.discountPct, perk: d.perk } })
     await hitungUlangTingkat(tx)
-    await catatAudit(tx, k, { action: 'tingkat.ubah', docType: 'member_tier', docId: id, summary: `Mengubah ${s.berubah.join(', ')} tingkat ${b.name}`, before: s.sebelum, after: s.sesudah })
+    await catatAudit(tx, k, { action: 'tingkat.ubah', docType: 'member_tier', docId: id, summary: `Mengubah ${labelKolom(s.berubah)} tingkat ${b.name}`, before: s.sebelum, after: s.sesudah })
     return { t: b, berubah: s.berubah.length }
   })
 }
@@ -174,7 +174,7 @@ export async function ubahMember(db: Db, k: Konteks, aktor: Aktor, id: number, m
       const s = selisih({ name: m.name, wa: m.wa, visits: m.visits, discountOn: m.discountOn, note: m.note }, { name: d.name, wa, visits: d.visits, discountOn: d.discountOn, note: d.note })
       if (!s.berubah.length) return { m, berubah: 0 }
       const b = await tx.member.update({ where: { id }, data: { name: d.name, wa, visits: d.visits, discountOn: d.discountOn, note: d.note, tierId: tingkat?.id ?? null, updatedBy: aktor.id } })
-      await catatAudit(tx, k, { action: 'member.ubah', docType: 'member', docId: id, summary: `Mengubah ${s.berubah.join(', ')} member ${b.name}`, before: s.sebelum, after: s.sesudah })
+      await catatAudit(tx, k, { action: 'member.ubah', docType: 'member', docId: id, summary: `Mengubah ${labelKolom(s.berubah)} member ${b.name}`, before: s.sebelum, after: s.sesudah })
       return { m: b, berubah: s.berubah.length }
     })
   } catch (e) {

@@ -46,8 +46,9 @@ describe('matriks bawaan RANCANGAN 8.2', () => {
     assert.equal(punyaIzin(admin.izin, 'beli.pembayaran', 'S'), false)
     assert.equal(punyaIzin(admin.izin, 'beli.penerimaan', 'P'), true)
   })
-  test('Kasir hanya melihat lima menu kasir dan menu', () => {
-    assert.deepEqual(Object.keys(kasir.izin).sort(), ['kasir.layar', 'kasir.shift', 'kasir.transaksi', 'menu.member', 'menu.menu'])
+  test('Kasir hanya melihat menu kasir, menu, member, dan tingkat member', () => {
+    // menu.tingkat ditambah di tahap 3A (Kasir hanya Lihat).
+    assert.deepEqual(Object.keys(kasir.izin).sort(), ['kasir.layar', 'kasir.shift', 'kasir.transaksi', 'menu.member', 'menu.menu', 'menu.tingkat'])
   })
   test('aksi yang tidak berlaku untuk menu diabaikan walau tersimpan di database', async () => {
     const r = await idPeran('kasir')

@@ -6,7 +6,7 @@ import { catatAudit, selisih, type Konteks } from './audit'
 import type { Db, Tx } from './db'
 import { bacaPilihanFoto, hapusUnggahan, tentukanFoto, type PilihanFoto } from './foto'
 import { pastikanIzin, type Pengguna } from './izin-inti'
-import { BATAS_HARGA, PER_HALAMAN, bacaRupiah, formatRupiah, jadikanKode, pesanUnik, sesuaiHalaman, skemaCentang, skemaTeksOpsional, skemaUang } from './master'
+import { BATAS_HARGA, PER_HALAMAN, bacaRupiah, formatRupiah, jadikanKode, pesanUnik, sesuaiHalaman, skemaCentang, skemaTeksOpsional, skemaUang, labelKolom } from './master'
 
 type Aktor = Pick<Pengguna, 'id' | 'izin'>
 const MENU = 'menu.menu'
@@ -57,7 +57,7 @@ export async function ubahKategori(db: Db, k: Konteks, aktor: Aktor, id: number,
     const s = selisih({ name: c.name, sort: c.sort }, { name: d.name, sort: urut })
     if (!s.berubah.length) return { c, berubah: 0 }
     const baru = await tx.menuCategory.update({ where: { id }, data: { name: d.name, sort: urut, updatedBy: aktor.id } })
-    await catatAudit(tx, k, { action: 'kategori.ubah', docType: 'menu_category', docId: id, summary: `Mengubah ${s.berubah.join(', ')} kategori ${baru.name}`, before: s.sebelum, after: s.sesudah })
+    await catatAudit(tx, k, { action: 'kategori.ubah', docType: 'menu_category', docId: id, summary: `Mengubah ${labelKolom(s.berubah)} kategori ${baru.name}`, before: s.sebelum, after: s.sesudah })
     return { c: baru, berubah: s.berubah.length }
   })
 }
@@ -157,7 +157,7 @@ export async function ubahMenu(db: Db, k: Konteks, aktor: Aktor, id: number, mas
       if (!s.berubah.length) return { m, berubah: 0, fotoLama: null as string | null }
       const b = await tx.menuItem.update({ where: { id }, data: { name: d.name, category: c.code, price: d.price, description: d.description, kcal, featured: d.featured, image, updatedBy: aktor.id } })
       if (d.price !== m.price) await catatHarga(tx, aktor, `Ubah harga ${b.name}`, 'manual', [{ menuItemId: id, lama: m.price, baru: d.price }])
-      await catatAudit(tx, k, { action: 'menu.ubah', docType: 'menu_item', docId: id, summary: `Mengubah ${s.berubah.join(', ')} menu ${b.name}`, before: s.sebelum, after: s.sesudah })
+      await catatAudit(tx, k, { action: 'menu.ubah', docType: 'menu_item', docId: id, summary: `Mengubah ${labelKolom(s.berubah)} menu ${b.name}`, before: s.sebelum, after: s.sesudah })
       return { m: b, berubah: s.berubah.length, fotoLama: m.image !== image ? m.image : null }
     })
     await hapusUnggahan(hasil.fotoLama)
@@ -353,7 +353,7 @@ export async function ubahPaket(db: Db, k: Konteks, aktor: Aktor, id: number, ma
       )
       if (!s.berubah.length) return { p, berubah: 0, fotoLama: null as string | null }
       const b = await tx.menuSet.update({ where: { id }, data: { name: d.name, mainItemId: utama.id, drinkItemId: minum.id, normalPrice: normal, price: d.price, image, updatedBy: aktor.id } })
-      await catatAudit(tx, k, { action: 'paket.ubah', docType: 'menu_set', docId: id, summary: `Mengubah ${s.berubah.join(', ')} paket ${b.name}`, before: s.sebelum, after: s.sesudah })
+      await catatAudit(tx, k, { action: 'paket.ubah', docType: 'menu_set', docId: id, summary: `Mengubah ${labelKolom(s.berubah)} paket ${b.name}`, before: s.sebelum, after: s.sesudah })
       return { p: b, berubah: s.berubah.length, fotoLama: p.image !== image ? p.image : null }
     })
     await hapusUnggahan(hasil.fotoLama)
