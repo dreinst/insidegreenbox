@@ -117,6 +117,26 @@ const JALUR: Record<string, React.ReactNode> = {
       <circle cx="12" cy="9.5" r="2.5" />
     </>
   ),
+  // tahap 5A
+  setoran: (
+    <>
+      <rect x="3" y="7" width="18" height="11" rx="2" />
+      <circle cx="12" cy="12.5" r="2.5" />
+      <path d="M12 3v3M9.5 4.5L12 2l2.5 2.5" />
+    </>
+  ),
+  laporan: (
+    <>
+      <path d="M4 20V4M4 20h16" />
+      <path d="M8 16v-4M12 16V8M16 16v-6" />
+    </>
+  ),
+  rekening: (
+    <>
+      <path d="M3 9.5L12 4l9 5.5M4.5 9.5h15M4 20h16" />
+      <path d="M6.5 11.5v6M10 11.5v6M14 11.5v6M17.5 11.5v6" />
+    </>
+  ),
   tutup: <path d="M6 6l12 12M18 6L6 18" />,
   keluar: <path d="M14 4h5v16h-5M10 8l-4 4 4 4M6 12h10" />,
 }

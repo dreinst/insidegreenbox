@@ -24,8 +24,9 @@ const AKUN = {
 const KASIR_3B = ['Layar Kasir', 'Shift', 'Transaksi']
 const STOK_4A = ['Produk dan Satuan', 'Stok', 'Penyesuaian', 'Opname', 'Pindah Stok', 'Alasan', 'Lokasi']
 const SIDEBAR_HARAP = {
-  owner: ['Beranda', ...KASIR_3B, 'PIN Kasir', 'Menu dan Harga', 'Promo', 'Member', 'Metode Bayar', ...STOK_4A, 'Pengguna', 'Peran dan Izin', 'Saklar Fitur', 'Jejak Audit'],
-  admin: ['Beranda', ...KASIR_3B, 'PIN Kasir', 'Menu dan Harga', 'Promo', 'Member', 'Metode Bayar', ...STOK_4A, 'Jejak Audit'],
+  // tahap 5A menambah Setoran POS, Laporan, dan Rekening Bank (Owner dan Admin; Kasir tanpa akses).
+  owner: ['Beranda', ...KASIR_3B, 'PIN Kasir', 'Setoran POS', 'Laporan', 'Menu dan Harga', 'Promo', 'Member', 'Metode Bayar', 'Rekening Bank', ...STOK_4A, 'Pengguna', 'Peran dan Izin', 'Saklar Fitur', 'Jejak Audit'],
+  admin: ['Beranda', ...KASIR_3B, 'PIN Kasir', 'Setoran POS', 'Laporan', 'Menu dan Harga', 'Promo', 'Member', 'Metode Bayar', 'Rekening Bank', ...STOK_4A, 'Jejak Audit'],
   kasir: ['Beranda', ...KASIR_3B, 'Menu dan Harga', 'Member'],
 }
 const LEBAR = [

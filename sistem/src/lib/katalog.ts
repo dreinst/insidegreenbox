@@ -164,7 +164,8 @@ export const PERAN_SISTEM: { kode: KodePeranSistem; nama: string }[] = [
   { kode: 'kasir', nama: 'Kasir' },
 ]
 
-export type ItemSidebar = { href: string; label: string; menu: string | null; ikon: string }
+// menu berisi satu kode, beberapa kode (tampil bila salah satunya boleh dilihat), atau null untuk semua pengguna.
+export type ItemSidebar = { href: string; label: string; menu: string | string[] | null; ikon: string }
 
 // Hanya halaman yang sudah dibangun (KONTRAK 8). menu null artinya tampil untuk semua pengguna yang masuk.
 // tahap 3B: modul kasir.
@@ -175,14 +176,27 @@ const SIDEBAR_KASIR: ItemSidebar[] = [
   { href: '/pin', label: 'PIN Kasir', menu: 'kasir.pin', ikon: 'pin' },
 ]
 
+// laporan dan setoran (tahap 5A). Izinnya sudah ada di matriks RANCANGAN 8.2: kasir.setoran, kas.rekening, dan
+// laporan.*. Item Laporan tampil bila minimal satu laporan boleh dilihat; tabnya diatur di halaman laporan.
+const SIDEBAR_SETORAN: ItemSidebar[] = [
+  { href: '/setoran', label: 'Setoran POS', menu: 'kasir.setoran', ikon: 'setoran' },
+  { href: '/laporan', label: 'Laporan', menu: ['laporan.penjualan'], ikon: 'laporan' },
+]
+const SIDEBAR_REKENING: ItemSidebar[] = [{ href: '/rekening', label: 'Rekening Bank', menu: 'kas.rekening', ikon: 'rekening' }]
+
+// Item tampil bila pengguna memegang Lihat di kode menunya (KONTRAK 8).
+export const itemTampil = (i: ItemSidebar, boleh: (menu: string) => boolean) => i.menu === null || (Array.isArray(i.menu) ? i.menu.some(boleh) : boleh(i.menu))
+
 export const SIDEBAR: ItemSidebar[] = [
   { href: '/', label: 'Beranda', menu: null, ikon: 'beranda' },
   ...SIDEBAR_KASIR,
+  ...SIDEBAR_SETORAN,
   // tahap 3A: modul master.
   { href: '/menu', label: 'Menu dan Harga', menu: 'menu.menu', ikon: 'hidangan' },
   { href: '/promo', label: 'Promo', menu: 'menu.promo', ikon: 'promo' },
   { href: '/member', label: 'Member', menu: 'menu.member', ikon: 'member' },
   { href: '/metode-bayar', label: 'Metode Bayar', menu: 'akun.metode_bayar', ikon: 'bayar' },
+  ...SIDEBAR_REKENING,
   // tahap 4A: persediaan (urutan KONTRAK bagian 8) dan master lokasi sederhana (atur.lokasi).
   { href: '/produk', label: 'Produk dan Satuan', menu: 'stok.produk', ikon: 'produk' },
   { href: '/stok', label: 'Stok', menu: 'stok.saldo', ikon: 'stok' },

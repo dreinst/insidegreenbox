@@ -1500,8 +1500,11 @@ model PosSettlement {
   id                 Int                 @id @default(autoincrement())
   paymentMethodId    Int                 @map("payment_method_id")
   paymentMethod      PaymentMethod       @relation(fields: [paymentMethodId], references: [id])
-  toAccountId        Int                 @map("to_account_id")
-  toAccount          Account             @relation("SetoranAkunTujuan", fields: [toAccountId], references: [id])
+  // tahap 5A: akun tujuan diisi saat modul akuntansi (COA) ada; rekening tujuan dari bank_account.
+  toAccountId        Int?                @map("to_account_id")
+  toAccount          Account?            @relation("SetoranAkunTujuan", fields: [toAccountId], references: [id], onDelete: Restrict)
+  bankAccountId      Int?                @map("bank_account_id")
+  bankAccount        BankAccount?        @relation(fields: [bankAccountId], references: [id], onDelete: Restrict)
   no                 String              @unique
   date               DateTime            @db.Date
   expectedTotal      BigInt              @default(0) @map("expected_total")
@@ -1527,6 +1530,9 @@ model PosSettlement {
   updatedAt          DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
   posSettlementLines PosSettlementLine[]
 
+  // Indeks unik sebagian (date, payment_method_id) WHERE status <> 'Batal' ada di migrasi tahap5a_setoran:
+  // satu setoran per tanggal per metode bayar.
+  @@index([date])
   @@map("pos_settlement")
 }
 
@@ -1541,6 +1547,11 @@ model PosSettlementLine {
   actual          BigInt        @default(0)
   diff            BigInt        @default(0)
   note            String        @default("")
+  // tahap 5A: salinan metode bayar kepala dan penanda batal, untuk indeks unik sebagian
+  // (shift_id, payment_method_id) WHERE NOT cancelled di migrasi: satu shift dan metode hanya di satu setoran
+  // yang tidak Batal.
+  paymentMethodId Int           @map("payment_method_id")
+  cancelled       Boolean       @default(false)
 
   @@index([posSettlementId])
   @@index([shiftId])
@@ -1629,14 +1640,20 @@ model PaymentMethod {
 
 model BankAccount {
   id                 Int                 @id @default(autoincrement())
-  accountId          Int                 @map("account_id")
-  account            Account             @relation(fields: [accountId], references: [id])
+  // tahap 5A: akun COA diisi saat modul akuntansi ada, jadi boleh kosong.
+  accountId          Int?                @map("account_id")
+  account            Account?            @relation(fields: [accountId], references: [id], onDelete: Restrict)
   bankName           String              @map("bank_name")
   accountNo          String              @map("account_no")
   holderName         String              @default("") @map("holder_name")
   active             Boolean             @default(true)
+  createdBy          Int?                @map("created_by")
+  createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedBy          Int?                @map("updated_by")
+  updatedAt          DateTime            @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   bankStatementLines BankStatementLine[]
   bankReconciles     BankReconcile[]
+  posSettlements     PosSettlement[]
 
   @@map("bank_account")
 }

@@ -184,6 +184,19 @@ export const NAMA_PERISTIWA: Record<string, string> = {
   'pindah.posting': 'Posting pindah stok',
   'pindah.batal': 'Batalkan pindah stok',
   'impor.stok': 'Impor bahan dan saldo awal',
+  // tahap 5A
+  'setoran.tambah': 'Buat setoran',
+  'setoran.ubah': 'Ubah setoran',
+  'setoran.ajukan': 'Ajukan setoran',
+  'setoran.kembalikan': 'Kembalikan setoran ke draf',
+  'setoran.setujui': 'Setujui setoran',
+  'setoran.posting': 'Posting setoran',
+  'setoran.batal': 'Batalkan setoran',
+  'setoran.hapus': 'Hapus draf setoran',
+  'rekening.tambah': 'Tambah rekening bank',
+  'rekening.ubah': 'Ubah rekening bank',
+  'rekening.aktifkan': 'Aktifkan rekening bank',
+  'rekening.nonaktifkan': 'Nonaktifkan rekening bank',
 }
 
 export const NAMA_ENTITAS: Record<string, string> = {
@@ -214,4 +227,7 @@ export const NAMA_ENTITAS: Record<string, string> = {
   stock_adjustment: 'Penyesuaian stok',
   stock_opname: 'Stock opname',
   stock_transfer: 'Pindah stok',
+  // tahap 5A
+  pos_settlement: 'Setoran POS',
+  bank_account: 'Rekening bank',
 }

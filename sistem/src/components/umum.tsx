@@ -16,6 +16,15 @@ const PESAN: Record<string, string> = {
   'shift-tutup': 'Shift ditutup.',
   'shift-setuju': 'Selisih kas disetujui dan shift ditutup.',
   void: 'Transaksi sudah di-void.',
+  // tahap 5A
+  'setoran-dibuat': 'Setoran dibuat dari shift yang sudah ditutup.',
+  'setoran-muat': 'Baris setoran dimuat ulang dari shift yang sudah ditutup.',
+  'setoran-tersimpan': 'Setoran tersimpan.',
+  'setoran-ajukan': 'Setoran diajukan ke Owner.',
+  'setoran-kembali': 'Setoran dikembalikan ke Draft.',
+  'setoran-posting': 'Setoran diposting.',
+  'setoran-batal': 'Setoran dibatalkan. Shift-nya bisa disetor ulang.',
+  'setoran-hapus': 'Draf setoran dihapus.',
 }
 
 export function PesanFlash({ kode }: { kode?: string }) {
