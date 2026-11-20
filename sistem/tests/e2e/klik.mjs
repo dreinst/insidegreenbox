@@ -32,8 +32,9 @@ const AKUNTANSI_5B = ['Akun dan Pemetaan', 'Jurnal Umum', 'Buku Besar', 'Laporan
 const SIDEBAR_HARAP = {
   // tahap 5A: Setoran POS di grup Kasir, Rekening Bank di grup Keuangan, Laporan di grup Laporan (Owner dan Admin).
   // tahap 5B: grup Akuntansi sesudah Keuangan; Admin hanya Akun dan Pemetaan.
-  owner: ['Beranda', ...KASIR_3B, 'PIN Kasir', 'Setoran POS', 'Metode Bayar', 'Menu dan Harga', 'Promo', 'Member', ...STOK_4A, ...PRODUKSI_4B, ...BELI_4C, 'Rekening Bank', 'Hutang Pemasok', ...AKUNTANSI_5B, 'Laporan', 'Lokasi', 'Pengguna', 'Peran dan Izin', 'Saklar Fitur', 'Jejak Audit'],
-  admin: ['Beranda', ...KASIR_3B, 'PIN Kasir', 'Setoran POS', 'Metode Bayar', 'Menu dan Harga', 'Promo', 'Member', ...STOK_4A, ...PRODUKSI_4B, ...BELI_4C, 'Rekening Bank', 'Hutang Pemasok', 'Akun dan Pemetaan', 'Laporan', 'Lokasi', 'Jejak Audit'],
+  // tahap 5C: Kas Masuk/Keluar, Pindah Dana, dan Rekonsiliasi Bank di awal grup Keuangan; Admin hanya Kas Masuk/Keluar.
+  owner: ['Beranda', ...KASIR_3B, 'PIN Kasir', 'Setoran POS', 'Metode Bayar', 'Menu dan Harga', 'Promo', 'Member', ...STOK_4A, ...PRODUKSI_4B, ...BELI_4C, 'Kas Masuk/Keluar', 'Pindah Dana', 'Rekonsiliasi Bank', 'Rekening Bank', 'Hutang Pemasok', ...AKUNTANSI_5B, 'Laporan', 'Lokasi', 'Pengguna', 'Peran dan Izin', 'Saklar Fitur', 'Jejak Audit'],
+  admin: ['Beranda', ...KASIR_3B, 'PIN Kasir', 'Setoran POS', 'Metode Bayar', 'Menu dan Harga', 'Promo', 'Member', ...STOK_4A, ...PRODUKSI_4B, ...BELI_4C, 'Kas Masuk/Keluar', 'Rekening Bank', 'Hutang Pemasok', 'Akun dan Pemetaan', 'Laporan', 'Lokasi', 'Jejak Audit'],
   kasir: ['Beranda', ...KASIR_3B, 'Menu dan Harga', 'Member'],
 }
 const LEBAR = [
@@ -123,7 +124,7 @@ for (const { w, h } of LEBAR) {
       const h1 = await page.textContent('h1')
       const aktif = await page.$eval('.samping nav a.aktif', (a) => a.textContent.trim()).catch(() => '')
       const lebih = await luapan(page)
-      const slug = teks.toLowerCase().replace(/\s+/g, '-')
+      const slug = teks.toLowerCase().replace(/[^a-z0-9]+/g, '-')
       await potret(page, `${w}-${peran}-${slug}`)
       cek(`${w}px ${peran}: klik ${teks}`, aktif === teks && !/Akses ditolak|tidak ditemukan|Galat/i.test(h1) && (!res || res.status() < 400), `h1 "${h1}"`)
       cek(`${w}px ${peran}: ${teks} tanpa luapan horizontal`, lebih <= 1, `lebih ${lebih}px`)

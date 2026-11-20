@@ -257,8 +257,9 @@ export const SIDEBAR_GRUP: GrupSidebar[] = [
   {
     judul: 'Keuangan',
     item: [
-      { href: '/kas', label: 'Kas Masuk dan Keluar', menu: 'kas.transaksi', ikon: 'kas' },
+      { href: '/kas', label: 'Kas Masuk/Keluar', menu: 'kas.transaksi', ikon: 'kas' },
       { href: '/pindah-dana', label: 'Pindah Dana', menu: 'kas.pindah', ikon: 'pindahdana' },
+      { href: '/rekonsiliasi', label: 'Rekonsiliasi Bank', menu: 'kas.rekonsiliasi', ikon: 'rekonsiliasi' },
       ...SIDEBAR_REKENING,
       ...SIDEBAR_BELI.filter((i) => i.href === '/hutang'),
     ],
