@@ -130,7 +130,7 @@ export type SaklarFitur = {
 const Y = (batas: number | null = null) => ({ nyala: true, batas })
 const N = (batas: number | null = null) => ({ nyala: false, batas })
 
-// 23 saklar RANCANGAN 8.3 ditambah log.lihat_semua (KONTRAK 4.4).
+// 23 saklar RANCANGAN 8.3 ditambah log.lihat_semua dan, sejak tahap 4B, pos.jual_stok_minus (KONTRAK 4.4).
 export const SAKLAR: SaklarFitur[] = [
   { kode: 'beli.po_tanpa_pr', nama: 'Pesanan tanpa permintaan', keterangan: 'Pesanan pembelian boleh dibuat tanpa permintaan pembelian.', bawaan: { owner: Y(), admin: Y(), kasir: N() } },
   { kode: 'beli.ubah_qty_pr', nama: 'Ubah qty permintaan', keterangan: 'Qty di pesanan boleh berbeda dari permintaan.', bawaan: { owner: Y(), admin: Y(), kasir: N() } },
@@ -156,6 +156,13 @@ export const SAKLAR: SaklarFitur[] = [
   { kode: 'b2b.ubah_harga', nama: 'Ubah harga jual B2B', keterangan: 'Mengubah harga jual B2B dari daftar harga pelanggan.', bawaan: { owner: Y(), admin: N(), kasir: N() } },
   { kode: 'aset.penyusutan_fiskal', nama: 'Penyusutan fiskal', keterangan: 'Menghitung penyusutan fiskal di samping komersial.', bawaan: { owner: Y(), admin: N(), kasir: N() } },
   { kode: 'log.lihat_semua', nama: 'Lihat semua jejak audit', keterangan: 'Melihat aktivitas semua pengguna di Jejak Audit. Tanpa saklar ini hanya aktivitas sendiri.', bawaan: { owner: Y(), admin: N(), kasir: N() } },
+  // tahap 4B: bawaan sementara RANCANGAN 11.2 untuk penjualan saat stok bahan kurang (KONTRAK 11).
+  {
+    kode: 'pos.jual_stok_minus',
+    nama: 'Jual walau stok bahan kurang',
+    keterangan: 'Penjualan kasir tetap tersimpan walau stok bahan menurut sistem kurang; stok bahan boleh minus khusus untuk gerak penjualan. Saklar mati: penjualan ditolak kecuali lokasinya mengizinkan stok minus.',
+    bawaan: { owner: Y(), admin: Y(), kasir: Y() },
+  },
 ]
 
 export const PERAN_SISTEM: { kode: KodePeranSistem; nama: string }[] = [

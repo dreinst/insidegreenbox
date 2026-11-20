@@ -1,6 +1,6 @@
 // Penjualan kasir dan void (tahap 3B). Tanpa Next, dipanggil aksi server dan tes.
-// Jurnal dan potong stok dari resep belum dibuat di tahap ini (KONTRAK 11): sale.hpp diisi 0, dan jurnal serta
-// mutasi stok penjualan dibentuk ulang dari data sale saat modulnya dibangun.
+// tahap 4B: penjualan memotong bahan dari resep lewat mesin stok di transaksi yang sama (docType sale), dan HPP diisi dari
+// nilai keluar. Void membalik gerak itu lewat balikDokumen. Jurnal penjualan menyusul di tahap 5 (KONTRAK 11).
 import { z } from 'zod'
 import type { Prisma } from '@/generated/prisma/client'
 import { GalatAturan } from './aksi'
@@ -11,6 +11,9 @@ import { isOwner, pastikanIzin, punyaIzin, saklarNyala, type Pengguna } from './
 import { catatKunjungan, potonganMember, tingkatUntuk } from './member'
 import { ambilNomor } from './nomor'
 import { periksaPenyetujuVoid } from './pin'
+import { pemakaianJual } from './produksi/resep'
+import { hariIni } from './stok/dokumen'
+import { balikDokumen, catatGerak } from './stok/mesin'
 import { kunciShift, lihatSemuaKasir } from './shift'
 import { normalisasiWa } from './wa'
 import { akhirHari, awalHari } from './waktu'
@@ -151,6 +154,7 @@ export async function simpanPenjualan(db: Db, k: Konteks, aktor: Aktor, masukan:
       },
     })
     if (member) await catatKunjungan(tx, member.id, 1)
+    const stok = await potongStokJual(tx, aktor, { id: jual.id, no, at: sekarang, locationId: s.locationId }, baris)
     const namaBayar = bagi.baris.map((b) => `${perMetode.get(b.metodeId)!.name} ${rupiah(b.amount)}`).join(', ')
     await catatAudit(tx, k, {
       action: 'penjualan.simpan',
@@ -165,12 +169,43 @@ export async function simpanPenjualan(db: Db, k: Konteks, aktor: Aktor, masukan:
         member: member?.name ?? null,
         memberPct: pctMember,
         ...t,
+        hpp: stok.hpp,
+        ...(stok.tanpaResep.length ? { tanpaResep: stok.tanpaResep } : {}),
+        ...(stok.minus.length ? { stokMinus: stok.minus } : {}),
         baris: baris.map((b) => ({ menu: b.name, ...(b.menuSetId ? { paketId: b.menuSetId } : {}), qty: b.qty, harga: b.harga, catatan: b.catatan })),
         bayar: bagi.baris.map((b) => ({ metode: perMetode.get(b.metodeId)!.name, amount: b.amount, paid: b.paid, change: b.change })),
       },
     })
-    return { id: jual.id, no, total: t.total, kembalian: bagi.kembalian }
+    return { id: jual.id, no, total: t.total, kembalian: bagi.kembalian, hpp: stok.hpp }
   })
+}
+
+// Potong bahan dari resep untuk semua baris penjualan dalam satu panggilan mesin (KONTRAK 12.2 aturan 2), di lokasi shift.
+// Baris paket memakai resep menu utama dan minuman dari baris itu (KONTRAK 11 butir 27). Menu tanpa resep tidak memotong
+// stok dan ber-HPP 0. Stok boleh minus khusus gerak penjualan bila saklar pos.jual_stok_minus nyala (KONTRAK 11).
+async function potongStokJual(tx: Prisma.TransactionClient, aktor: Aktor, jual: { id: number; no: string; at: Date; locationId: number }, baris: BarisJual[]) {
+  const idBaris = await tx.saleLine.findMany({ where: { saleId: jual.id }, select: { id: true }, orderBy: { id: 'asc' } })
+  const { pakai, tanpaResep } = await pemakaianJual(
+    tx,
+    baris.map((b, i) => ({ lineId: idBaris[i].id, menu: b.drinkId ? [b.menuItemId, b.drinkId] : [b.menuItemId], qty: b.qty })),
+  )
+  const gerak = pakai.length
+    ? await catatGerak(
+        tx,
+        { docType: 'sale', docId: jual.id, docNo: jual.no, tanggal: hariIni(jual.at), oleh: aktor.id },
+        pakai.map((u) => ({ productId: u.productId, locationId: jual.locationId, qty: u.qty.neg(), lineId: u.lineId })),
+        { izinkanMinus: saklarNyala(aktor, 'pos.jual_stok_minus') },
+      )
+    : []
+  const perBaris = new Map<number, bigint>()
+  for (const g of gerak) perBaris.set(g.lineId!, (perBaris.get(g.lineId!) ?? 0n) - g.nilai)
+  for (const [lineId, hpp] of perBaris) await tx.saleLine.update({ where: { id: lineId }, data: { hpp } })
+  const hpp = [...perBaris.values()].reduce((n, v) => n + v, 0n)
+  if (hpp) await tx.sale.update({ where: { id: jual.id }, data: { hpp } })
+  // Bahan yang saldonya minus sesudah penjualan ini, untuk audit dan peringatan.
+  const minus = [...new Map(gerak.filter((g) => g.saldoQty.isNeg()).map((g) => [g.productId, g])).values()]
+  const nama = minus.length ? new Map((await tx.product.findMany({ where: { id: { in: minus.map((g) => g.productId) } }, select: { id: true, name: true } })).map((p) => [p.id, p.name])) : new Map()
+  return { hpp, tanpaResep, minus: minus.map((g) => ({ produk: nama.get(g.productId), saldo: g.saldoQty.toString() })) }
 }
 
 export const skemaVoid = z.object({
@@ -208,13 +243,15 @@ export async function voidPenjualan(db: Db, k: Konteks, aktor: Aktor, saleId: nu
       data: { status: 'Void', voidBy: aktor.id, voidAt: new Date(), voidReason: d.alasan, voidApprovedBy: penyetuju?.id ?? null },
     })
     if (jual.memberId) await catatKunjungan(tx, jual.memberId, -1)
+    // Bahan resep kembali lewat gerak balik bertanggal hari void, dengan nilai sama persis (KONTRAK 12.2 aturan 4).
+    const balik = await balikDokumen(tx, { docType: 'sale', docId: saleId, docNo: jual.no, tanggal: hariIni(), oleh: aktor.id })
     await catatAudit(tx, k, {
       action: 'penjualan.void',
       docType: 'sale',
       docId: saleId,
       summary: `Void ${jual.no} ${rupiah(jual.total)}${penyetuju ? `, disetujui ${penyetuju.name} dengan PIN` : ''}${s?.status !== 'Buka' ? ' sesudah shift ditutup' : ''}. Alasan: ${d.alasan}`,
       before: { status: jual.status },
-      after: { status: 'Void', voidReason: d.alasan, voidApprovedBy: penyetuju?.id ?? null, shiftStatus: s?.status },
+      after: { status: 'Void', voidReason: d.alasan, voidApprovedBy: penyetuju?.id ?? null, shiftStatus: s?.status, gerakBalik: balik.length, nilaiKembali: balik.reduce((n, g) => n + g.nilai, 0n) },
     })
     return baru
   })
