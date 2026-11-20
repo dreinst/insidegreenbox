@@ -4,17 +4,26 @@
 import { useActionState, useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { PesanHasil, TombolKirim } from '@/components/form'
 import { HASIL_AWAL, type HasilAksi } from '@/lib/aksi'
-import { bagiBayar, hitungTotal, rupiah } from '@/lib/hitung-kasir'
+import { bagiBayar, hitungKeranjang, kenaPotonganMember, rupiah, type JenisBaris } from '@/lib/hitung-kasir'
 import type { HasilCariMember } from './aksi'
 
+type Kategori = { code: string; name: string }
 type Menu = { id: number; name: string; category: string; price: number }
+type Paket = { id: number; name: string; price: number; normalPrice: number; minuman: string }
 type Metode = { id: number; name: string; tunai: boolean }
-type Baris = { menuItemId: number; qty: number; catatan: string }
+// Ubin dan baris keranjang dikenali lewat kunci "menu:<id>" atau "paket:<id>" (admin lama: kind + id).
+type Ubin = { kunci: string; jenis: JenisBaris; id: number; name: string; sub: string; price: number; normal?: number; kelompok: string }
+type Baris = { kunci: string; jenis: JenisBaris; id: number; qty: number; catatan: string }
 type Bayar = { kunci: number; metodeId: number; jumlah: string }
 type Member = Extract<HasilCariMember, { ok: true }>['member']
 
+// Kelompok paket di pilihan kategori. Diawali tanda yang tidak mungkin ada di kode kategori.
+const KELOMPOK_PAKET = '*paket'
+
 type Prop = {
+  kategori: Kategori[]
   menu: Menu[]
+  paket: Paket[]
   metode: Metode[]
   biaya: { pajak: number; service: number }
   aksi: (sebelum: HasilAksi, fd: FormData) => Promise<HasilAksi>
@@ -24,7 +33,7 @@ type Prop = {
 const angka = (s: string) => Number(s.replace(/\D/g, '')) || 0
 const ribuan = (n: number) => (n ? n.toLocaleString('id-ID') : '')
 
-export function LayarKasir({ menu, metode, biaya, aksi, cariMember }: Prop) {
+export function LayarKasir({ kategori: semuaKategori, menu, paket, metode, biaya, aksi, cariMember }: Prop) {
   const [hasil, kirim] = useActionState(aksi, HASIL_AWAL)
   const [mode, setMode] = useState<'dinein' | 'takeaway'>('dinein')
   const [meja, setMeja] = useState('')
@@ -49,10 +58,19 @@ export function LayarKasir({ menu, metode, biaya, aksi, cariMember }: Prop) {
     return () => o.disconnect()
   }, [])
 
-  const perId = useMemo(() => new Map(menu.map((m) => [m.id, m])), [menu])
-  const daftarKategori = useMemo(() => [...new Set(menu.map((m) => m.category))], [menu])
-  const t = hitungTotal(
-    keranjang.map((b) => ({ harga: perId.get(b.menuItemId)?.price ?? 0, qty: b.qty, reguler: true })),
+  // Paket tampil lebih dulu seperti Early set di admin lama, lalu menu menurut urutan kategori dari server.
+  const ubin = useMemo(() => {
+    const namaKategori = new Map(semuaKategori.map((k) => [k.code, k.name]))
+    return [
+      ...paket.map((p): Ubin => ({ kunci: `paket:${p.id}`, jenis: 'paket', id: p.id, name: `Paket ${p.name}`, sub: `+ ${p.minuman}`, price: p.price, normal: p.normalPrice, kelompok: KELOMPOK_PAKET })),
+      ...menu.map((m): Ubin => ({ kunci: `menu:${m.id}`, jenis: 'menu', id: m.id, name: m.name, sub: namaKategori.get(m.category) ?? m.category, price: m.price, kelompok: m.category })),
+    ]
+  }, [semuaKategori, menu, paket])
+  const perKunci = useMemo(() => new Map(ubin.map((u) => [u.kunci, u])), [ubin])
+  // Hanya kategori yang punya menu aktif yang dijadikan pilihan.
+  const daftarKategori = useMemo(() => semuaKategori.filter((k) => menu.some((m) => m.category === k.code)), [semuaKategori, menu])
+  const t = hitungKeranjang(
+    keranjang.map((b) => ({ harga: perKunci.get(b.kunci)?.price ?? 0, qty: b.qty, jenis: b.jenis })),
     member?.persen ?? 0,
     biaya,
   )
@@ -66,12 +84,13 @@ export function LayarKasir({ menu, metode, biaya, aksi, cariMember }: Prop) {
   const jumlahItem = keranjang.reduce((a, b) => a + b.qty, 0)
 
   const kata = cari.trim().toLowerCase()
-  const tampil = menu.filter((m) => (kategori === 'semua' || m.category === kategori) && m.name.toLowerCase().includes(kata))
+  const tampil = ubin.filter((u) => (kategori === 'semua' || u.kelompok === kategori) && u.name.toLowerCase().includes(kata))
   const galatMeja = !hasil.ok ? hasil.galat?.meja : undefined
 
-  const tambah = (id: number) => setKeranjang((k) => (k.some((b) => b.menuItemId === id) ? k.map((b) => (b.menuItemId === id ? { ...b, qty: Math.min(999, b.qty + 1) } : b)) : [...k, { menuItemId: id, qty: 1, catatan: '' }]))
-  const ubahQty = (id: number, d: number) => setKeranjang((k) => k.map((b) => (b.menuItemId === id ? { ...b, qty: Math.min(999, b.qty + d) } : b)).filter((b) => b.qty > 0))
-  const ubahCatatan = (id: number, v: string) => setKeranjang((k) => k.map((b) => (b.menuItemId === id ? { ...b, catatan: v } : b)))
+  const tambah = (u: Ubin) =>
+    setKeranjang((k) => (k.some((b) => b.kunci === u.kunci) ? k.map((b) => (b.kunci === u.kunci ? { ...b, qty: Math.min(999, b.qty + 1) } : b)) : [...k, { kunci: u.kunci, jenis: u.jenis, id: u.id, qty: 1, catatan: '' }]))
+  const ubahQty = (kunci: string, d: number) => setKeranjang((k) => k.map((b) => (b.kunci === kunci ? { ...b, qty: Math.min(999, b.qty + d) } : b)).filter((b) => b.qty > 0))
+  const ubahCatatan = (kunci: string, v: string) => setKeranjang((k) => k.map((b) => (b.kunci === kunci ? { ...b, catatan: v } : b)))
   const ubahBayar = (kunci: number, ubah: Partial<Bayar>) => setBayar((s) => s.map((b) => (b.kunci === kunci ? { ...b, ...ubah } : b)))
   const kosongkan = () => {
     setKeranjang([])
@@ -99,7 +118,7 @@ export function LayarKasir({ menu, metode, biaya, aksi, cariMember }: Prop) {
     mode,
     meja: mode === 'dinein' ? meja.trim() : '',
     memberId: member?.id ?? null,
-    baris: keranjang,
+    baris: keranjang.map((b) => (b.jenis === 'paket' ? { menuSetId: b.id, qty: b.qty, catatan: b.catatan } : { menuItemId: b.id, qty: b.qty, catatan: b.catatan })),
     bayar: masukanBayar.map((b) => ({ metodeId: b.metodeId, jumlah: b.jumlah })),
   })
 
@@ -128,22 +147,25 @@ export function LayarKasir({ menu, metode, biaya, aksi, cariMember }: Prop) {
             </label>
           </div>
           <div className="pil gulir" role="group" aria-label="Kategori menu">
-            {['semua', ...daftarKategori].map((k) => (
-              <button key={k} type="button" className={kategori === k ? 'aktif' : ''} aria-pressed={kategori === k} onClick={() => setKategori(k)}>
-                {k === 'semua' ? 'Semua' : k}
+            {[{ code: 'semua', name: 'Semua' }, ...(paket.length ? [{ code: KELOMPOK_PAKET, name: 'Paket set' }] : []), ...daftarKategori].map((k) => (
+              <button key={k.code} type="button" className={kategori === k.code ? 'aktif' : ''} aria-pressed={kategori === k.code} onClick={() => setKategori(k.code)}>
+                {k.name}
               </button>
             ))}
           </div>
           {tampil.length ? (
             <ul className="lk-ubin">
               {tampil.map((m) => {
-                const n = keranjang.find((b) => b.menuItemId === m.id)?.qty ?? 0
+                const n = keranjang.find((b) => b.kunci === m.kunci)?.qty ?? 0
                 return (
-                  <li key={m.id}>
-                    <button type="button" onClick={() => tambah(m.id)} aria-label={`Tambah ${m.name}, ${rupiah(m.price)}${n ? `, sudah ${n}` : ''}`}>
+                  <li key={m.kunci}>
+                    <button type="button" className={m.jenis === 'paket' ? 'paket' : undefined} onClick={() => tambah(m)} aria-label={`Tambah ${m.name}${m.jenis === 'paket' ? ` ${m.sub}` : ''}, ${rupiah(m.price)}${n ? `, sudah ${n}` : ''}`}>
                       <b>{m.name}</b>
-                      <small>{m.category}</small>
-                      <span className="lk-harga">{rupiah(m.price)}</span>
+                      <small>{m.sub}</small>
+                      <span className="lk-harga">
+                        {rupiah(m.price)}
+                        {m.normal && m.normal > m.price ? <s>{rupiah(m.normal)}</s> : null}
+                      </span>
                       {n ? (
                         <span className="lk-jumlah" aria-hidden="true">
                           {n}
@@ -155,7 +177,7 @@ export function LayarKasir({ menu, metode, biaya, aksi, cariMember }: Prop) {
               })}
             </ul>
           ) : (
-            <p className="kosong">{menu.length ? 'Tidak ada menu yang cocok.' : 'Belum ada menu aktif. Minta Owner atau Admin mengisi menu.'}</p>
+            <p className="kosong">{ubin.length ? 'Tidak ada menu yang cocok.' : 'Belum ada menu aktif. Minta Owner atau Admin mengisi menu.'}</p>
           )}
         </section>
 
@@ -167,24 +189,30 @@ export function LayarKasir({ menu, metode, biaya, aksi, cariMember }: Prop) {
             {keranjang.length ? (
               <ul className="lk-baris">
                 {keranjang.map((b) => {
-                  const m = perId.get(b.menuItemId)
+                  const m = perKunci.get(b.kunci)
                   return (
-                    <li key={b.menuItemId}>
+                    <li key={b.kunci}>
                       <div className="lk-baris-atas">
                         <b>{m?.name ?? 'Menu tidak aktif'}</b>
                         <span>{rupiah((m?.price ?? 0) * b.qty)}</span>
                       </div>
+                      {m && !kenaPotonganMember(b.jenis) ? (
+                        <small className="lk-baris-ket">
+                          {m.sub}
+                          {member?.persen ? ', tanpa potongan member' : ''}
+                        </small>
+                      ) : null}
                       <div className="lk-baris-bawah">
                         <span className="langkah">
-                          <button type="button" onClick={() => ubahQty(b.menuItemId, -1)} aria-label={`Kurangi ${m?.name}`}>
+                          <button type="button" onClick={() => ubahQty(b.kunci, -1)} aria-label={`Kurangi ${m?.name}`}>
                             −
                           </button>
                           <output aria-label={`Jumlah ${m?.name}`}>{b.qty}</output>
-                          <button type="button" onClick={() => ubahQty(b.menuItemId, 1)} aria-label={`Tambah ${m?.name}`}>
+                          <button type="button" onClick={() => ubahQty(b.kunci, 1)} aria-label={`Tambah ${m?.name}`}>
                             +
                           </button>
                         </span>
-                        <input className="lk-catatan" value={b.catatan} onChange={(e) => ubahCatatan(b.menuItemId, e.target.value)} maxLength={80} placeholder="Catatan" aria-label={`Catatan ${m?.name}`} />
+                        <input className="lk-catatan" value={b.catatan} onChange={(e) => ubahCatatan(b.kunci, e.target.value)} maxLength={80} placeholder="Catatan" aria-label={`Catatan ${m?.name}`} />
                       </div>
                     </li>
                   )

@@ -71,25 +71,17 @@ export const PECAHAN = [100000, 50000, 20000, 10000, 5000, 2000, 1000, 500, 200,
 
 export const totalPecahan = (jumlah: Partial<Record<number, number>>) => PECAHAN.reduce((a, p) => a + p * (jumlah[p] ?? 0), 0)
 
-// Tingkat member: tingkat yang dipasang di member, atau tingkat dengan min kunjungan tertinggi yang sudah dicapai,
-// atau tingkat pertama. Potongan 0 bila potongan member dimatikan (admin lama: discountOf dan tierOf).
-export function persenMember(
-  m: { visits: number; discountOn: boolean; tierId: number | null },
-  tingkat: { id: number; minVisits: number; discountPct: number }[],
-) {
-  const t = tingkatMember(m, tingkat)
-  return m.discountOn && t ? t.discountPct : 0
-}
+// Baris keranjang berisi menu biasa atau paket set (admin lama: SaleLine kind 'item' atau 'set').
+// Paket sudah berharga khusus, jadi tidak kena potongan member; menu biasa kena. Dipakai layar kasir dan server.
+export type JenisBaris = 'menu' | 'paket'
+export const kenaPotonganMember = (jenis: JenisBaris) => jenis === 'menu'
 
-export function tingkatMember<T extends { id: number; minVisits: number }>(m: { visits: number; tierId: number | null }, tingkat: T[]) {
-  if (m.tierId !== null) {
-    const t = tingkat.find((x) => x.id === m.tierId)
-    if (t) return t
-  }
-  const urut = [...tingkat].sort((a, b) => b.minVisits - a.minVisits)
-  return urut.find((t) => m.visits >= t.minVisits) ?? [...tingkat].sort((a, b) => a.minVisits - b.minVisits)[0]
+export function hitungKeranjang(baris: { harga: number; qty: number; jenis: JenisBaris }[], persenMember: number, biaya: Biaya) {
+  return hitungTotal(
+    baris.map((b) => ({ harga: b.harga, qty: b.qty, reguler: kenaPotonganMember(b.jenis) })),
+    persenMember,
+    biaya,
+  )
 }
-
-export const angkaWa = (wa: string) => wa.replace(/\D/g, '').replace(/^62/, '0')
 
 export const rupiah = (n: number | bigint) => `Rp ${Number(n).toLocaleString('id-ID')}`

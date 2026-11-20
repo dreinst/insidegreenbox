@@ -4,9 +4,10 @@ import { after, before, describe, test } from 'node:test'
 import bcrypt from 'bcryptjs'
 import { GalatAturan, GalatIzin } from '../src/lib/aksi'
 import type { Db } from '../src/lib/db'
-import { bagiBayar, hitungTotal, kasSeharusnya, kembalian, perluPersetujuan, persenMember, totalPecahan } from '../src/lib/hitung-kasir'
+import { bagiBayar, hitungKeranjang, hitungTotal, kasSeharusnya, kembalian, perluPersetujuan, totalPecahan } from '../src/lib/hitung-kasir'
 import type { Pengguna } from '../src/lib/izin-inti'
 import { BATAS_GAGAL_NAMA } from '../src/lib/masuk'
+import { potonganMember, ubahStatusMember, ubahStatusTingkat } from '../src/lib/member'
 import { ambilPenjualan, cariMember, simpanPenjualan, voidPenjualan } from '../src/lib/penjualan'
 import { aturPin, bolehMasukPin, cobaMasukPin, daftarMasukPin, daftarPenyetujuVoid } from '../src/lib/pin'
 import { bukaShift, catatKasLaci, setujuiShift, tutupShift } from '../src/lib/shift'
@@ -32,10 +33,13 @@ before(async () => {
   kasir2 = await buatAktor(db, 'kasir', 'kasir2')
   const cabang = await db.branch.findFirstOrThrow()
   await db.branch.update({ where: { id: cabang.id }, data: { taxPct: 10, servicePct: 5 } })
+  // menu_item.category adalah kunci asing ke menu_category.code (tahap 3A), jadi kategorinya dibuat dulu.
+  await db.menuCategory.createMany({ data: [{ code: 'kopi', name: 'Kopi', sort: 10 }, { code: 'nonkopi', name: 'Non kopi', sort: 20 }] })
   for (const [n, c, p] of [
-    ['Kopi', 'Kopi', 28000n],
-    ['Teh', 'Non kopi', 18000n],
-    ['Mati', 'Kopi', 1000n],
+    ['Kopi', 'kopi', 28000n],
+    ['Teh', 'nonkopi', 18000n],
+    ['Mati', 'kopi', 1000n],
+    ['Nasi', 'nonkopi', 30000n],
   ] as const) {
     menu[n] = (await db.menuItem.create({ data: { name: n, category: c, price: p, active: n !== 'Mati' } })).id
   }
@@ -46,7 +50,8 @@ before(async () => {
     metode[n] = (await db.paymentMethod.create({ data: { name: n, kind } })).id
   }
   await db.memberTier.createMany({ data: [{ name: 'Reguler', minVisits: 0, discountPct: 0 }, { name: 'Sahabat', minVisits: 5, discountPct: 10 }] })
-  memberId = (await db.member.create({ data: { name: 'Budi', wa: '+62 812-3456-7890', visits: 5, discountOn: true } })).id
+  // Nomor disimpan dalam format 62 seperti hasil modul member; tier_id sengaja kosong (tingkat dihitung dari kunjungan).
+  memberId = (await db.member.create({ data: { name: 'Budi', wa: '6281234567890', visits: 5, discountOn: true } })).id
 })
 after(() => hapus())
 
@@ -109,15 +114,26 @@ describe('hitungan (sama dengan admin lama)', () => {
   test('hitung pecahan', () => {
     assert.equal(totalPecahan({ 100000: 2, 5000: 3, 500: 1 }), 215500)
   })
-  test('persen member dari tingkat yang tercapai, 0 bila potongan dimatikan', () => {
-    const t = [
-      { id: 1, minVisits: 0, discountPct: 0 },
-      { id: 2, minVisits: 5, discountPct: 10 },
-    ]
-    assert.equal(persenMember({ visits: 6, discountOn: true, tierId: null }, t), 10)
-    assert.equal(persenMember({ visits: 2, discountOn: true, tierId: null }, t), 0)
-    assert.equal(persenMember({ visits: 2, discountOn: true, tierId: 2 }, t), 10)
-    assert.equal(persenMember({ visits: 9, discountOn: false, tierId: null }, t), 0)
+  test('potongan member: persen tingkat, 0 bila member nonaktif, potongan mati, tanpa tingkat, atau tingkat nonaktif', () => {
+    const tier = { active: true, discountPct: '10' }
+    assert.equal(potonganMember({ active: true, discountOn: true, tier }), 10)
+    assert.equal(potonganMember({ active: false, discountOn: true, tier }), 0)
+    assert.equal(potonganMember({ active: true, discountOn: false, tier }), 0)
+    assert.equal(potonganMember({ active: true, discountOn: true, tier: null }), 0)
+    assert.equal(potonganMember({ active: true, discountOn: true, tier: { active: false, discountPct: '10' } }), 0)
+  })
+  test('paket set tidak kena potongan member, menu biasa kena (admin lama: hanya baris reguler)', () => {
+    const t = hitungKeranjang(
+      [
+        { harga: 28000, qty: 1, jenis: 'menu' },
+        { harga: 45000, qty: 2, jenis: 'paket' },
+      ],
+      10,
+      { pajak: 10, service: 5 },
+    )
+    // Potongan 10% hanya dari 28.000. Net 115.200, service 5.760, pajak 12.096.
+    assert.deepEqual(t, { sub: 118000, disc: 2800, net: 115200, svc: 5760, tax: 12096, total: 133056 })
+    assert.equal(hitungKeranjang([{ harga: 45000, qty: 1, jenis: 'paket' }], 15, { pajak: 0, service: 0 }).disc, 0)
   })
 })
 
@@ -239,6 +255,75 @@ describe('shift', () => {
     await bukaShift(db, k(kasir), kasir, { modal: '0' })
     await assert.rejects(simpanPenjualan(db, k(kasir), kasir, { mode: 'takeaway', baris: [{ menuItemId: menu.Mati, qty: 1 }], bayar: [{ metodeId: metode.Tunai, jumlah: 5000 }] }), tolakAturan(/tidak aktif/))
     await assert.rejects(simpanPenjualan(db, k(kasir), kasir, { mode: 'dinein', meja: '', baris: [{ menuItemId: menu.Kopi, qty: 1 }], bayar: [{ metodeId: metode.Tunai, jumlah: 50000 }] }))
+  })
+
+  // Tes di bawah memakai shift kasir yang masih terbuka dari tes sebelumnya.
+  test('paket set dijual sebagai satu baris berpenanda paket tanpa potongan member, menu biasa tetap kena', async () => {
+    const paket = await db.menuSet.create({ data: { name: 'Pagi', mainItemId: menu.Nasi, drinkItemId: menu.Teh, normalPrice: 48000n, price: 40000n } })
+    const sebelum = await db.member.findUniqueOrThrow({ where: { id: memberId } })
+    // Member dicari dengan nomor format 08, tersimpan dalam format 62.
+    const m = await cariMember(db, '0812-3456-7890')
+    assert.equal(m?.id, memberId)
+    assert.equal(m?.persen, 10)
+    const j = await simpanPenjualan(db, k(kasir), kasir, {
+      mode: 'takeaway',
+      memberId,
+      baris: [
+        { menuSetId: paket.id, qty: 2, catatan: 'es sedikit' },
+        { menuItemId: menu.Kopi, qty: 1 },
+      ],
+      bayar: [{ metodeId: metode.Tunai, jumlah: 200000 }],
+    })
+    const harap = hitungKeranjang(
+      [
+        { harga: 40000, qty: 2, jenis: 'paket' },
+        { harga: 28000, qty: 1, jenis: 'menu' },
+      ],
+      10,
+      { pajak: 10, service: 5 },
+    )
+    assert.equal(harap.disc, 2800)
+    assert.equal(j.total, harap.total)
+    const r = await ambilPenjualan(db, kasir, j.id)
+    assert.equal(r?.disc, 2800n)
+    const bp = r!.saleLines.find((l) => l.menuSetId === paket.id)
+    assert.ok(bp, 'baris paket tersimpan dengan menu_set_id')
+    assert.deepEqual(
+      { name: bp.name, category: bp.category, menuItemId: bp.menuItemId, drinkId: bp.drinkId, price: bp.price, qty: bp.qty, note: bp.note },
+      { name: 'Paket Pagi', category: 'paket', menuItemId: menu.Nasi, drinkId: menu.Teh, price: 40000n, qty: 2, note: 'es sedikit' },
+    )
+    const bm = r!.saleLines.find((l) => l.menuSetId === null)
+    assert.deepEqual({ menuItemId: bm?.menuItemId, drinkId: bm?.drinkId, category: bm?.category }, { menuItemId: menu.Kopi, drinkId: null, category: 'kopi' })
+    // Kunjungan bertambah dan tier_id ikut dihitung ulang dari tingkat aktif.
+    const sesudah = await db.member.findUniqueOrThrow({ where: { id: memberId }, include: { tier: true } })
+    assert.equal(sesudah.visits, sebelum.visits + 1)
+    assert.equal(sesudah.tier?.name, 'Sahabat')
+
+    // Paket berisi menu dan paket sekaligus ditolak, paket nonaktif ditolak.
+    await assert.rejects(simpanPenjualan(db, k(kasir), kasir, { mode: 'takeaway', baris: [{ menuItemId: menu.Kopi, menuSetId: paket.id, qty: 1 }], bayar: [{ metodeId: metode.Tunai, jumlah: 100000 }] }))
+    await db.menuSet.update({ where: { id: paket.id }, data: { active: false } })
+    await assert.rejects(
+      simpanPenjualan(db, k(kasir), kasir, { mode: 'takeaway', baris: [{ menuSetId: paket.id, qty: 1 }], bayar: [{ metodeId: metode.Tunai, jumlah: 100000 }] }),
+      tolakAturan(/paket yang sudah tidak aktif/),
+    )
+  })
+
+  test('member nonaktif tidak ditemukan dan ditolak saat jual, tingkat nonaktif tidak memberi potongan', async () => {
+    const sahabat = await db.memberTier.findFirstOrThrow({ where: { name: 'Sahabat' } })
+    await ubahStatusTingkat(db, k(owner), owner, sahabat.id, false)
+    // Tanpa Sahabat, tingkat aktif tertinggi yang tercapai adalah Reguler (0%).
+    assert.deepEqual(await cariMember(db, '6281234567890'), { id: memberId, name: 'Budi', tingkat: 'Reguler', persen: 0 })
+    await ubahStatusTingkat(db, k(owner), owner, sahabat.id, true)
+    assert.equal((await cariMember(db, '+62 812 3456 7890'))?.persen, 10)
+
+    await ubahStatusMember(db, k(owner), owner, memberId, false)
+    assert.equal(await cariMember(db, '081234567890'), null)
+    await assert.rejects(
+      simpanPenjualan(db, k(kasir), kasir, { mode: 'takeaway', memberId, baris: [{ menuItemId: menu.Kopi, qty: 1 }], bayar: [{ metodeId: metode.Tunai, jumlah: 50000 }] }),
+      tolakAturan(/nonaktif/),
+    )
+    await ubahStatusMember(db, k(owner), owner, memberId, true)
+    assert.equal(await cariMember(db, '0812'), null, 'nomor tidak sah tidak dicari')
   })
 })
 

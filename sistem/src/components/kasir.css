@@ -79,6 +79,11 @@
 .lk-baris-atas { display: flex; justify-content: space-between; gap: 10px; font-variant-numeric: tabular-nums }
 .lk-baris-atas b { overflow-wrap: anywhere; min-width: 0 }
 .lk-baris-atas span { white-space: nowrap; font-weight: 700 }
+/* Paket set (tahap 3C): ubin bertepi hijau dengan harga normal dicoret, baris keranjang dengan keterangan minuman. */
+.lk-ubin button.paket { background: var(--green-tint); box-shadow: inset 0 2px 0 #fff, inset 0 0 0 1px #B9E6B4, 0 10px 18px -14px rgba(39, 41, 36, .6) }
+.lk-ubin button.paket small { color: #2D5A2B }
+.lk-harga s { margin-left: 6px; font-weight: 600; font-size: 12.5px; color: var(--muted) }
+.lk-baris-ket { display: block; margin-top: 2px; color: var(--muted); font-size: 12.5px; overflow-wrap: anywhere }
 .lk-baris-bawah { display: flex; align-items: center; gap: 10px; margin-top: 8px }
 .langkah { display: inline-flex; align-items: center; flex: none; border-radius: 10px; background: #fff; box-shadow: inset 0 0 0 1px #D9DCD4 }
 .langkah button { width: 40px; height: 40px; border: 0; background: none; font: inherit; font-size: 20px; font-weight: 700; color: var(--ink); cursor: pointer }

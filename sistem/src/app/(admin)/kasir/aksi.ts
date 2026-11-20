@@ -7,6 +7,7 @@ import { jalankanAksi } from '@/lib/izin'
 import { punyaIzin } from '@/lib/izin-inti'
 import { cariMember, simpanPenjualan } from '@/lib/penjualan'
 import { konteksPermintaan, penggunaSaatIni } from '@/lib/sesi'
+import { normalisasiWa } from '@/lib/wa'
 
 // Isi keranjang dikirim sebagai JSON di kolom "data"; harga, potongan, pajak, dan service dihitung ulang di server.
 export async function simpanPenjualanAksi(sebelum: HasilAksi, fd: FormData) {
@@ -28,6 +29,8 @@ export type HasilCariMember = { ok: true; member: { id: number; name: string; ti
 export async function cariMemberAksi(wa: string): Promise<HasilCariMember> {
   const p = await penggunaSaatIni()
   if (!p || !punyaIzin(p.izin, 'kasir.layar', 'T')) return { ok: false, pesan: 'Kamu tidak punya izin untuk tindakan ini.' }
-  const m = await cariMember(db, String(wa ?? '').slice(0, 30))
-  return m ? { ok: true, member: m } : { ok: false, pesan: 'Nomor ini belum terdaftar sebagai member.' }
+  const teks = String(wa ?? '').slice(0, 30)
+  if (!normalisasiWa(teks)) return { ok: false, pesan: 'Nomor WhatsApp tidak sah. Pakai nomor seluler, misalnya 0812 3456 7890.' }
+  const m = await cariMember(db, teks)
+  return m ? { ok: true, member: m } : { ok: false, pesan: 'Nomor ini belum terdaftar sebagai member aktif.' }
 }

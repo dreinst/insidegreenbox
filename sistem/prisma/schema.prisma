@@ -388,7 +388,8 @@ model MenuItem {
   createdAt   DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedBy   Int?               @map("updated_by")
   updatedAt   DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
-  saleLines   SaleLine[]
+  saleLines   SaleLine[]         @relation("BarisMenu")
+  drinkLines  SaleLine[]         @relation("BarisMinumanPaket")
   priceRows   MenuPriceHistory[]
   setsAsMain  MenuSet[]          @relation("PaketUtama")
   setsAsDrink MenuSet[]          @relation("PaketMinuman")
@@ -441,21 +442,22 @@ model MenuPriceHistory {
 
 // tahap 3A: paket set (padanan EarlySet): satu menu utama dan satu minuman dengan harga paket.
 model MenuSet {
-  id           Int      @id @default(autoincrement())
-  name         String
-  mainItemId   Int      @map("main_item_id")
-  mainItem     MenuItem @relation("PaketUtama", fields: [mainItemId], references: [id])
-  drinkItemId  Int      @map("drink_item_id")
-  drinkItem    MenuItem @relation("PaketMinuman", fields: [drinkItemId], references: [id])
-  normalPrice  BigInt   @map("normal_price")
-  price        BigInt
-  image        String?
-  sort         Int      @default(0)
-  active       Boolean  @default(true)
-  createdBy    Int?     @map("created_by")
-  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedBy    Int?     @map("updated_by")
-  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id          Int        @id @default(autoincrement())
+  name        String
+  mainItemId  Int        @map("main_item_id")
+  mainItem    MenuItem   @relation("PaketUtama", fields: [mainItemId], references: [id])
+  drinkItemId Int        @map("drink_item_id")
+  drinkItem   MenuItem   @relation("PaketMinuman", fields: [drinkItemId], references: [id])
+  normalPrice BigInt     @map("normal_price")
+  price       BigInt
+  image       String?
+  sort        Int        @default(0)
+  active      Boolean    @default(true)
+  createdBy   Int?       @map("created_by")
+  createdAt   DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedBy   Int?       @map("updated_by")
+  updatedAt   DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+  saleLines   SaleLine[]
 
   @@map("menu_set")
 }
@@ -1444,18 +1446,24 @@ model Sale {
 }
 
 model SaleLine {
-  id         Int      @id @default(autoincrement())
-  saleId     Int      @map("sale_id")
-  sale       Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
-  menuItemId Int      @map("menu_item_id")
-  menuItem   MenuItem @relation(fields: [menuItemId], references: [id])
+  id         Int       @id @default(autoincrement())
+  saleId     Int       @map("sale_id")
+  sale       Sale      @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  menuItemId Int       @map("menu_item_id")
+  menuItem   MenuItem  @relation("BarisMenu", fields: [menuItemId], references: [id])
   qty        Int
   price      BigInt
-  note       String   @default("")
-  hpp        BigInt   @default(0)
+  note       String    @default("")
+  hpp        BigInt    @default(0)
   // tahap 3B: nama dan kategori menu saat dijual, supaya struk lama tidak ikut berubah.
-  name       String   @default("")
-  category   String   @default("")
+  name       String    @default("")
+  category   String    @default("")
+  // tahap 3C: baris paket set. menu_set_id terisi berarti baris ini paket; menu_item_id berisi menu utama paket
+  // dan set_drink_item_id minumannya saat dijual. Keduanya terisi atau keduanya kosong (CHECK di migrasi).
+  menuSetId  Int?      @map("menu_set_id")
+  menuSet    MenuSet?  @relation(fields: [menuSetId], references: [id], onDelete: Restrict)
+  drinkId    Int?      @map("set_drink_item_id")
+  drinkItem  MenuItem? @relation("BarisMinumanPaket", fields: [drinkId], references: [id], onDelete: Restrict)
 
   @@index([saleId])
   @@map("sale_line")

@@ -6,11 +6,13 @@ import type { Prisma } from '@/generated/prisma/client'
 import { GalatAturan } from './aksi'
 import { catatAudit, type Konteks } from './audit'
 import type { Db, DbAtauTx } from './db'
-import { angkaWa, bagiBayar, hitungTotal, persenMember, rupiah, tingkatMember } from './hitung-kasir'
+import { bagiBayar, hitungKeranjang, rupiah, type JenisBaris } from './hitung-kasir'
 import { isOwner, pastikanIzin, punyaIzin, saklarNyala, type Pengguna } from './izin-inti'
+import { catatKunjungan, potonganMember, tingkatUntuk } from './member'
 import { ambilNomor } from './nomor'
 import { periksaPenyetujuVoid } from './pin'
 import { kunciShift, lihatSemuaKasir } from './shift'
+import { normalisasiWa } from './wa'
 import { akhirHari, awalHari } from './waktu'
 
 type Aktor = Pick<Pengguna, 'id' | 'izin' | 'saklar' | 'peran'>
@@ -19,15 +21,22 @@ export const MODE = { dinein: 'Dine in', takeaway: 'Take away' } as const
 
 const bulat = (pesan: string, min: number, maks: number) => z.coerce.number({ message: pesan }).int(pesan).min(min, pesan).max(maks, pesan)
 
+// Satu baris keranjang berisi menu (menuItemId) atau paket set (menuSetId), tidak keduanya.
+const skemaBaris = z
+  .object({
+    menuItemId: bulat('Menu tidak sah.', 1, 2_000_000_000).optional(),
+    menuSetId: bulat('Paket tidak sah.', 1, 2_000_000_000).optional(),
+    qty: bulat('Qty 1 sampai 999.', 1, 999),
+    catatan: z.string().trim().max(80, 'Catatan baris paling panjang 80 huruf.').default(''),
+  })
+  .refine((b) => (b.menuItemId === undefined) !== (b.menuSetId === undefined), { message: 'Baris harus berisi satu menu atau satu paket.' })
+
 export const skemaJual = z
   .object({
     mode: z.enum(['dinein', 'takeaway'], { message: 'Pilih dine in atau take away.' }),
     meja: z.string().trim().max(10, 'Nomor meja paling panjang 10 huruf.').default(''),
     memberId: z.coerce.number().int().positive().nullable().default(null),
-    baris: z
-      .array(z.object({ menuItemId: bulat('Menu tidak sah.', 1, 2_000_000_000), qty: bulat('Qty 1 sampai 999.', 1, 999), catatan: z.string().trim().max(80, 'Catatan baris paling panjang 80 huruf.').default('') }))
-      .min(1, 'Keranjang masih kosong.')
-      .max(100, 'Paling banyak 100 baris per transaksi.'),
+    baris: z.array(skemaBaris).min(1, 'Keranjang masih kosong.').max(100, 'Paling banyak 100 baris per transaksi.'),
     bayar: z.array(z.object({ metodeId: bulat('Metode bayar tidak sah.', 1, 2_000_000_000), jumlah: bulat('Jumlah bayar tidak sah.', 0, 1_000_000_000) })).max(10, 'Paling banyak 10 pembayaran.'),
   })
   .refine((d) => d.mode !== 'dinein' || d.meja !== '', { path: ['meja'], message: 'Isi nomor meja untuk dine in.' })
@@ -35,15 +44,49 @@ export const skemaJual = z
 // Mengambil persen pajak dan service lokasi shift.
 const biayaDari = (b: { taxPct: Prisma.Decimal; servicePct: Prisma.Decimal }) => ({ pajak: Number(b.taxPct), service: Number(b.servicePct) })
 
+// Tingkat dan potongan member saat transaksi. Tingkat dihitung dari kunjungan dan tingkat yang aktif sekarang
+// (tingkatUntuk), lalu persennya lewat potonganMember, sumber aturan yang sama dengan halaman Member.
+async function potonganSaatIni(db: DbAtauTx, m: { active: boolean; discountOn: boolean; visits: number }) {
+  const tier = await tingkatUntuk(db, m.visits)
+  return { tingkat: tier?.name ?? '', persen: potonganMember({ ...m, tier }) }
+}
+
+// Mencari member aktif lewat nomor WA. Nomor dinormalisasi ke format 62 dengan aturan modul member, jadi
+// "0812...", "+62 812..." dan "812..." menemukan member yang sama. Member nonaktif dianggap tidak ada.
 export async function cariMember(db: DbAtauTx, wa: string) {
-  const digit = angkaWa(wa)
-  if (digit.length < 5) return null
-  const baris = await db.$queryRaw<{ id: number }[]>`
-    SELECT id FROM member WHERE regexp_replace(regexp_replace(wa, '[^0-9]', '', 'g'), '^62', '0') = ${digit} LIMIT 1`
-  if (!baris.length) return null
-  const [m, tingkat] = await Promise.all([db.member.findUniqueOrThrow({ where: { id: baris[0].id } }), db.memberTier.findMany()])
-  const t = tingkat.map((x) => ({ id: x.id, name: x.name, minVisits: x.minVisits, discountPct: Number(x.discountPct) }))
-  return { id: m.id, name: m.name, tingkat: tingkatMember(m, t)?.name ?? '', persen: persenMember(m, t) }
+  const nomor = normalisasiWa(wa)
+  if (!nomor) return null
+  const m = await db.member.findFirst({ where: { wa: nomor, active: true } })
+  if (!m) return null
+  return { id: m.id, name: m.name, ...(await potonganSaatIni(db, m)) }
+}
+
+type BarisJual = { jenis: JenisBaris; menuItemId: number; menuSetId: number | null; drinkId: number | null; name: string; category: string; harga: bigint; qty: number; catatan: string }
+
+// Kode kategori yang disimpan di sale_line.category untuk baris paket (bukan kode menu_category).
+export const KATEGORI_PAKET = 'paket'
+
+// Menyusun baris penjualan dari isi keranjang dengan harga dan nama dari database. Menu harus aktif dan
+// kategorinya aktif; paket harus aktif beserta menu utama dan minumannya.
+async function susunBaris(tx: DbAtauTx, baris: z.infer<typeof skemaJual>['baris']): Promise<BarisJual[]> {
+  const idMenu = [...new Set(baris.flatMap((b) => (b.menuItemId ? [b.menuItemId] : [])))]
+  const idPaket = [...new Set(baris.flatMap((b) => (b.menuSetId ? [b.menuSetId] : [])))]
+  const menu = idMenu.length ? await tx.menuItem.findMany({ where: { id: { in: idMenu }, active: true, categoryRef: { active: true } } }) : []
+  if (menu.length !== idMenu.length) throw new GalatAturan('Ada menu yang sudah tidak aktif atau terhapus. Muat ulang layar kasir.')
+  const paket = idPaket.length
+    ? await tx.menuSet.findMany({ where: { id: { in: idPaket }, active: true, mainItem: { active: true }, drinkItem: { active: true } }, include: { mainItem: { select: { name: true } }, drinkItem: { select: { name: true } } } })
+    : []
+  if (paket.length !== idPaket.length) throw new GalatAturan('Ada paket yang sudah tidak aktif. Muat ulang layar kasir.')
+  const perMenu = new Map(menu.map((m) => [m.id, m]))
+  const perPaket = new Map(paket.map((p) => [p.id, p]))
+  return baris.map((b) => {
+    if (b.menuSetId) {
+      const p = perPaket.get(b.menuSetId)!
+      return { jenis: 'paket', menuItemId: p.mainItemId, menuSetId: p.id, drinkId: p.drinkItemId, name: `Paket ${p.name}`, category: KATEGORI_PAKET, harga: p.price, qty: b.qty, catatan: b.catatan }
+    }
+    const m = perMenu.get(b.menuItemId!)!
+    return { jenis: 'menu', menuItemId: m.id, menuSetId: null, drinkId: null, name: m.name, category: m.category, harga: m.price, qty: b.qty, catatan: b.catatan }
+  })
 }
 
 export async function simpanPenjualan(db: Db, k: Konteks, aktor: Aktor, masukan: unknown) {
@@ -56,25 +99,20 @@ export async function simpanPenjualan(db: Db, k: Konteks, aktor: Aktor, masukan:
     if (!s || s.status !== 'Buka') throw new GalatAturan('Shift sudah ditutup. Buka shift baru dulu.')
     const lokasi = await tx.location.findUniqueOrThrow({ where: { id: s.locationId }, include: { branch: true } })
 
-    const ids = [...new Set(d.baris.map((b) => b.menuItemId))]
-    const menu = await tx.menuItem.findMany({ where: { id: { in: ids }, active: true } })
-    if (menu.length !== ids.length) throw new GalatAturan('Ada menu yang sudah tidak aktif atau terhapus. Muat ulang layar kasir.')
-    const per = new Map(menu.map((m) => [m.id, m]))
-    const baris = d.baris.map((b) => ({ ...b, m: per.get(b.menuItemId)! }))
+    const baris = await susunBaris(tx, d.baris)
 
     let member: { id: number; name: string } | null = null
     let pctMember = 0
     if (d.memberId) {
       const m = await tx.member.findUnique({ where: { id: d.memberId } })
-      if (!m) throw new GalatAturan('Member tidak ditemukan.', 'member')
-      const tingkat = (await tx.memberTier.findMany()).map((x) => ({ id: x.id, minVisits: x.minVisits, discountPct: Number(x.discountPct) }))
+      if (!m || !m.active) throw new GalatAturan('Member tidak ditemukan atau sudah nonaktif. Cari ulang membernya.', 'member')
       member = { id: m.id, name: m.name }
-      pctMember = persenMember(m, tingkat)
+      pctMember = (await potonganSaatIni(tx, m)).persen
     }
 
     const biaya = biayaDari(lokasi.branch)
-    // Semua menu_item dihitung baris reguler (kena potongan member). Paket atau early set dari sesi A menyusul.
-    const t = hitungTotal(baris.map((b) => ({ harga: Number(b.m.price), qty: b.qty, reguler: true })), pctMember, biaya)
+    // Potongan member hanya untuk baris menu biasa; paket set tidak kena (admin lama, KONTRAK 11).
+    const t = hitungKeranjang(baris.map((b) => ({ harga: Number(b.harga), qty: b.qty, jenis: b.jenis })), pctMember, biaya)
 
     const idMetode = [...new Set(d.bayar.map((b) => b.metodeId))]
     const metode = await tx.paymentMethod.findMany({ where: { id: { in: idMetode }, active: true } })
@@ -106,11 +144,13 @@ export async function simpanPenjualan(db: Db, k: Konteks, aktor: Aktor, masukan:
         svcPct: biaya.service,
         taxPct: biaya.pajak,
         createdBy: aktor.id,
-        saleLines: { create: baris.map((b) => ({ menuItemId: b.m.id, qty: b.qty, price: b.m.price, note: b.catatan, hpp: 0n, name: b.m.name, category: b.m.category })) },
+        saleLines: {
+          create: baris.map((b) => ({ menuItemId: b.menuItemId, menuSetId: b.menuSetId, drinkId: b.drinkId, qty: b.qty, price: b.harga, note: b.catatan, hpp: 0n, name: b.name, category: b.category })),
+        },
         salePayments: { create: bagi.baris.map((b) => ({ paymentMethodId: b.metodeId, amount: BigInt(b.amount), paid: BigInt(b.paid), change: BigInt(b.change) })) },
       },
     })
-    if (member) await tx.member.update({ where: { id: member.id }, data: { visits: { increment: 1 } } })
+    if (member) await catatKunjungan(tx, member.id, 1)
     const namaBayar = bagi.baris.map((b) => `${perMetode.get(b.metodeId)!.name} ${rupiah(b.amount)}`).join(', ')
     await catatAudit(tx, k, {
       action: 'penjualan.simpan',
@@ -125,7 +165,7 @@ export async function simpanPenjualan(db: Db, k: Konteks, aktor: Aktor, masukan:
         member: member?.name ?? null,
         memberPct: pctMember,
         ...t,
-        baris: baris.map((b) => ({ menu: b.m.name, qty: b.qty, harga: b.m.price, catatan: b.catatan })),
+        baris: baris.map((b) => ({ menu: b.name, ...(b.menuSetId ? { paketId: b.menuSetId } : {}), qty: b.qty, harga: b.harga, catatan: b.catatan })),
         bayar: bagi.baris.map((b) => ({ metode: perMetode.get(b.metodeId)!.name, amount: b.amount, paid: b.paid, change: b.change })),
       },
     })
@@ -167,7 +207,7 @@ export async function voidPenjualan(db: Db, k: Konteks, aktor: Aktor, saleId: nu
       where: { id: saleId },
       data: { status: 'Void', voidBy: aktor.id, voidAt: new Date(), voidReason: d.alasan, voidApprovedBy: penyetuju?.id ?? null },
     })
-    if (jual.memberId) await tx.member.updateMany({ where: { id: jual.memberId, visits: { gt: 0 } }, data: { visits: { decrement: 1 } } })
+    if (jual.memberId) await catatKunjungan(tx, jual.memberId, -1)
     await catatAudit(tx, k, {
       action: 'penjualan.void',
       docType: 'sale',

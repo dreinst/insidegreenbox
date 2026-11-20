@@ -39,8 +39,22 @@ export default async function HalamanKasir({ searchParams }: { searchParams: Pro
     )
   }
 
-  const [menu, metode, lokasi] = await Promise.all([
-    db.menuItem.findMany({ where: { active: true }, orderBy: [{ category: 'asc' }, { name: 'asc' }], take: 500, select: { id: true, name: true, category: true, price: true } }),
+  // Hanya kategori dan menu yang aktif, diurutkan menurut urutan kategori lalu urutan menu (sama dengan modul Menu).
+  // Paket set aktif (beserta menu utama dan minumannya) tampil sebagai kelompok sendiri.
+  const [kategori, menu, paket, metode, lokasi] = await Promise.all([
+    db.menuCategory.findMany({ where: { active: true }, orderBy: [{ sort: 'asc' }, { name: 'asc' }], select: { code: true, name: true } }),
+    db.menuItem.findMany({
+      where: { active: true, categoryRef: { active: true } },
+      orderBy: [{ categoryRef: { sort: 'asc' } }, { sort: 'asc' }, { name: 'asc' }],
+      take: 500,
+      select: { id: true, name: true, category: true, price: true },
+    }),
+    db.menuSet.findMany({
+      where: { active: true, mainItem: { active: true }, drinkItem: { active: true } },
+      orderBy: [{ sort: 'asc' }, { name: 'asc' }],
+      take: 100,
+      select: { id: true, name: true, price: true, normalPrice: true, drinkItem: { select: { name: true } } },
+    }),
     db.paymentMethod.findMany({ where: { active: true }, orderBy: { id: 'asc' }, select: { id: true, name: true, kind: true } }),
     db.location.findUniqueOrThrow({ where: { id: shift.locationId }, include: { branch: true } }),
   ])
@@ -68,7 +82,9 @@ export default async function HalamanKasir({ searchParams }: { searchParams: Pro
       {bolehJual ? (
         <LayarKasir
           key={baru?.id ?? 'baru'}
+          kategori={kategori}
           menu={menu.map((m) => ({ ...m, price: Number(m.price) }))}
+          paket={paket.map((p) => ({ id: p.id, name: p.name, price: Number(p.price), normalPrice: Number(p.normalPrice), minuman: p.drinkItem.name }))}
           metode={metode.map((m) => ({ id: m.id, name: m.name, tunai: m.kind === 'tunai' }))}
           biaya={{ pajak: Number(lokasi.branch.taxPct), service: Number(lokasi.branch.servicePct) }}
           aksi={simpanPenjualanAksi}
