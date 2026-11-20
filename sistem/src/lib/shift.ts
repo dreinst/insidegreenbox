@@ -3,6 +3,7 @@
 import { z } from 'zod'
 import type { Prisma } from '@/generated/prisma/client'
 import { GalatAturan } from './aksi'
+import { jurnalKasLaci, jurnalSelisihShift } from './akuntansi/dokumen'
 import { catatAudit, type Konteks } from './audit'
 import type { Db, DbAtauTx, Tx } from './db'
 import { muatSaklar, pastikanIzin, punyaIzin, type Pengguna } from './izin-inti'
@@ -119,12 +120,14 @@ export async function catatKasLaci(db: Db, k: Konteks, aktor: Aktor, shiftId: nu
     pastikanPemilik(aktor, s)
     if (s.status !== 'Buka') throw new GalatAturan('Shift sudah ditutup, kas laci tidak bisa dicatat lagi.')
     const m = await tx.shiftCashMove.create({ data: { shiftId, kind: d.jenis, amount: BigInt(d.jumlah), reason: d.alasan, createdBy: aktor.id } })
+    // tahap 5B: kas laci di luar penjualan dijurnal ke lawan dari pemetaan laci_masuk atau laci_keluar.
+    const jurnal = await jurnalKasLaci(tx, m.id, aktor.id)
     await catatAudit(tx, k, {
       action: 'shift.kas',
       docType: 'shift',
       docId: shiftId,
       summary: `Kas ${d.jenis} ${rupiah(d.jumlah)} di shift #${shiftId}: ${d.alasan}`,
-      after: { moveId: m.id, kind: d.jenis, amount: m.amount, reason: d.alasan },
+      after: { moveId: m.id, kind: d.jenis, amount: m.amount, reason: d.alasan, jurnal: jurnal?.no ?? null },
     })
     return m
   })
@@ -168,13 +171,15 @@ export async function tutupShift(db: Db, k: Konteks, aktor: Aktor, shiftId: numb
         status,
       },
     })
+    // tahap 5B: selisih kas dijurnal saat shift ditutup (RANCANGAN 6.1), walau masih menunggu persetujuan Owner.
+    const jurnal = await jurnalSelisihShift(tx, shiftId, aktor.id)
     await catatAudit(tx, k, {
       action: 'shift.tutup',
       docType: 'shift',
       docId: shiftId,
       summary: `Menutup shift #${shiftId} ${s.user.name}: seharusnya ${rupiah(harus)}, dihitung ${rupiah(d.kas)}, selisih ${selisih < 0 ? '-' : selisih > 0 ? '+' : ''}${rupiah(Math.abs(selisih))}${status === 'PerluPersetujuan' ? ', perlu persetujuan Owner' : ''}`,
       before: { status: s.status },
-      after: { status, expectedCash: harus, countedCash: d.kas, cashDiff: selisih, diffLimit: baru.diffLimit, denominations: d.lembar, note: d.catatan, ...a },
+      after: { status, expectedCash: harus, countedCash: d.kas, cashDiff: selisih, diffLimit: baru.diffLimit, denominations: d.lembar, note: d.catatan, ...a, jurnal: jurnal?.no ?? null },
     })
     return baru
   })

@@ -1,9 +1,11 @@
 // Penjualan kasir dan void (tahap 3B). Tanpa Next, dipanggil aksi server dan tes.
 // tahap 4B: penjualan memotong bahan dari resep lewat mesin stok di transaksi yang sama (docType sale), dan HPP diisi dari
-// nilai keluar. Void membalik gerak itu lewat balikDokumen. Jurnal penjualan menyusul di tahap 5 (KONTRAK 11).
+// nilai keluar. Void membalik gerak itu lewat balikDokumen.
+// tahap 5B: jurnal penjualan dan jurnal balik void dibentuk di transaksi yang sama (KONTRAK 14.3).
 import { z } from 'zod'
 import type { Prisma } from '@/generated/prisma/client'
 import { GalatAturan } from './aksi'
+import { balikJurnalPenjualan, jurnalPenjualan } from './akuntansi/dokumen'
 import { catatAudit, type Konteks } from './audit'
 import type { Db, DbAtauTx } from './db'
 import { bagiBayar, hitungKeranjang, rupiah, type JenisBaris } from './hitung-kasir'
@@ -155,6 +157,7 @@ export async function simpanPenjualan(db: Db, k: Konteks, aktor: Aktor, masukan:
     })
     if (member) await catatKunjungan(tx, member.id, 1)
     const stok = await potongStokJual(tx, aktor, { id: jual.id, no, at: sekarang, locationId: s.locationId }, baris)
+    const jurnal = await jurnalPenjualan(tx, jual.id, aktor.id)
     const namaBayar = bagi.baris.map((b) => `${perMetode.get(b.metodeId)!.name} ${rupiah(b.amount)}`).join(', ')
     await catatAudit(tx, k, {
       action: 'penjualan.simpan',
@@ -170,6 +173,7 @@ export async function simpanPenjualan(db: Db, k: Konteks, aktor: Aktor, masukan:
         memberPct: pctMember,
         ...t,
         hpp: stok.hpp,
+        jurnal: jurnal?.no ?? null,
         ...(stok.tanpaResep.length ? { tanpaResep: stok.tanpaResep } : {}),
         ...(stok.minus.length ? { stokMinus: stok.minus } : {}),
         baris: baris.map((b) => ({ menu: b.name, ...(b.menuSetId ? { paketId: b.menuSetId } : {}), qty: b.qty, harga: b.harga, catatan: b.catatan })),
@@ -245,13 +249,14 @@ export async function voidPenjualan(db: Db, k: Konteks, aktor: Aktor, saleId: nu
     if (jual.memberId) await catatKunjungan(tx, jual.memberId, -1)
     // Bahan resep kembali lewat gerak balik bertanggal hari void, dengan nilai sama persis (KONTRAK 12.2 aturan 4).
     const balik = await balikDokumen(tx, { docType: 'sale', docId: saleId, docNo: jual.no, tanggal: hariIni(), oleh: aktor.id })
+    const jurnal = await balikJurnalPenjualan(tx, saleId, hariIni(), aktor.id)
     await catatAudit(tx, k, {
       action: 'penjualan.void',
       docType: 'sale',
       docId: saleId,
       summary: `Void ${jual.no} ${rupiah(jual.total)}${penyetuju ? `, disetujui ${penyetuju.name} dengan PIN` : ''}${s?.status !== 'Buka' ? ' sesudah shift ditutup' : ''}. Alasan: ${d.alasan}`,
       before: { status: jual.status },
-      after: { status: 'Void', voidReason: d.alasan, voidApprovedBy: penyetuju?.id ?? null, shiftStatus: s?.status, gerakBalik: balik.length, nilaiKembali: balik.reduce((n, g) => n + g.nilai, 0n) },
+      after: { status: 'Void', voidReason: d.alasan, voidApprovedBy: penyetuju?.id ?? null, shiftStatus: s?.status, gerakBalik: balik.length, nilaiKembali: balik.reduce((n, g) => n + g.nilai, 0n), jurnalBalik: jurnal?.no ?? null },
     })
     return baru
   })

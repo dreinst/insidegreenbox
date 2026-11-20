@@ -2,6 +2,7 @@
 // Assembly dikali qty rencana saat draf dibuat, jadi perubahan BOM sesudahnya tidak mengubah perintah yang berjalan.
 // Alur: Draft -> (Diajukan ->) Disetujui -> Selesai, Draft | Diajukan | Disetujui -> Batal (KONTRAK 3.2). Nilai barang dalam
 // proses (wip_value) bertambah oleh Pengeluaran Bahan dan berkurang oleh Hasil Produksi (KONTRAK 13). Tanpa impor Next.
+import { jurnalTutupPerintah } from '../akuntansi/dokumen'
 import { z } from 'zod'
 import type { DocStatus, Prisma } from '@/generated/prisma/client'
 import { GalatAturan, GalatIzin } from '../aksi'
@@ -205,6 +206,8 @@ export async function ubahStatusPerintah(db: Db, k: Konteks, aktor: Aktor, id: n
       sesudah = { producedQty: po.producedQty, wipWriteOff: po.wipValue, closeReason: alasan }
     }
     await tx.productionOrder.update({ where: { id }, data: { ...data, updatedBy: aktor.id } })
+    // tahap 5B: tutup manual membuang sisa barang dalam proses ke Selisih Produksi lewat jurnal.
+    if (aksi === 'tutup') sesudah.jurnal = (await jurnalTutupPerintah(tx, id, aktor.id))?.no ?? null
     await catatAudit(tx, k, { action: `perintah.${aksi}`, docType: JENIS, docId: id, summary: ringkas, before: { status: po.status }, after: { status: data.status, ...sesudah } })
     return data.status as DocStatus
   })

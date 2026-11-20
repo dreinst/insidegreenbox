@@ -1,10 +1,12 @@
 // Setoran POS (tahap 5A, RANCANGAN 6.2): satu dokumen per tanggal per metode bayar, berisi shift yang sudah ditutup
 // dan belum disetor untuk metode itu. Dokumen pelaksana: Draft -> Diposting, atau Draft -> Diajukan -> Diposting bila
-// butuh Owner. Jurnal belum dibuat (tahap 5 akuntansi, KONTRAK 11); dibentuk ulang dari dokumen Diposting.
+// butuh Owner. tahap 5B: jurnal dibentuk saat Diposting dan dibalik saat Batal dari Diposting (KONTRAK 14.3).
 // Tanggal shift = tanggal WIB saat shift dibuka. Tanpa Next, dipanggil aksi server dan tes.
 import { z } from 'zod'
 import type { Prisma } from '@/generated/prisma/client'
 import { GalatAturan } from './aksi'
+import { balikJurnalSetoran, jurnalSetoran } from './akuntansi/dokumen'
+import { tanggalJurnal } from './akuntansi/jurnal'
 import { catatAudit, type Konteks } from './audit'
 import type { Db, DbAtauTx, Tx } from './db'
 import { perluPersetujuan, persen, rupiah } from './hitung-kasir'
@@ -417,6 +419,7 @@ export async function postingSetoran(db: Db, k: Konteks, aktor: Aktor, id: numbe
       data.approvedAt = sekarang
     }
     const b = await tx.posSettlement.update({ where: { id }, data })
+    const jurnal = await jurnalSetoran(tx, id, aktor.id)
     if (butuhSetuju) {
       await catatAudit(tx, k, { action: 'setoran.setujui', docType: 'pos_settlement', docId: id, summary: `Menyetujui setoran ${st.no}: ${alasan.join(', ')}`, before: jejak(st), after: { approvedBy: aktor.id, alasan } })
     }
@@ -426,7 +429,7 @@ export async function postingSetoran(db: Db, k: Konteks, aktor: Aktor, id: numbe
       docId: id,
       summary: `Memposting setoran ${st.no} ${st.paymentMethod.name}: disetor ${rupiah(st.actualTotal)}, MDR ${rupiah(st.mdrFee)}, selisih ${rupiah(st.diff)}`,
       before: jejak(st),
-      after: { status: b.status, expectedTotal: st.expectedTotal, actualTotal: st.actualTotal, mdrFee: st.mdrFee, diff: st.diff, shift: st.posSettlementLines.map((l) => l.shiftId) },
+      after: { status: b.status, expectedTotal: st.expectedTotal, actualTotal: st.actualTotal, mdrFee: st.mdrFee, diff: st.diff, shift: st.posSettlementLines.map((l) => l.shiftId), jurnal: jurnal?.no ?? null },
     })
     return b
   })
@@ -448,7 +451,8 @@ export async function batalSetoran(db: Db, k: Konteks, aktor: Aktor, id: number,
     }
     const b = await tx.posSettlement.update({ where: { id }, data: { status: 'Batal', cancelledBy: aktor.id, cancelledAt: new Date(), cancelReason: d.alasan, updatedBy: aktor.id } })
     await tx.posSettlementLine.updateMany({ where: { posSettlementId: id }, data: { cancelled: true } })
-    await catatAudit(tx, k, { action: 'setoran.batal', docType: 'pos_settlement', docId: id, summary: `Membatalkan setoran ${st.no} (${st.status}): ${d.alasan}`, before: jejak(st), after: { status: 'Batal', cancelReason: d.alasan } })
+    const jurnal = st.status === 'Diposting' ? await balikJurnalSetoran(tx, id, tanggalJurnal(new Date()), aktor.id) : null
+    await catatAudit(tx, k, { action: 'setoran.batal', docType: 'pos_settlement', docId: id, summary: `Membatalkan setoran ${st.no} (${st.status}): ${d.alasan}`, before: jejak(st), after: { status: 'Batal', cancelReason: d.alasan, jurnalBalik: jurnal?.no ?? null } })
     return b
   })
 }

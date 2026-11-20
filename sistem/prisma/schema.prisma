@@ -1580,6 +1580,12 @@ model Account {
   isCashBank            Boolean               @default(false) @map("is_cash_bank")
   isPostable            Boolean               @default(true) @map("is_postable")
   active                Boolean               @default(true)
+  // tahap 5B: keterangan dan kolom audit master (KONTRAK 3.1).
+  note                  String                @default("")
+  createdBy             Int?                  @map("created_by")
+  createdAt             DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedBy             Int?                  @map("updated_by")
+  updatedAt             DateTime              @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   suppliersPayable      Supplier[]            @relation("PemasokAkunHutang")
   purchaseInvoiceLines  PurchaseInvoiceLine[] @relation("FakturBeliAkunBeban")
   directPurchasesCash   DirectPurchase[]      @relation("BeliLangsungAkunKas")
@@ -1624,6 +1630,10 @@ model FiscalPeriod {
   closedBy           Int?                @map("closed_by")
   closer             AppUser?            @relation(fields: [closedBy], references: [id])
   status             PeriodStatus        @default(Terbuka)
+  // tahap 5B: periode yang dibuka lagi oleh Owner menyimpan alasan dan pelakunya (riwayat lengkap di audit_log).
+  reopenedBy         Int?                @map("reopened_by")
+  reopenedAt         DateTime?           @map("reopened_at") @db.Timestamptz(6)
+  reopenReason       String?             @map("reopen_reason")
   journals           Journal[]
   assetDepreciations AssetDepreciation[]
 
@@ -1679,10 +1689,27 @@ model Journal {
   sourceType   String        @map("source_type")
   sourceId     Int?          @map("source_id")
   memo         String        @default("")
+  // tahap 5B: posted_at kosong berarti belum berlaku (memorial Draft atau Diajukan). Jurnal dari dokumen selalu Diposting.
   postedBy     Int?          @map("posted_by")
-  postedAt     DateTime      @default(now()) @map("posted_at") @db.Timestamptz(6)
+  postedAt     DateTime?     @map("posted_at") @db.Timestamptz(6)
+  // tahap 5B: nomor dokumen sumber untuk tampilan, dan alur status memorial (jurnal manual).
+  docNo        String        @default("") @map("doc_no")
+  status       DocStatus     @default(Diposting)
+  createdBy    Int?          @map("created_by")
+  createdAt    DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedBy    Int?          @map("updated_by")
+  updatedAt    DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  submittedBy  Int?          @map("submitted_by")
+  submittedAt  DateTime?     @map("submitted_at") @db.Timestamptz(6)
+  approvedBy   Int?          @map("approved_by")
+  approvedAt   DateTime?     @map("approved_at") @db.Timestamptz(6)
+  cancelledBy  Int?          @map("cancelled_by")
+  cancelledAt  DateTime?     @map("cancelled_at") @db.Timestamptz(6)
+  cancelReason String?       @map("cancel_reason")
   journalLines JournalLine[]
 
+  // Indeks unik sebagian di migrasi tahap5b: satu jurnal maju per dokumen sumber (selain memorial) dan satu jurnal
+  // balik per jurnal.
   @@index([sourceType, sourceId])
   @@index([date])
   @@map("journal")
@@ -1705,7 +1732,7 @@ model JournalLine {
   bankReconcileMatch BankReconcileMatch?
 
   @@index([journalId])
-  @@index([accountId])
+  @@index([accountId, journalId])
   @@map("journal_line")
 }
 
