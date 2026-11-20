@@ -191,6 +191,20 @@ const SIDEBAR_SETORAN: ItemSidebar[] = [
 ]
 const SIDEBAR_REKENING: ItemSidebar[] = [{ href: '/rekening', label: 'Rekening Bank', menu: 'kas.rekening', ikon: 'rekening' }]
 
+// tahap 4C: pembelian dan hutang pemasok. Izinnya sudah ada di matriks RANCANGAN 8.2 (beli.* dan kas.hutang), jadi
+// matriks bawaan tidak berubah. Orkestrator memindahkan item ini ke grup Pembelian saat sidebar berkelompok digabung.
+const SIDEBAR_BELI: ItemSidebar[] = [
+  { href: '/pemasok', label: 'Pemasok', menu: 'beli.pemasok', ikon: 'pemasok' },
+  { href: '/permintaan', label: 'Permintaan', menu: 'beli.permintaan', ikon: 'permintaan' },
+  { href: '/pesanan', label: 'Pesanan', menu: 'beli.pesanan', ikon: 'pesanan' },
+  { href: '/penerimaan', label: 'Penerimaan', menu: 'beli.penerimaan', ikon: 'penerimaan' },
+  { href: '/faktur', label: 'Faktur', menu: 'beli.faktur', ikon: 'faktur' },
+  { href: '/retur-beli', label: 'Retur', menu: 'beli.retur', ikon: 'retur' },
+  { href: '/beli-langsung', label: 'Pembelian Langsung', menu: 'beli.langsung', ikon: 'belanja' },
+  { href: '/pembayaran', label: 'Pembayaran', menu: 'beli.pembayaran', ikon: 'pembayaran' },
+  { href: '/hutang', label: 'Hutang Pemasok', menu: 'kas.hutang', ikon: 'hutang' },
+]
+
 // Item tampil bila pengguna memegang Lihat di kode menunya (KONTRAK 8).
 export const itemTampil = (i: ItemSidebar, boleh: (menu: string) => boolean) => i.menu === null || (Array.isArray(i.menu) ? i.menu.some(boleh) : boleh(i.menu))
 
@@ -236,8 +250,10 @@ export const SIDEBAR_GRUP: GrupSidebar[] = [
       { href: '/produksi-cepat', label: 'Produksi Cepat', menu: 'produksi.cepat', ikon: 'cepat' },
     ],
   },
+  // tahap 4C: pembelian (RANCANGAN 3); Hutang Pemasok di grup Keuangan.
+  { judul: 'Pembelian', item: SIDEBAR_BELI.filter((i) => i.href !== '/hutang') },
   // tahap 5A: rekening bank dan laporan penjualan.
-  { judul: 'Keuangan', item: [...SIDEBAR_REKENING] },
+  { judul: 'Keuangan', item: [...SIDEBAR_REKENING, ...SIDEBAR_BELI.filter((i) => i.href === '/hutang')] },
   { judul: 'Laporan', item: [SIDEBAR_SETORAN[1]] },
   // tahap 2, ditambah master lokasi sederhana tahap 4A (atur.lokasi).
   {

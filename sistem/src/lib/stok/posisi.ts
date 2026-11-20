@@ -15,6 +15,10 @@ export const TAUTAN_DOK: Record<string, { nama: string; jalur?: string }> = {
   material_issue: { nama: 'Pengeluaran bahan', jalur: '/pengeluaran-bahan' },
   production_result: { nama: 'Hasil produksi', jalur: '/hasil-produksi' },
   quick_production: { nama: 'Produksi cepat', jalur: '/produksi-cepat' },
+  // tahap 4C
+  goods_receipt: { nama: 'Penerimaan', jalur: '/penerimaan' },
+  purchase_return: { nama: 'Retur beli', jalur: '/retur-beli' },
+  direct_purchase: { nama: 'Pembelian langsung', jalur: '/beli-langsung' },
 }
 
 export const tautanDok = (docType: string, docId: number) => {

@@ -163,6 +163,57 @@ const JALUR: Record<string, React.ReactNode> = {
     </>
   ),
   cepat: <path d="M13 2L4 14h7l-1 8 9-12h-7z" />,
+  // tahap 4C
+  pemasok: (
+    <>
+      <path d="M3 7h11v9H3zM14 10h4l3 3v3h-7" />
+      <circle cx="7" cy="17.5" r="1.8" />
+      <circle cx="17" cy="17.5" r="1.8" />
+    </>
+  ),
+  permintaan: (
+    <>
+      <path d="M8 4h8M9 3h6v3H9zM6 5H5v16h14V5h-1" />
+      <path d="M9 11h6M9 15h4" />
+    </>
+  ),
+  pesanan: (
+    <>
+      <path d="M6 3h9l4 4v14H6z" />
+      <path d="M15 3v4h4M9 12l2 2 4-4M9 17h6" />
+    </>
+  ),
+  penerimaan: (
+    <>
+      <path d="M3 8l9-4 9 4v9l-9 4-9-4z" />
+      <path d="M3 8l9 4 9-4M12 12v9" />
+    </>
+  ),
+  faktur: (
+    <>
+      <path d="M6 3h12v18l-3-2-3 2-3-2-3 2z" />
+      <path d="M9 8h6M9 12h6M9 16h3" />
+    </>
+  ),
+  retur: <path d="M9 7H4V2M4.5 7A8 8 0 1112 20" />,
+  belanja: (
+    <>
+      <path d="M5 8h14l-1 12H6z" />
+      <path d="M9 8V6a3 3 0 016 0v2" />
+    </>
+  ),
+  pembayaran: (
+    <>
+      <rect x="2.5" y="6" width="19" height="12" rx="2" />
+      <path d="M2.5 10h19M6 15h4" />
+    </>
+  ),
+  hutang: (
+    <>
+      <path d="M4 4h16v16H4z" />
+      <path d="M8 9h8M8 13h8M8 17h4" />
+    </>
+  ),
   tutup: <path d="M6 6l12 12M18 6L6 18" />,
   keluar: <path d="M14 4h5v16h-5M10 8l-4 4 4 4M6 12h10" />,
 }
