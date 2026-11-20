@@ -16,7 +16,8 @@ const nextConfig: NextConfig = {
   turbopack: { root: process.cwd() },
   outputFileTracingRoot: process.cwd(),
   // forbidden() dan forbidden.tsx untuk layar "Akses ditolak" berstatus 403.
-  experimental: { authInterrupts: true },
+  // tahap 3A: unggah foto menu sampai 2 MB lewat aksi server (bawaan Next hanya 1 MB).
+  experimental: { authInterrupts: true, serverActions: { bodySizeLimit: '3mb' } },
   // Uji lokal memakai 127.0.0.1, bukan localhost.
   allowedDevOrigins: ['127.0.0.1'],
   async headers() {

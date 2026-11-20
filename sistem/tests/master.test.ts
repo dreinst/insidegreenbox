@@ -295,6 +295,8 @@ describe('izin dan audit', () => {
     await assert.rejects(() => terapkanHargaMassal(db, k(kasir), kasir, { kategori: '', mode: 'persen', arah: 'naik', nilai: '5', bulat: '500', label: 'Ilegal' }), GalatIzin)
     await assert.rejects(() => tambahPromo(db, k(admin), admin, { name: 'Ilegal', kind: 'persen', percent: '5' }), GalatIzin, 'Admin hanya melihat promo')
     await assert.rejects(() => tambahMetode(db, k(admin), admin, { name: 'Ilegal', kind: 'qris', mdrPct: '0' }), GalatIzin, 'Admin tidak menambah metode bayar')
+    await assert.rejects(() => tambahTingkat(db, k(kasir), kasir, { name: 'Ilegal', minVisits: '99', discountPct: '50', perk: '' }), GalatIzin, 'Kasir tidak mengatur tingkat')
+    await assert.rejects(() => ubahStatusTingkat(db, k(kasir), kasir, 1, false), GalatIzin)
     await assert.rejects(() => ubahMember(db, k(kasir), kasir, 1, { name: 'x', wa: '081200000000' }), GalatIzin, 'Kasir menambah tapi tidak mengubah member')
     assert.equal(await jumlahAudit(), awal)
     assert.equal(await db.menuItem.count({ where: { name: 'Ilegal' } }), 0)

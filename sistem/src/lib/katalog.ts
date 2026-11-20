@@ -44,6 +44,8 @@ const BARIS: [string, string, string, string, string, string][] = [
   ['menu.menu', 'Menu', 'Menu, kategori, harga', 'LTUH', 'LU', 'L'],
   ['menu.promo', 'Menu', 'Promo', 'LTUHS', 'L', '-'],
   ['menu.member', 'Menu', 'Member dan tingkat', 'LTUH', 'LTU', 'LT'],
+  // tahap 3A: tingkat Greenbox Key dipisah dari member supaya Kasir bisa mendaftarkan member tanpa mengatur potongan (KONTRAK 11).
+  ['menu.tingkat', 'Menu', 'Tingkat member (Greenbox Key)', 'LTUH', 'LTU', 'L'],
   ['stok.produk', 'Persediaan', 'Produk dan satuan', 'LTUH', 'LTU', '-'],
   ['stok.resep', 'Persediaan', 'Resep dan BOM', 'LTUH', 'LTU', '-'],
   ['stok.saldo', 'Persediaan', 'Stok dan kartu stok', 'L', 'L', '-'],
@@ -163,6 +165,11 @@ export type ItemSidebar = { href: string; label: string; menu: string | null; ik
 // Hanya halaman yang sudah dibangun (KONTRAK 8). menu null artinya tampil untuk semua pengguna yang masuk.
 export const SIDEBAR: ItemSidebar[] = [
   { href: '/', label: 'Beranda', menu: null, ikon: 'beranda' },
+  // tahap 3A: modul master (urutan mengikuti SIDEBAR di KONTRAK bagian 8; item tahap 3B menyusul dari sesi lain).
+  { href: '/menu', label: 'Menu dan Harga', menu: 'menu.menu', ikon: 'hidangan' },
+  { href: '/promo', label: 'Promo', menu: 'menu.promo', ikon: 'promo' },
+  { href: '/member', label: 'Member', menu: 'menu.member', ikon: 'member' },
+  { href: '/metode-bayar', label: 'Metode Bayar', menu: 'akun.metode_bayar', ikon: 'bayar' },
   { href: '/pengguna', label: 'Pengguna', menu: 'atur.pengguna', ikon: 'pengguna' },
   { href: '/peran', label: 'Peran dan Izin', menu: 'atur.peran', ikon: 'peran' },
   { href: '/saklar', label: 'Saklar Fitur', menu: 'atur.saklar', ikon: 'saklar' },

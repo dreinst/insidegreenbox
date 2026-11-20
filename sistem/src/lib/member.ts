@@ -9,6 +9,7 @@ import { PER_HALAMAN, pesanUnik, sesuaiHalaman, skemaCentang, skemaPersen, skema
 
 type Aktor = Pick<Pengguna, 'id' | 'izin'>
 const MENU = 'menu.member'
+const TINGKAT = 'menu.tingkat'
 
 // Nomor WhatsApp ke format 62: "0812-3456-0001", "+62 812 3456 0001", dan "812..." semuanya menjadi 62812...
 // Hanya nomor seluler Indonesia (62 8xx, 11 sampai 14 angka) yang diterima. Hasil null berarti tidak sah.
@@ -55,7 +56,7 @@ async function periksaTingkat(tx: Tx, d: z.infer<typeof skemaTingkat>, kecuali?:
 }
 
 export async function tambahTingkat(db: Db, k: Konteks, aktor: Aktor, masukan: unknown) {
-  pastikanIzin(aktor, MENU, 'T')
+  pastikanIzin(aktor, TINGKAT, 'T')
   const d = skemaTingkat.parse(masukan)
   return db.$transaction(async (tx) => {
     await periksaTingkat(tx, d)
@@ -73,7 +74,7 @@ export async function tambahTingkat(db: Db, k: Konteks, aktor: Aktor, masukan: u
 }
 
 export async function ubahTingkat(db: Db, k: Konteks, aktor: Aktor, id: number, masukan: unknown) {
-  pastikanIzin(aktor, MENU, 'U')
+  pastikanIzin(aktor, TINGKAT, 'U')
   const d = skemaTingkat.parse(masukan)
   return db.$transaction(async (tx) => {
     const t = await tx.memberTier.findUnique({ where: { id } })
@@ -90,7 +91,7 @@ export async function ubahTingkat(db: Db, k: Konteks, aktor: Aktor, id: number, 
 }
 
 export async function ubahStatusTingkat(db: Db, k: Konteks, aktor: Aktor, id: number, aktif: boolean) {
-  pastikanIzin(aktor, MENU, 'U')
+  pastikanIzin(aktor, TINGKAT, 'U')
   return db.$transaction(async (tx) => {
     const t = await tx.memberTier.findUnique({ where: { id } })
     if (!t) throw new GalatAturan('Tingkat tidak ditemukan.')

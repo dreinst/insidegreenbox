@@ -26,6 +26,31 @@ const JALUR: Record<string, React.ReactNode> = {
     </>
   ),
   menu: <path d="M4 7h16M4 12h16M4 17h16" />,
+  // tahap 3A
+  hidangan: (
+    <>
+      <path d="M5 9h12v6a5 5 0 01-5 5h-2a5 5 0 01-5-5V9zM17 11h1.5a2.5 2.5 0 010 5H17" />
+      <path d="M8 3.5c0 1.5 1 1.5 1 3M12 3.5c0 1.5 1 1.5 1 3" />
+    </>
+  ),
+  promo: (
+    <>
+      <path d="M3 12.5V4h8.5L21 13.5 13.5 21 3 12.5z" />
+      <circle cx="8" cy="8.5" r="1.4" />
+    </>
+  ),
+  member: (
+    <>
+      <circle cx="8" cy="12" r="3.5" />
+      <path d="M11.5 12H21M17.5 12v3M20 12v2" />
+    </>
+  ),
+  bayar: (
+    <>
+      <rect x="3" y="6" width="18" height="12" rx="2.5" />
+      <path d="M3 10h18M7 15h3" />
+    </>
+  ),
   tutup: <path d="M6 6l12 12M18 6L6 18" />,
   keluar: <path d="M14 4h5v16h-5M10 8l-4 4 4 4M6 12h10" />,
 }

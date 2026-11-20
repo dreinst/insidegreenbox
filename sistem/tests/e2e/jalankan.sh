@@ -7,17 +7,21 @@ cd "$(dirname "$0")/../.."
 # .env dibaca lewat dotenv (bukan source) karena nilainya boleh berisi spasi.
 DATABASE_URL="$(node -e "require('dotenv').config({ quiet: true }); process.stdout.write(process.env.DATABASE_URL || '')")"
 PORT="${E2E_PORT:-3241}"
-DB_E2E="${DATABASE_URL%/*}/greenbox_e2e"
+# E2E_DB mengganti nama basis data uji (bawaan greenbox_e2e) supaya dua sesi di Mac yang sama tidak saling timpa.
+NAMA_E2E="${E2E_DB:-greenbox_e2e}"
+DB_E2E="${DATABASE_URL%/*}/$NAMA_E2E"
 DB_ADMIN="${DATABASE_URL%/*}/postgres"
 
 node -e "
 const pg = require('pg');
 const c = new pg.Client({ connectionString: process.argv[1] });
-c.connect().then(() => c.query('DROP DATABASE IF EXISTS greenbox_e2e WITH (FORCE)')).then(() => c.query('CREATE DATABASE greenbox_e2e')).then(() => c.end());
-" "$DB_ADMIN"
+c.connect().then(() => c.query('DROP DATABASE IF EXISTS ' + c.escapeIdentifier(process.argv[2]) + ' WITH (FORCE)')).then(() => c.query('CREATE DATABASE ' + c.escapeIdentifier(process.argv[2]))).then(() => c.end());
+" "$DB_ADMIN" "$NAMA_E2E"
 DATABASE_URL="$DB_E2E" npx prisma migrate deploy > /dev/null
 DATABASE_URL="$DB_E2E" npx prisma db seed > /dev/null
 DATABASE_URL="$DB_E2E" npx tsx scripts/seed-contoh.ts > /dev/null
+# tahap 3A: kategori, menu, paket, tingkat, dan metode bayar untuk uji modul master.
+DATABASE_URL="$DB_E2E" npx tsx scripts/impor-menu.ts > /dev/null
 
 DATABASE_URL="$DB_E2E" TRUST_PROXY=1 HTTPS_AKTIF=0 NODE_OPTIONS=--max-old-space-size=256 \
   node node_modules/next/dist/bin/next start -p "$PORT" > tests/hasil/server-e2e.log 2>&1 &
@@ -32,4 +36,8 @@ for _ in $(seq 1 40); do
   curl -s -o /dev/null "http://127.0.0.1:$PORT/masuk" && break
   sleep 1
 done
-BASE_URL="http://127.0.0.1:$PORT" E2E_DATABASE_URL="$DB_E2E" node tests/e2e/klik.mjs
+# Dua berkas uji dijalankan berurutan; keduanya selalu jalan, dan skrip gagal bila salah satunya gagal.
+gagal=0
+BASE_URL="http://127.0.0.1:$PORT" E2E_DATABASE_URL="$DB_E2E" node tests/e2e/klik.mjs || gagal=1
+BASE_URL="http://127.0.0.1:$PORT" E2E_DATABASE_URL="$DB_E2E" node tests/e2e/master.mjs || gagal=1
+exit $gagal

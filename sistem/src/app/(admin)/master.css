@@ -1,0 +1,43 @@
+/* Gaya modul master tahap 3A: menu, kategori, paket, promo, metode bayar, member. Melengkapi globals.css. */
+.lencana.kuning { background: var(--butter-tint); color: #6B5B00 }
+
+/* Foto */
+.foto-mini { display: inline-block; flex: none; border-radius: 8px; object-fit: cover; background: #ECEEE9 }
+.foto-kecil { display: flex; align-items: center; justify-content: center; width: 72px; height: 72px; flex: none; border-radius: 10px; object-fit: cover; background: #ECEEE9; font-size: 11px; color: var(--muted); text-align: center }
+.kosong-foto { box-shadow: inset 0 0 0 1px #D9DCD4 }
+.sel-foto { display: flex; align-items: center; gap: 12px; min-width: 0 }
+.sel-foto > span:last-child { min-width: 0; overflow-wrap: anywhere }
+.foto-isi { display: flex; align-items: flex-start; gap: 14px }
+.foto-kontrol { display: flex; flex-direction: column; gap: 8px; flex: 1; min-width: 0 }
+.foto-kontrol input[type='file'] { min-height: 0; padding: 8px 10px; font-size: 14px }
+
+/* Medan khusus */
+.kolom.lebar { grid-column: 1 / -1 }
+.kolom textarea { width: 100%; padding: 10px 12px; border: 0; border-radius: 10px; font: inherit; font-size: 16px; color: var(--ink); background: #fff; resize: vertical; box-shadow: inset 0 2px 5px rgba(0, 0, 0, .08), inset 0 0 0 1px #D9DCD4 }
+.kolom textarea:focus { outline: none; box-shadow: inset 0 2px 5px rgba(0, 0, 0, .08), inset 0 0 0 2px var(--ink) }
+.kolom.salah textarea { box-shadow: inset 0 2px 5px rgba(0, 0, 0, .08), inset 0 0 0 2px var(--red) }
+.kolom.centang { justify-content: flex-end }
+.kolom .centang-baris { display: flex; align-items: center; gap: 10px; min-height: 44px; font-size: 15px; font-weight: 600; letter-spacing: 0; text-transform: none; cursor: pointer }
+.kolom .centang-baris input { width: 22px; height: 22px; min-height: 0; margin: 0; flex: none; accent-color: var(--green-lo); box-shadow: none }
+.kolom input[type='date'] { appearance: none; min-width: 0 }
+
+/* Baris tabel dengan foto: isi sejajar di tengah */
+.tabel tr:has(.sel-foto) td { vertical-align: middle }
+.tabel td > .lencana { width: fit-content; justify-self: start }
+
+/* Pratinjau harga */
+.tabel .angka { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums }
+.tabel th.angka { text-align: right }
+.naik { color: #0B6B09; font-weight: 700 }
+.turun { color: var(--red); font-weight: 700 }
+.riwayat-baris { margin: 0 0 14px; padding: 0 }
+.riwayat-baris summary { cursor: pointer; font-weight: 700 }
+.kartu-aturan { display: grid; gap: 14px }
+.catatan { padding: 12px 14px; border-radius: 10px; background: var(--butter-tint); color: #4D4300; font-size: 14px }
+.ringkas-baris { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 6px 0 0; padding: 0; list-style: none; font-size: 14px }
+.nilai-besar { font-family: var(--f-judul); font-weight: 800; font-size: 20px }
+
+@media (max-width: 640px) {
+  .foto-isi { flex-direction: column }
+  .tabel .angka { text-align: left }
+}
