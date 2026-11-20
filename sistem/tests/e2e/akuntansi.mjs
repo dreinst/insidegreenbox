@@ -185,12 +185,23 @@ const idKasLaci = await akunId('1-1100')
   cek('laba rugi: terbuka dengan laba kotor dan laba bersih', lr.includes('Laba kotor') && lr.includes('Laba bersih') && lr.includes('Penjualan'))
   await page.goto(`${BASE}/laporan-keuangan/neraca`)
   cek('neraca: seimbang', (await page.textContent('.lk-status')).startsWith('Seimbang'), await page.textContent('.lk-status'))
-  cek('neraca: persediaan buku cocok dengan kartu stok', (await teks(page)).includes('Cocok'))
+  // Gerak stok dari dokumen yang belum punya jurnal maju (setelah penggabungan tahap 4C dan 5B: dokumen pembelian dari
+  // pembelian.mjs, sampai jurnal pembelian digabung; KONTRAK 11 butir 86) dikeluarkan dari pembanding. Bila semuanya
+  // sudah berjurnal, nilainya 0 dan neraca wajib menulis Cocok.
+  const tanpaJurnal = BigInt(
+    (
+      await satu(
+        'select coalesce(sum(g.value),0)::text n from stock_ledger g where not exists (select 1 from journal j where j.source_type=g.doc_type and j.source_id=g.doc_id and j.reversal_of_id is null)',
+      )
+    ).n,
+  )
+  const isiNeraca = await teks(page)
+  cek('neraca: persediaan buku cocok dengan kartu stok', tanpaJurnal === 0n ? isiNeraca.includes('Cocok') : !isiNeraca.includes('Cocok'), `gerak belum berjurnal ${tanpaJurnal}`)
   const stok = await satu('select coalesce(sum(value),0)::text n from stock_balance')
   const buku = await satu(
     "select coalesce(sum(l.debit-l.credit),0)::text n from journal_line l join journal j on j.id=l.journal_id where j.posted_at is not null and l.account_id in (select account_id from account_mapping where key='persediaan' or key like 'persediaan.%')",
   )
-  cek('neraca: saldo akun persediaan sama dengan nilai stock_balance', stok.n === buku.n, `stok ${stok.n}, buku ${buku.n}`)
+  cek('neraca: saldo akun persediaan sama dengan nilai stock_balance dikurangi gerak belum berjurnal', BigInt(stok.n) - tanpaJurnal === BigInt(buku.n), `stok ${stok.n}, buku ${buku.n}, belum berjurnal ${tanpaJurnal}`)
 
   // 5. Tutup periode bulan lalu, lalu memorial bertanggal di bulan itu ditolak saat diposting; buka lagi dengan alasan.
   await page.goto(`${BASE}/tutup-periode`)
