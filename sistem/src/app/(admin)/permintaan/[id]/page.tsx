@@ -74,7 +74,7 @@ export default async function RincianPermintaan({ params, searchParams }: { para
             </dl>
           )}
         </section>
-        <PanelBeli p={p} jenis="purchase_request" d={jejak(d)} butuhSetuju={butuhSetuju} aksi={aksiPanel('purchase_request', d.id)} />
+        <PanelBeli p={p} jenis="purchase_request" d={jejak(d)} selesai={{ at: d.closedAt, alasan: d.closeReason }} butuhSetuju={butuhSetuju} aksi={aksiPanel('purchase_request', d.id)} />
       </div>
 
       <section className="kartu" aria-labelledby="j-baris">

@@ -28,6 +28,8 @@ DATABASE_URL="$DB_E2E" npx tsx scripts/impor-menu.ts > /dev/null
 DATABASE_URL="$DB_E2E" npx tsx scripts/seed-kasir-uji.ts > /dev/null
 # tahap 4A: bahan dan saldo awal admin lama untuk uji persediaan.
 DATABASE_URL="$DB_E2E" npx tsx scripts/impor-stok.ts > /dev/null
+# tahap 4C: pemasok dan pesanan admin lama (PO yang sudah diterima menjadi riwayat tanpa gerak stok).
+DATABASE_URL="$DB_E2E" npx tsx scripts/impor-beli.ts > /dev/null
 
 DATABASE_URL="$DB_E2E" TRUST_PROXY=1 HTTPS_AKTIF=0 NODE_OPTIONS=--max-old-space-size=256 \
   node node_modules/next/dist/bin/next start -p "$PORT" > tests/hasil/server-e2e.log 2>&1 &
@@ -51,5 +53,7 @@ BASE_URL="http://127.0.0.1:$PORT" E2E_DATABASE_URL="$DB_E2E" node tests/e2e/mast
 BASE_URL="http://127.0.0.1:$PORT" E2E_DATABASE_URL="$DB_E2E" node tests/e2e/laporan.mjs || HASIL=1
 # tahap 4A: persediaan.
 BASE_URL="http://127.0.0.1:$PORT" E2E_DATABASE_URL="$DB_E2E" node tests/e2e/stok.mjs || HASIL=1
+# tahap 4C: pembelian, sesudah stok.mjs karena memakai bahan dan saldo awal impor.
+BASE_URL="http://127.0.0.1:$PORT" E2E_DATABASE_URL="$DB_E2E" node tests/e2e/pembelian.mjs || HASIL=1
 BASE_URL="http://127.0.0.1:$PORT" E2E_DATABASE_URL="$DB_E2E" node tests/e2e/klik.mjs || HASIL=1
 exit $HASIL

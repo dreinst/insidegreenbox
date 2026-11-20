@@ -133,13 +133,16 @@ export default async function RincianFaktur({ params, searchParams }: { params: 
               tombol="Simpan qty dan harga"
               catatan={bolehUbahHarga ? 'Harga atau qty yang berbeda dari penerimaan dicatat sebagai selisih harga. Qty hanya boleh lebih kecil.' : 'Qty dan harga mengikuti penerimaan karena kamu tidak punya saklar Ubah harga faktur.'}
             />
+            <details className="bl-lipat">
+            <summary>Hapus baris</summary>
             <ul className="bl-turunan" aria-label="Hapus baris">
               {d.purchaseInvoiceLines.map((b) => (
                 <li key={b.id}>
-                  <TombolAksi aksi={hapusBarisFakturAksi.bind(null, d.id, b.id)} label={`Hapus ${b.goodsReceiptLine?.product.name ?? b.description}`} kelas="btn kecil sekunder" konfirmasi="Hapus baris ini dari faktur?" />
+                  <TombolAksi aksi={hapusBarisFakturAksi.bind(null, d.id, b.id)} label={`Hapus ${b.goodsReceiptLine?.product.name ?? b.description}${b.goodsReceipt ? ` (${b.goodsReceipt.no})` : ''}`} kelas="btn kecil sekunder" konfirmasi="Hapus baris ini dari faktur?" />
                 </li>
               ))}
             </ul>
+          </details>
           </>
         ) : d.purchaseInvoiceLines.length ? (
           <div className="kartu tanpa-isi">

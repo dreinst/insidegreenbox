@@ -8,6 +8,7 @@ import type { DocStatus, PayStatus, Progress } from '@/generated/prisma/client'
 import type { HasilAksi } from '@/lib/aksi'
 import { DOK_BELI, NAMA_BAYAR, tombolBeli, type JenisBeli, type SaringBeli } from '@/lib/beli/dokumen'
 import { punyaIzin, type Pengguna } from '@/lib/izin-inti'
+import { formatWaktu } from '@/lib/waktu'
 import { FormAlasan } from './beli-form'
 import { JejakStatus, type JejakDok } from './stok-dok'
 import { LencanaStatus } from './stok'
@@ -157,10 +158,12 @@ type PropPanel = {
   catatan?: string
   bolehTutup?: boolean
   konfirmasiPosting?: string
+  // Dokumen rencana yang Selesai: waktu dan alasan tutup sisa (kosong bila selesai otomatis).
+  selesai?: { at: Date | null; alasan: string | null }
 }
 
 // Panel status dan tindakan dokumen pembelian. Tombol mengikuti tombolBeli; server tetap memeriksa ulang.
-export async function PanelBeli({ p, jenis, d, butuhSetuju, aksi, catatan, bolehTutup, konfirmasiPosting }: PropPanel) {
+export async function PanelBeli({ p, jenis, d, butuhSetuju, aksi, catatan, bolehTutup, konfirmasiPosting, selesai }: PropPanel) {
   const t = tombolBeli(p, jenis, d.status, butuhSetuju, d.submittedBy, { bolehTutup })
   const info = DOK_BELI[jenis]
   const nama = info.nama.toLowerCase()
@@ -174,6 +177,11 @@ export async function PanelBeli({ p, jenis, d, butuhSetuju, aksi, catatan, boleh
       </div>
       {catatan ? <p className="catatan">{catatan}</p> : null}
       <JejakStatus d={d} />
+      {d.status === 'Selesai' && selesai ? (
+        <p className="redup kecil">
+          Selesai {selesai.at ? formatWaktu(selesai.at) : ''}: {selesai.alasan ? `sisa ditutup. Alasan: ${selesai.alasan}` : 'semua baris terpenuhi.'}
+        </p>
+      ) : null}
       {adaTombol ? (
         <div className="deret-tombol">
           {t.setujui ? (

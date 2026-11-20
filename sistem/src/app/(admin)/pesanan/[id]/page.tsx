@@ -105,7 +105,7 @@ export default async function RincianPesanan({ params, searchParams }: { params:
             </dl>
           )}
         </section>
-        <PanelBeli p={p} jenis="purchase_order" d={jejak(d)} butuhSetuju={butuhSetuju} aksi={aksiPanel('purchase_order', d.id)} catatan={catatan} bolehTutup={saklarNyala(p, 'beli.tutup_po')} />
+        <PanelBeli p={p} jenis="purchase_order" d={jejak(d)} selesai={{ at: d.closedAt, alasan: d.closeReason }} butuhSetuju={butuhSetuju} aksi={aksiPanel('purchase_order', d.id)} catatan={catatan} bolehTutup={saklarNyala(p, 'beli.tutup_po')} />
       </div>
 
       <section className="kartu" aria-labelledby="j-baris">
@@ -185,13 +185,16 @@ export default async function RincianPesanan({ params, searchParams }: { params:
           <p className="kosong">Belum ada baris.</p>
         )}
         {t.ubah && d.purchaseOrderLines.length ? (
-          <ul className="bl-turunan" aria-label="Hapus baris">
+          <details className="bl-lipat">
+            <summary>Hapus baris</summary>
+            <ul className="bl-turunan" aria-label="Hapus baris">
             {d.purchaseOrderLines.map((b) => (
               <li key={b.id}>
                 <TombolAksi aksi={hapusBarisPesananAksi.bind(null, d.id, b.id)} label={`Hapus ${b.product.name}`} kelas="btn kecil sekunder" konfirmasi={`Hapus baris ${b.product.name}?`} />
               </li>
             ))}
           </ul>
+          </details>
         ) : null}
         {t.ubah ? (
           <>

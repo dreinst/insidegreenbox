@@ -156,7 +156,6 @@ export async function ubahStatusBeli<K extends KepalaBeli>(db: Db, k: Konteks, a
         approvedBy: aktor.id,
         approvedAt: sekarang,
         updatedBy: aktor.id,
-        ...(kini.status === 'Draft' ? { submittedBy: kini.submittedBy ?? aktor.id, submittedAt: sekarang } : {}),
       }
     } else if (aksi === 'posting') {
       if (gol === 'rencana' || !kait.posting) tolak()
@@ -179,7 +178,6 @@ export async function ubahStatusBeli<K extends KepalaBeli>(db: Db, k: Konteks, a
         postedAt: sekarang,
         updatedBy: aktor.id,
         ...(setujuSekaligus ? { approvedBy: aktor.id, approvedAt: sekarang } : {}),
-        ...(kini.status === 'Draft' ? { submittedBy: aktor.id, submittedAt: sekarang } : {}),
       }
     } else if (aksi === 'tutup') {
       if (gol !== 'rencana' || kini.status !== 'Disetujui') tolak()
