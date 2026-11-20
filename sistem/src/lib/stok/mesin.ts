@@ -48,7 +48,8 @@ export type HasilGerak = {
 
 // Langkah internal. nilaiTetap dipakai gerak balik (nilai persis dokumen asal), nilaiIkut dipakai pindah stok
 // (nilai masuk = nilai keluar langkah ke-i, tanda dibalik).
-type Langkah = Gerak & { nilaiTetap?: bigint; nilaiIkut?: number }
+// tahap 4B: nilaiDari dipakai produksi (nilai masuk = jumlah nilai keluar langkah-langkah itu, tanda dibalik, + tambahan).
+type Langkah = Gerak & { nilaiTetap?: bigint; nilaiIkut?: number; nilaiDari?: { langkah: number[]; tambahan: bigint } }
 
 type Saldo = { qty: Desimal; nilai: bigint; rata: Desimal }
 
@@ -64,6 +65,7 @@ function periksaLangkah(l: Langkah, i: number) {
   if (q.isNeg() && l.hargaSatuan !== undefined && l.hargaSatuan !== null) throw new GalatAturan(`Gerak ke-${i + 1}: barang keluar selalu memakai harga rata-rata.`)
   if (l.hargaSatuan !== undefined && l.hargaSatuan !== null && des(l.hargaSatuan).isNeg()) throw new GalatAturan(`Gerak ke-${i + 1}: harga satuan tidak boleh minus.`)
   if (l.nilaiIkut !== undefined && (l.nilaiIkut >= i || l.nilaiIkut < 0)) throw new GalatAturan(`Gerak ke-${i + 1}: rujukan nilai tidak sah.`)
+  if (l.nilaiDari && (!q.isPos() || l.nilaiDari.langkah.some((j) => j >= i || j < 0) || l.nilaiDari.tambahan < 0n)) throw new GalatAturan(`Gerak ke-${i + 1}: rujukan nilai tidak sah.`)
   return q
 }
 
@@ -114,6 +116,7 @@ async function terapkan(tx: Tx, dok: DokumenAsal, langkah: Langkah[], opsi: Opsi
     if (q.isPos()) {
       // Masuk: nilai dari rujukan, nilai tetap, nilai, atau qty x harga. Harga rata-rata dihitung ulang.
       if (l.nilaiIkut !== undefined) nilai = -hasil[l.nilaiIkut].nilai
+      else if (l.nilaiDari) nilai = l.nilaiDari.langkah.reduce((n, j) => n - hasil[j].nilai, 0n) + l.nilaiDari.tambahan
       else if (l.nilaiTetap !== undefined) nilai = l.nilaiTetap
       else if (l.nilai !== undefined && l.nilai !== null) nilai = l.nilai
       else {
@@ -184,6 +187,21 @@ async function terapkan(tx: Tx, dok: DokumenAsal, langkah: Langkah[], opsi: Opsi
 // per dokumen, dengan semua barisnya sekaligus. Urutan gerak dipakai apa adanya; penguncian selalu berurutan.
 export function catatGerak(tx: Tx, dok: DokumenAsal, gerak: Gerak[], opsi: OpsiGerak = {}) {
   return terapkan(tx, dok, gerak, opsi, false)
+}
+
+export type HasilOlah = { productId: number; locationId: number; qty: Angka; biayaTambahan?: bigint; lineId?: number | null }
+
+// tahap 4B: produksi satu langkah (Produksi Cepat). Bahan keluar dengan harga rata-rata lokasinya, lalu hasil masuk dengan
+// nilai = jumlah nilai bahan + biaya tambahan, dalam satu panggilan supaya semua baris saldo dikunci sekali dengan urutan
+// tetap (aturan 2). Hasil kembalian: gerak bahan dulu, gerak hasil paling akhir.
+export function olahStok(tx: Tx, dok: DokumenAsal, bahan: Gerak[], hasil: HasilOlah, opsi: OpsiGerak = {}) {
+  if (!bahan.length) throw new GalatAturan('Produksi butuh minimal satu bahan.')
+  for (const b of bahan) if (!des(b.qty).isNeg()) throw new GalatAturan('Qty bahan produksi harus keluar (minus).')
+  const q = des(hasil.qty)
+  if (!q.gt(0)) throw new GalatAturan('Qty hasil produksi harus lebih dari 0.')
+  const langkah: Langkah[] = bahan.map((b) => ({ ...b, hargaSatuan: null, nilai: null }))
+  langkah.push({ productId: hasil.productId, locationId: hasil.locationId, qty: q, lineId: hasil.lineId, nilaiDari: { langkah: bahan.map((_, i) => i), tambahan: hasil.biayaTambahan ?? 0n } })
+  return terapkan(tx, dok, langkah, opsi, false)
 }
 
 export type BarisPindah = { productId: number; dari: number; ke: number; qty: Angka; lineId?: number | null }

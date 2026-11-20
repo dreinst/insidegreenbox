@@ -8,16 +8,21 @@ import type { Db, Tx } from '../db'
 import { batasSaklar, pastikanIzin, punyaIzin, saklarNyala, type Pengguna } from '../izin-inti'
 import { transisiSah } from '../status'
 import { tanggalIso } from '../waktu'
-import { balikDokumen, type DokumenAsal } from './mesin'
+import { balikDokumen, type DokumenAsal, type HasilGerak } from './mesin'
 
 export type Aktor = Pick<Pengguna, 'id' | 'izin' | 'saklar'>
 
-export type JenisDokStok = 'stock_adjustment' | 'stock_opname' | 'stock_transfer'
+// tahap 4B: dokumen pelaksana produksi (Pengeluaran Bahan, Hasil Produksi, Produksi Cepat) memakai alur yang sama.
+export type JenisDokStok = 'stock_adjustment' | 'stock_opname' | 'stock_transfer' | 'material_issue' | 'production_result' | 'quick_production'
 
 export const DOK_STOK: Record<JenisDokStok, { menu: string; awalan: string; nama: string; jalur: string; audit: string }> = {
   stock_adjustment: { menu: 'stok.penyesuaian', awalan: 'PS', nama: 'Penyesuaian Stok', jalur: '/penyesuaian', audit: 'penyesuaian' },
   stock_opname: { menu: 'stok.opname', awalan: 'OP', nama: 'Stock Opname', jalur: '/opname', audit: 'opname' },
   stock_transfer: { menu: 'stok.pindah', awalan: 'PD', nama: 'Pindah Stok', jalur: '/pindah-stok', audit: 'pindah' },
+  // tahap 4B
+  material_issue: { menu: 'produksi.pengeluaran', awalan: 'KB', nama: 'Pengeluaran Bahan', jalur: '/pengeluaran-bahan', audit: 'pengeluaran' },
+  production_result: { menu: 'produksi.hasil', awalan: 'HP', nama: 'Hasil Produksi', jalur: '/hasil-produksi', audit: 'hasil' },
+  quick_production: { menu: 'produksi.cepat', awalan: 'PC', nama: 'Produksi Cepat', jalur: '/produksi-cepat', audit: 'produksi_cepat' },
 }
 
 export const BATAS_BARIS = 500
@@ -73,6 +78,10 @@ export type KaitDok<K extends KepalaDok> = {
   posting: (tx: Tx, d: K, dok: DokumenAsal) => Promise<{ ringkas: string; sesudah?: unknown }>
   // Pemeriksaan sebelum diajukan (misalnya baris kosong).
   periksaAjukan?: (tx: Tx, d: K) => Promise<void>
+  // tahap 4B: pemeriksaan sebelum gerak balik (misalnya dokumen turunan) dan pembaruan sesudahnya (misalnya nilai barang
+  // dalam proses di perintah produksi). Keduanya di transaksi yang sama dengan gerak balik.
+  periksaBatalPosting?: (tx: Tx, d: K) => Promise<void>
+  sesudahBatalPosting?: (tx: Tx, d: K, balik: HasilGerak[]) => Promise<unknown>
 }
 
 export type AksiStatus = 'ajukan' | 'kembalikan' | 'posting' | 'batal'
@@ -125,9 +134,11 @@ export async function ubahStatusDok<K extends KepalaDok>(db: Db, k: Konteks, akt
         pastikanIzin(aktor, info.menu, 'P')
         if (!saklarNyala(aktor, 'dok.batal_posting')) throw new GalatAturan('Membatalkan dokumen yang sudah Diposting butuh saklar Batalkan dokumen diposting.')
         if (alasan.length < 5) throw new GalatAturan('Tulis alasan pembatalan, minimal 5 huruf.', 'alasan')
+        await kait.periksaBatalPosting?.(tx, kini)
         const balik = await balikDokumen(tx, { docType: kait.jenis, docId: kini.id, docNo: kini.no, tanggal: hariIni(sekarang), oleh: aktor.id })
+        const tambahan = await kait.sesudahBatalPosting?.(tx, kini, balik)
         ringkas = `Membatalkan ${info.nama.toLowerCase()} ${kini.no} yang sudah Diposting dengan ${balik.length} gerak balik. Alasan: ${alasan}`
-        sesudah = { gerakBalik: balik.map((g) => ({ productId: g.productId, locationId: g.locationId, qty: g.qty.toString(), nilai: g.nilai })) }
+        sesudah = { gerakBalik: balik.map((g) => ({ productId: g.productId, locationId: g.locationId, qty: g.qty.toString(), nilai: g.nilai })), ...(tambahan && typeof tambahan === 'object' ? tambahan : {}) }
       } else {
         pastikanIzin(aktor, info.menu, 'U')
         if (!transisiSah('pelaksana', kini.status, 'Batal')) tolakTransisi()
