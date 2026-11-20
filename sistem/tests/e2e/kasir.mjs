@@ -1,6 +1,6 @@
 // Uji klik modul kasir tahap 3B, dijalankan jalankan.sh sesudah klik.mjs dengan basis data e2e yang sama.
 // Di 1440 dan 390 px: Owner memasang PIN, Kasir masuk dengan PIN, buka shift, kas keluar, jual tunai dan QRIS,
-// void dengan PIN Admin, tutup shift dengan selisih di atas batas, Admin tidak bisa menyetujui, Owner menyetujui.
+// jual paket set dengan member yang dicari lewat WA format 08 (integrasi 3A dan 3B), void dengan PIN Admin, tutup shift dengan selisih di atas batas, Admin tidak bisa menyetujui, Owner menyetujui.
 // Lalu akses tanpa izin, Jejak Audit, dan rate limit PIN. Potret ke tests/potret/, ringkasan ke tests/hasil/e2e-kasir.json.
 import 'dotenv/config'
 import { mkdirSync, writeFileSync } from 'node:fs'
@@ -182,6 +182,42 @@ for (const [w, h] of [
   cek(`${w}px kasir: struk memuat potongan, total, dan QRIS`, isiStruk?.includes('Potongan member') && isiStruk.includes('33.264') && isiStruk.includes('QRIS'), isiStruk?.slice(0, 120))
   await potret(page, `${w}-struk`)
 
+  // Penjualan 3 (integrasi 3A dan 3B): kategori dari menu_category, paket set, member dari WA format 08, Debit.
+  // Paket Sarapan Uji 45.000 tanpa potongan + Teh Lemon 18.000 dipotong 10% (1.800). Net 61.200, service 3.060,
+  // pajak 6.426, total 70.686.
+  await page.goto(`${BASE}/kasir`)
+  const pil = await page.$$eval('.pil.gulir button', (b) => b.map((x) => x.textContent.trim()))
+  const harapKategori = (
+    await sql.query('select c.name from menu_category c where c.active and exists (select 1 from menu_item m where m.category = c.code and m.active) order by c.sort, c.name')
+  ).rows.map((r) => r.name)
+  cek(`${w}px kasir: pilihan kategori memakai nama dan urutan menu_category, paket sebagai kelompok sendiri`, JSON.stringify(pil) === JSON.stringify(['Semua', 'Paket set', ...harapKategori]), pil.join(', '))
+  await page.click('.pil.gulir button:text-is("Paket set")')
+  const ubinPaket = await page.$$eval('.lk-ubin button', (b) => b.map((x) => x.querySelector('b')?.textContent.trim()))
+  cek(`${w}px kasir: kelompok Paket set hanya berisi paket aktif`, ubinPaket.length >= 1 && ubinPaket.every((n) => n?.startsWith('Paket ')) && ubinPaket.includes('Paket Sarapan Uji'), ubinPaket.join(', '))
+  await page.click(ubin('Paket Sarapan Uji'))
+  await page.click('.pil.gulir button:text-is("Non-coffee")')
+  await page.click(ubin('Teh Lemon'))
+  await page.click('button:text-is("Take away")')
+  await page.fill('#k-wa', '081234567890')
+  await page.click('button:text-is("Cari")')
+  await page.waitForSelector('.lk-member-pilih')
+  cek(`${w}px kasir: member ditemukan lewat WA format 08 tanpa pemisah`, (await page.textContent('.lk-member-pilih'))?.includes('Member Uji'))
+  const ketPaket = await page.textContent('.lk-baris li:has(b:text-is("Paket Sarapan Uji")) .lk-baris-ket')
+  cek(`${w}px kasir: baris paket bertanda tanpa potongan member`, ketPaket?.includes('Americano') && ketPaket.includes('tanpa potongan member'), ketPaket)
+  cek(`${w}px kasir: potongan hanya dari menu biasa di layar`, (await page.textContent('.lk-jumlah-dl'))?.includes('-Rp 1.800'))
+  await page.selectOption('#k-metode-0', { label: 'Debit' })
+  cek(`${w}px kasir: Debit terisi sebesar total`, (await page.inputValue('#k-jumlah-0')) === '70.686', await page.inputValue('#k-jumlah-0'))
+  await potret(page, `${w}-kasir-paket-member`)
+  await Promise.all([page.waitForURL((u) => Number(u.searchParams.get('selesai')) > idJual2, { timeout: 20000 }), page.click('button.lk-tombol-bayar')])
+  const idJual3 = Number(new URL(page.url()).searchParams.get('selesai'))
+  const j3 = await satu('select total, disc, member_id, member_pct from sale where id=$1', [idJual3])
+  cek(`${w}px kasir: penjualan paket dengan member tersimpan`, j3?.total === '70686' && j3.disc === '1800' && j3.member_id && Number(j3.member_pct) === 10, JSON.stringify(j3))
+  const bp = await satu(
+    "select l.name, l.price, l.category, l.menu_set_id, l.set_drink_item_id, s.name paket, d.name minuman from sale_line l join menu_set s on s.id = l.menu_set_id join menu_item d on d.id = l.set_drink_item_id where l.sale_id=$1",
+    [idJual3],
+  )
+  cek(`${w}px kasir: baris paket menyimpan penanda paket dan minumannya`, bp?.name === 'Paket Sarapan Uji' && bp.price === '45000' && bp.category === 'paket' && bp.paket === 'Sarapan Uji' && bp.minuman === 'Americano', JSON.stringify(bp))
+
   // Void penjualan 1 dengan PIN Admin; tanpa PIN ditolak dan alasan tetap terisi.
   await page.goto(`${BASE}/transaksi`)
   await potret(page, `${w}-kasir-transaksi`)
@@ -270,6 +306,51 @@ for (const [w, h] of [
   const aksiJual = await owner.page.$$eval('.tabel tbody td[data-label="Aksi"]', (td) => td.map((x) => x.textContent.trim()))
   cek(`${w}px audit: simpan dan void penjualan`, ['Simpan penjualan', 'Void penjualan'].every((a) => aksiJual.includes(a)), aksiJual.join(', '))
   await potret(owner.page, `${w}-owner-audit-penjualan`)
+
+  // Sidebar Owner berisi semua menu tahap 2 sampai 3: di 1440 x 900 semua item terlihat, di HP laci bisa digulir
+  // sampai item terakhir walau layarnya pendek.
+  {
+    const p = owner.page
+    const ukur = () =>
+      p.evaluate(() => {
+        const el = document.querySelector('.samping')
+        const a = [...el.querySelectorAll('nav a')]
+        const r = a.at(-1).getBoundingClientRect()
+        return { n: a.length, atas: Math.round(r.top), bawah: Math.round(r.bottom), tinggi: window.innerHeight, gulir: el.scrollTop, oy: getComputedStyle(el).overflowY }
+      })
+    if (w > 820) {
+      await p.goto(`${BASE}/`)
+      const s = await ukur()
+      cek(`${w}px owner: semua item sidebar terlihat di ${w} x ${h}`, s.n >= 13 && s.bawah <= s.tinggi, JSON.stringify(s))
+      await p.screenshot({ path: `${POTRET}${w}-owner-sidebar.png` })
+      await p.setViewportSize({ width: w, height: 640 })
+      await p.mouse.move(120, 400)
+      await p.mouse.wheel(0, 1500)
+      await p.waitForTimeout(300)
+      const pendek = await ukur()
+      cek(`${w}px owner: sidebar bisa digulir di layar pendek (640 px)`, pendek.bawah <= pendek.tinggi && pendek.atas >= 0, JSON.stringify(pendek))
+      await p.screenshot({ path: `${POTRET}${w}-owner-sidebar-pendek.png` })
+      await p.setViewportSize({ width: w, height: h })
+    } else {
+      for (const tinggi of [h, 560]) {
+        await p.setViewportSize({ width: w, height: tinggi })
+        await p.goto(`${BASE}/`)
+        await p.click('.tombol-menu')
+        await p.waitForSelector('.laci-buka .samping')
+        await p.waitForTimeout(350)
+        await p.screenshot({ path: `${POTRET}${w}x${tinggi}-owner-laci-atas.png` })
+        await p.mouse.move(120, tinggi / 2)
+        await p.mouse.wheel(0, 1500)
+        await p.waitForTimeout(300)
+        const s = await ukur()
+        cek(`${w} x ${tinggi} owner: laci bisa digulir sampai item terakhir`, s.n >= 13 && s.bawah <= s.tinggi && s.atas >= 0 && s.oy === 'auto', JSON.stringify(s))
+        await p.screenshot({ path: `${POTRET}${w}x${tinggi}-owner-laci-bawah.png` })
+        await Promise.all([p.waitForURL('**/audit'), p.click('.samping nav a[href="/audit"]')])
+        cek(`${w} x ${tinggi} owner: item terakhir laci bisa diketuk dan laci menutup`, !(await p.$('.laci-buka')))
+      }
+      await p.setViewportSize({ width: w, height: h })
+    }
+  }
   cek(`${w}px owner: tanpa galat konsol`, owner.galat.length === 0, owner.galat.slice(0, 3).join(' | '))
   await owner.ctx.close()
 }
