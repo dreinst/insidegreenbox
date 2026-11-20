@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { pilihanShift, RingkasLaporan, SaringanLaporan, TabelLaporan } from '@/components/laporan'
 import { KepalaHalaman } from '@/components/umum'
+import { saklarNyala } from '@/lib/izin-inti'
 import { db } from '@/lib/db'
 import { rupiah } from '@/lib/hitung-kasir'
 import { wajibIzin } from '@/lib/izin'
@@ -15,7 +16,8 @@ export default async function RekapPenjualan({ searchParams }: { searchParams: P
   const s = await searchParams
   const [d, pil] = await Promise.all([rekapPenjualan(db, s), pilihanSaring(db)])
   const tampilVoid = lihatVoid(p)
-  const t = tabelRekap(d, { void: tampilVoid })
+  const nilai = saklarNyala(p, 'stok.lihat_nilai')
+  const t = tabelRekap(d, { void: tampilVoid, nilai })
   return (
     <>
       <KepalaHalaman judul="Rekap Penjualan" keterangan={`Penjualan selesai ${d.rentang.dari} sampai ${d.rentang.sampai} (WIB). Void tidak ikut dijumlah.`} />
@@ -39,11 +41,12 @@ export default async function RekapPenjualan({ searchParams }: { searchParams: P
           { label: 'Transaksi', nilai: d.jumlah.n.toLocaleString('id-ID') },
           { label: 'Penjualan bersih', nilai: rupiah(d.jumlah.bersih), catatan: `Kotor ${rupiah(d.jumlah.kotor)}, potongan ${rupiah(d.jumlah.potongan)}` },
           { label: 'Total diterima', nilai: rupiah(d.jumlah.total), catatan: `Service ${rupiah(d.jumlah.service)}, pajak ${rupiah(d.jumlah.pajak)}` },
+          ...(nilai ? [{ label: 'Laba kotor', nilai: rupiah(d.jumlah.laba), catatan: `HPP ${rupiah(d.jumlah.hpp)}${d.jumlah.persenLaba === null ? '' : `, ${d.jumlah.persenLaba.toLocaleString('id-ID')}% dari penjualan bersih`}` }] : []),
           ...(tampilVoid ? [{ label: 'Void', nilai: `${d.jumlah.nVoid} transaksi`, catatan: rupiah(d.jumlah.nilaiVoid) }] : []),
         ]}
       />
       <TabelLaporan tabel={t} judul={`Rekap penjualan ${KELOMPOK_REKAP[d.kelompok].toLowerCase()}`} kunci={(b) => b.kunci} kosong="Tidak ada penjualan pada rentang dan saringan ini." />
-      <p className="redup kecil">HPP dan laba kotor tampil sesudah modul stok menghitung HPP per penjualan.</p>
+      {nilai ? <p className="redup kecil">HPP adalah nilai bahan resep yang keluar saat penjualan. Menu tanpa resep dan penjualan sebelum potong stok berjalan ber-HPP 0.</p> : null}
     </>
   )
 }

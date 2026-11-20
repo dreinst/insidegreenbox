@@ -4,6 +4,7 @@ import { KepalaHalaman } from '@/components/umum'
 import { db } from '@/lib/db'
 import { rupiah } from '@/lib/hitung-kasir'
 import { wajibIzin } from '@/lib/izin'
+import { saklarNyala } from '@/lib/izin-inti'
 import { KELOMPOK_MENU, lihatVoid, pilihanSaring, rekapMenu, type SaringLaporan } from '@/lib/laporan'
 import { tabelMenu } from '@/lib/laporan-kolom'
 import { MODE } from '@/lib/penjualan'
@@ -14,6 +15,7 @@ export default async function RekapMenu({ searchParams }: { searchParams: Promis
   const p = await wajibIzin('laporan.penjualan', 'L')
   const s = await searchParams
   const [d, pil] = await Promise.all([rekapMenu(db, s), pilihanSaring(db)])
+  const nilai = saklarNyala(p, 'stok.lihat_nilai')
   return (
     <>
       <KepalaHalaman judul="Rekap Penjualan Menu" keterangan={`Menu, kategori, dan paket set terjual ${d.rentang.dari} sampai ${d.rentang.sampai} (WIB). Potongan member dibagi ke menu biasa sebanding nilainya; paket set tidak kena potongan.`} />
@@ -39,9 +41,10 @@ export default async function RekapMenu({ searchParams }: { searchParams: Promis
           { label: 'Penjualan kotor', nilai: rupiah(d.jumlah.kotor) },
           { label: 'Potongan', nilai: rupiah(d.jumlah.potongan) },
           { label: 'Penjualan bersih', nilai: rupiah(d.jumlah.bersih) },
+          ...(nilai ? [{ label: 'Margin', nilai: rupiah(d.jumlah.margin), catatan: `HPP ${rupiah(d.jumlah.hpp)}${d.jumlah.marginPersen === null ? '' : `, ${d.jumlah.marginPersen.toLocaleString('id-ID')}%`}` }] : []),
         ]}
       />
-      <TabelLaporan tabel={tabelMenu(d)} judul={`Rekap penjualan ${KELOMPOK_MENU[d.kelompok].toLowerCase()}`} kunci={(b) => b.kunci} kosong="Tidak ada menu terjual pada rentang dan saringan ini." />
+      <TabelLaporan tabel={tabelMenu(d, { nilai })} judul={`Rekap penjualan ${KELOMPOK_MENU[d.kelompok].toLowerCase()}`} kunci={(b) => b.kunci} kosong="Tidak ada menu terjual pada rentang dan saringan ini." />
       {lihatVoid(p) && d.void.n ? (
         <p className="redup kecil">
           {d.void.n} transaksi void ({rupiah(d.void.nilai)} sebelum potongan) tidak dihitung.

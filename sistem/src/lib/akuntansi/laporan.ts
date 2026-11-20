@@ -183,7 +183,8 @@ export type BarisBukuBesar = { lineId: number; jurnalId: number; tanggal: string
 
 // Buku besar satu akun (akun induk mencakup semua turunannya). Saldo berjalan dihitung di basis data untuk seluruh
 // rentang lalu dipotong per halaman, jadi saldo di halaman berikutnya tetap benar. Saldo dalam arti saldo normal akun.
-export async function bukuBesar(db: DbAtauTx, s: { akun?: string; dari?: string; sampai?: string; sumber?: string; hal?: string }) {
+// semua: untuk CSV, seluruh baris rentang itu (paling banyak 20.000) tanpa halaman.
+export async function bukuBesar(db: DbAtauTx, s: { akun?: string; dari?: string; sampai?: string; sumber?: string; hal?: string }, opsi: { semua?: boolean } = {}) {
   const r = rentangTanggal(s)
   const id = Number(s.akun)
   const akun = Number.isInteger(id) && id > 0 ? await db.account.findUnique({ where: { id } }) : null
@@ -207,7 +208,7 @@ export async function bukuBesar(db: DbAtauTx, s: { akun?: string; dari?: string;
     FROM journal_line l JOIN journal j ON j.id = l.journal_id
     WHERE j.posted_at IS NOT NULL AND j.date >= ${tgl(r.dari)} AND j.date <= ${tgl(r.sampai)} AND l.account_id IN ${ids}
       AND (${sumber}::text IS NULL OR j.source_type = ${sumber})
-    ORDER BY j.date, j.id, l.id OFFSET ${(hal - 1) * PER_HALAMAN_BB} LIMIT ${PER_HALAMAN_BB}`
+    ORDER BY j.date, j.id, l.id OFFSET ${opsi.semua ? 0 : (hal - 1) * PER_HALAMAN_BB} LIMIT ${opsi.semua ? 20_000 : PER_HALAMAN_BB}`
   const mutasi = (N(jml.d) - N(jml.k)) * Number(tanda)
   return {
     rentang: r,

@@ -18,7 +18,8 @@ export const JENIS_LAPORAN = {
 } as const
 export type JenisLaporan = keyof typeof JENIS_LAPORAN
 
-export function tabelRekap(d: Awaited<ReturnType<typeof rekapPenjualan>>, opsi: { void: boolean }): Tabel<BarisRekap> {
+// tahap 5B: nilai = pemegang saklar stok.lihat_nilai melihat kolom HPP dan laba (RANCANGAN 9).
+export function tabelRekap(d: Awaited<ReturnType<typeof rekapPenjualan>>, opsi: { void: boolean; nilai?: boolean }): Tabel<BarisRekap> {
   const label = { hari: 'Tanggal', kasir: 'Kasir', shift: 'Shift' }[d.kelompok]
   const kolom: Kolom<BarisRekap>[] = [
     { h: label, v: (b) => b.label },
@@ -30,19 +31,27 @@ export function tabelRekap(d: Awaited<ReturnType<typeof rekapPenjualan>>, opsi: 
     { h: 'Pajak PB1', v: (b) => b.pajak, jenis: 'uang' },
     { h: 'Total diterima', v: (b) => b.total, jenis: 'uang' },
   ]
+  if (opsi.nilai) kolom.push({ h: 'HPP', v: (b) => b.hpp, jenis: 'uang' }, { h: 'Laba kotor', v: (b) => b.laba, jenis: 'uang' }, { h: 'Persen laba', v: (b) => b.persenLaba, jenis: 'persen' })
   if (opsi.void) kolom.push({ h: 'Void', v: (b) => b.nVoid, jenis: 'angka' }, { h: 'Nilai void', v: (b) => b.nilaiVoid, jenis: 'uang' })
   return { kolom, baris: d.baris, jumlah: d.jumlah }
 }
 
-export function tabelMenu(d: Awaited<ReturnType<typeof rekapMenu>>): Tabel<BarisMenu> {
+export function tabelMenu(d: Awaited<ReturnType<typeof rekapMenu>>, opsi: { nilai?: boolean } = {}): Tabel<BarisMenu> {
   const kolom: Kolom<BarisMenu>[] = d.kelompok === 'menu' ? [{ h: 'Kategori', v: (b) => b.kategori }, { h: 'Menu', v: (b) => b.nama }] : [{ h: 'Kategori', v: (b) => b.nama }]
   kolom.push(
     { h: 'Qty terjual', v: (b) => b.qty, jenis: 'angka' },
     { h: 'Penjualan kotor', v: (b) => b.kotor, jenis: 'uang' },
     { h: 'Potongan teralokasi', v: (b) => b.potongan, jenis: 'uang' },
     { h: 'Penjualan bersih', v: (b) => b.bersih, jenis: 'uang' },
-    { h: 'Kontribusi', v: (b) => b.kontribusi, jenis: 'persen' },
   )
+  if (opsi.nilai)
+    kolom.push(
+      { h: 'HPP per porsi', v: (b) => b.hppPorsi, jenis: 'uang' },
+      { h: 'HPP total', v: (b) => b.hpp, jenis: 'uang' },
+      { h: 'Margin', v: (b) => b.margin, jenis: 'uang' },
+      { h: 'Margin persen', v: (b) => b.marginPersen, jenis: 'persen' },
+    )
+  kolom.push({ h: 'Kontribusi', v: (b) => b.kontribusi, jenis: 'persen' })
   return { kolom, baris: d.baris, jumlah: d.jumlah }
 }
 

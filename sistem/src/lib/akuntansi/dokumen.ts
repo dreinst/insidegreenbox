@@ -217,3 +217,28 @@ export async function jurnalTutupPerintah(tx: Tx, id: number, oleh: number | nul
   const memo = `Tutup perintah produksi ${po.no}, sisa barang dalam proses dibuang`
   return buatJurnal(tx, { docType: 'production_order', docId: id, docNo: po.no, tanggal: tanggalJurnal(po.closedAt), memo, oleh }, [dk('selisih_produksi', po.wipWriteOff, memo), dk('bdp', -po.wipWriteOff, memo)])
 }
+
+// Alamat halaman dokumen sumber jurnal, untuk tautan di Jurnal Umum dan Buku Besar. Dokumen pembelian ditambahkan di
+// sini saat jurnalnya disambungkan.
+const JALUR_SUMBER: Record<string, string> = {
+  sale: '/transaksi',
+  shift: '/shift',
+  pos_settlement: '/setoran',
+  stock_adjustment: '/penyesuaian',
+  stock_opname: '/opname',
+  stock_transfer: '/pindah-stok',
+  material_issue: '/pengeluaran-bahan',
+  production_result: '/hasil-produksi',
+  quick_production: '/produksi-cepat',
+  production_order: '/perintah-produksi',
+  memorial: '/jurnal',
+}
+
+export function tautanSumber(sourceType: string, sourceId: number | null, docNo = '') {
+  if (sourceType === 'shift_cash_move') {
+    const m = /#(\d+)$/.exec(docNo)
+    return m ? `/shift/${m[1]}` : null
+  }
+  const jalur = JALUR_SUMBER[sourceType]
+  return jalur && sourceId ? `${jalur}/${sourceId}` : null
+}

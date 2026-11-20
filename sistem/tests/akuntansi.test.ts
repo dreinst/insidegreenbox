@@ -13,6 +13,8 @@ import { pasangBawaanAkuntansi } from '../src/lib/akuntansi/pemetaan'
 import { bukaPeriode, bulanIni, geserBulan, tutupPeriode } from '../src/lib/akuntansi/periode'
 import type { Db } from '../src/lib/db'
 import type { Pengguna } from '../src/lib/izin-inti'
+import { rekapMenu, rekapPenjualan } from '../src/lib/laporan'
+import { keCsv, tabelMenu, tabelRekap } from '../src/lib/laporan-kolom'
 import { simpanPenjualan, voidPenjualan } from '../src/lib/penjualan'
 import { buatCepat, ubahStatusCepat } from '../src/lib/produksi/cepat'
 import { simpanBahan, tambahResep } from '../src/lib/produksi/resep'
@@ -334,5 +336,18 @@ describe('bentuk ulang dan laporan', () => {
     assert.equal(p.buku, p.stok)
     const persediaanNeraca = n.baris.find((b) => b.kode === '1-1500')
     assert.equal(persediaanNeraca?.nilai, p.stok)
+  })
+
+  test('laporan penjualan: kolom HPP dan laba kotor dari sale.hpp untuk pemegang lihat nilai', async () => {
+    const r = await rekapPenjualan(db, {})
+    const [h] = await db.$queryRaw<{ n: bigint }[]>`SELECT COALESCE(SUM(hpp), 0)::bigint AS n FROM sale WHERE status = 'Selesai'`
+    assert.equal(r.jumlah.hpp, Number(h.n))
+    assert.equal(r.jumlah.laba, r.jumlah.bersih - r.jumlah.hpp)
+    assert.ok(keCsv(tabelRekap(r, { void: false, nilai: true })).split('\r\n')[0].endsWith('HPP,Laba kotor,Persen laba'))
+    assert.ok(!keCsv(tabelRekap(r, { void: false })).includes('HPP'))
+    const m = await rekapMenu(db, {})
+    const kopiSusu = m.baris.find((b) => b.nama === 'Kopi Susu')
+    assert.ok(!kopiSusu || kopiSusu.hppPorsi === 5400 || kopiSusu.qty === 0)
+    assert.ok(keCsv(tabelMenu(m, { nilai: true })).includes('HPP per porsi'))
   })
 })

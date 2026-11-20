@@ -61,9 +61,13 @@ function syaratJual(r: Rentang, s: SaringLaporan) {
   return Prisma.join(w, ' AND ')
 }
 
+// Laba kotor dan persennya terhadap penjualan bersih (satu desimal).
+const laba = (bersih: number, hpp: number) => ({ hpp, laba: bersih - hpp, persenLaba: bersih ? Math.round(((bersih - hpp) / bersih) * 1000) / 10 : null })
+
 // 1. Rekap Penjualan per hari, kasir, atau shift.
 export const KELOMPOK_REKAP = { hari: 'Per hari', kasir: 'Per kasir', shift: 'Per shift' } as const
-export type BarisRekap = { kunci: string; label: string; n: number; kotor: number; potongan: number; bersih: number; service: number; pajak: number; total: number; nVoid: number; nilaiVoid: number }
+// tahap 5B: hpp dari sale.hpp (nilai bahan resep saat dijual), laba kotor = penjualan bersih - HPP (KONTRAK 11 butir 47).
+export type BarisRekap = { kunci: string; label: string; n: number; kotor: number; potongan: number; bersih: number; service: number; pajak: number; total: number; nVoid: number; nilaiVoid: number; hpp: number; laba: number; persenLaba: number | null }
 
 export async function rekapPenjualan(db: Db, s: SaringLaporan) {
   const r = rentang(s)
@@ -86,6 +90,7 @@ export async function rekapPenjualan(db: Db, s: SaringLaporan) {
       COALESCE(SUM(s.svc) FILTER (WHERE s.status = 'Selesai'), 0)::bigint AS service,
       COALESCE(SUM(s.tax) FILTER (WHERE s.status = 'Selesai'), 0)::bigint AS pajak,
       COALESCE(SUM(s.total) FILTER (WHERE s.status = 'Selesai'), 0)::bigint AS total,
+      COALESCE(SUM(s.hpp) FILTER (WHERE s.status = 'Selesai'), 0)::bigint AS hpp,
       COUNT(*) FILTER (WHERE s.status = 'Void')::bigint AS nvoid,
       COALESCE(SUM(s.total) FILTER (WHERE s.status = 'Void'), 0)::bigint AS nilaivoid
     FROM sale s JOIN shift sh ON sh.id = s.shift_id JOIN app_user u ON u.id = sh.user_id
@@ -103,19 +108,24 @@ export async function rekapPenjualan(db: Db, s: SaringLaporan) {
     total: N(b.total),
     nVoid: N(b.nvoid),
     nilaiVoid: N(b.nilaivoid),
+    ...laba(N(b.kotor) - N(b.potongan), N(b.hpp)),
   }))
   const jumlah = hasil.reduce(
-    (a, b) => ({ ...a, n: a.n + b.n, kotor: a.kotor + b.kotor, potongan: a.potongan + b.potongan, bersih: a.bersih + b.bersih, service: a.service + b.service, pajak: a.pajak + b.pajak, total: a.total + b.total, nVoid: a.nVoid + b.nVoid, nilaiVoid: a.nilaiVoid + b.nilaiVoid }),
-    { kunci: '', label: 'Jumlah', n: 0, kotor: 0, potongan: 0, bersih: 0, service: 0, pajak: 0, total: 0, nVoid: 0, nilaiVoid: 0 } as BarisRekap,
+    (a, b) => ({ ...a, n: a.n + b.n, kotor: a.kotor + b.kotor, potongan: a.potongan + b.potongan, bersih: a.bersih + b.bersih, service: a.service + b.service, pajak: a.pajak + b.pajak, total: a.total + b.total, nVoid: a.nVoid + b.nVoid, nilaiVoid: a.nilaiVoid + b.nilaiVoid, hpp: a.hpp + b.hpp }),
+    { kunci: '', label: 'Jumlah', n: 0, kotor: 0, potongan: 0, bersih: 0, service: 0, pajak: 0, total: 0, nVoid: 0, nilaiVoid: 0, hpp: 0, laba: 0, persenLaba: null } as BarisRekap,
   )
+  Object.assign(jumlah, laba(jumlah.bersih, jumlah.hpp))
   return { rentang: r, kelompok, baris: hasil, jumlah }
 }
+
+const margin = (bersih: number, hpp: number, qty: number) => ({ hpp, hppPorsi: qty ? Math.round(hpp / qty) : 0, margin: bersih - hpp, marginPersen: bersih ? Math.round(((bersih - hpp) / bersih) * 1000) / 10 : null })
 
 // 2. Rekap Penjualan Menu per menu (paket set sebagai baris sendiri) atau per kategori. Potongan member dialokasikan
 // ke baris menu biasa sebanding nilainya; sisa pembulatan dibagi ke baris dengan sisa pecahan terbesar, sehingga
 // jumlah potongan per transaksi sama persis dengan sale.disc. Baris paket tidak kena potongan (KONTRAK 11 butir 24).
 export const KELOMPOK_MENU = { menu: 'Per menu', kategori: 'Per kategori' } as const
-export type BarisMenu = { kunci: string; nama: string; kategori: string; qty: number; kotor: number; potongan: number; bersih: number; kontribusi: number }
+// tahap 5B: hpp dari sale_line.hpp; HPP per porsi = HPP / qty; margin = penjualan bersih - HPP.
+export type BarisMenu = { kunci: string; nama: string; kategori: string; qty: number; kotor: number; potongan: number; bersih: number; kontribusi: number; hpp: number; hppPorsi: number; margin: number; marginPersen: number | null }
 
 export async function rekapMenu(db: Db, s: SaringLaporan) {
   const r = rentang(s)
@@ -127,7 +137,7 @@ export async function rekapMenu(db: Db, s: SaringLaporan) {
   const kunci = kelompok === 'menu' ? Prisma.sql`CASE WHEN c.menu_set_id IS NOT NULL THEN 'p' || c.menu_set_id ELSE 'm' || c.menu_item_id END` : Prisma.sql`c.category`
   const baris = await db.$queryRaw<Record<string, unknown>[]>`
     WITH b AS (
-      SELECT l.id, l.sale_id, l.qty, (l.price * l.qty)::bigint AS nilai, (l.menu_set_id IS NULL) AS reguler,
+      SELECT l.id, l.sale_id, l.qty, (l.price * l.qty)::bigint AS nilai, (l.menu_set_id IS NULL) AS reguler, l.hpp,
         l.menu_item_id, l.menu_set_id, l.name, l.category, s.disc
       FROM sale_line l JOIN sale s ON s.id = l.sale_id JOIN shift sh ON sh.id = s.shift_id
       WHERE s.status = 'Selesai' AND ${syaratJual(r, s)}
@@ -144,7 +154,7 @@ export async function rekapMenu(db: Db, s: SaringLaporan) {
       FROM a
     )
     SELECT ${kunci} AS kunci, (array_agg(c.name ORDER BY c.id DESC))[1] AS nama, (array_agg(c.category ORDER BY c.id DESC))[1] AS kategori,
-      SUM(c.qty)::bigint AS qty, SUM(c.nilai)::bigint AS kotor, SUM(c.potong)::bigint AS potongan
+      SUM(c.qty)::bigint AS qty, SUM(c.nilai)::bigint AS kotor, SUM(c.potong)::bigint AS potongan, SUM(c.hpp)::bigint AS hpp
     FROM c WHERE ${Prisma.join(saring, ' AND ')}
     GROUP BY 1 ORDER BY SUM(c.nilai) - SUM(c.potong) DESC, 1`
   const kat = new Map((await db.menuCategory.findMany({ select: { code: true, name: true } })).map((k) => [k.code, k.name]))
@@ -153,9 +163,10 @@ export async function rekapMenu(db: Db, s: SaringLaporan) {
   const hasil: BarisMenu[] = baris.map((b) => {
     const bersih = N(b.kotor) - N(b.potongan)
     const kategori = namaKategori(String(b.kategori))
-    return { kunci: String(b.kunci), nama: kelompok === 'menu' ? String(b.nama) : kategori, kategori, qty: N(b.qty), kotor: N(b.kotor), potongan: N(b.potongan), bersih, kontribusi: totalBersih ? Math.round((bersih / totalBersih) * 1000) / 10 : 0 }
+    return { kunci: String(b.kunci), nama: kelompok === 'menu' ? String(b.nama) : kategori, kategori, qty: N(b.qty), kotor: N(b.kotor), potongan: N(b.potongan), bersih, kontribusi: totalBersih ? Math.round((bersih / totalBersih) * 1000) / 10 : 0, ...margin(bersih, N(b.hpp), N(b.qty)) }
   })
-  const jumlah = hasil.reduce((a, b) => ({ ...a, qty: a.qty + b.qty, kotor: a.kotor + b.kotor, potongan: a.potongan + b.potongan, bersih: a.bersih + b.bersih }), { kunci: '', nama: kelompok === 'menu' ? '' : 'Jumlah', kategori: kelompok === 'menu' ? 'Jumlah' : '', qty: 0, kotor: 0, potongan: 0, bersih: 0, kontribusi: hasil.length ? 100 : 0 } as BarisMenu)
+  const jumlah = hasil.reduce((a, b) => ({ ...a, qty: a.qty + b.qty, kotor: a.kotor + b.kotor, potongan: a.potongan + b.potongan, bersih: a.bersih + b.bersih, hpp: a.hpp + b.hpp }), { kunci: '', nama: kelompok === 'menu' ? '' : 'Jumlah', kategori: kelompok === 'menu' ? 'Jumlah' : '', qty: 0, kotor: 0, potongan: 0, bersih: 0, kontribusi: hasil.length ? 100 : 0, hpp: 0, hppPorsi: 0, margin: 0, marginPersen: null } as BarisMenu)
+  Object.assign(jumlah, margin(jumlah.bersih, jumlah.hpp, jumlah.qty))
   const v = await db.$queryRaw<{ n: bigint; nilai: bigint }[]>`
     SELECT COUNT(*)::bigint AS n, COALESCE(SUM(s.sub), 0)::bigint AS nilai FROM sale s JOIN shift sh ON sh.id = s.shift_id WHERE s.status = 'Void' AND ${syaratJual(r, s)}`
   const kategoriPilihan = [...[...kat.entries()].map(([kode, nama]) => ({ kode, nama })), { kode: KATEGORI_PAKET, nama: 'Paket set' }]

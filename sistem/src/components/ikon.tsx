@@ -163,6 +163,41 @@ const JALUR: Record<string, React.ReactNode> = {
     </>
   ),
   cepat: <path d="M13 2L4 14h7l-1 8 9-12h-7z" />,
+  // tahap 5B: akuntansi.
+  akun: (
+    <>
+      <circle cx="6" cy="5" r="2" />
+      <path d="M6 7v12h4M6 12h4" />
+      <rect x="11" y="9.5" width="9" height="5" rx="1.5" />
+      <rect x="11" y="16.5" width="9" height="5" rx="1.5" />
+    </>
+  ),
+  jurnal: (
+    <>
+      <path d="M5 3h12a2 2 0 012 2v16H7a2 2 0 01-2-2z" />
+      <path d="M5 19a2 2 0 012-2h12M9 7h6M9 11h6" />
+    </>
+  ),
+  bukubesar: (
+    <>
+      <path d="M3 5.5C5.5 4 8.5 4 12 6c3.5-2 6.5-2 9-.5V19c-2.5-1.5-5.5-1.5-9 .5-3.5-2-6.5-2-9-.5z" />
+      <path d="M12 6v13.5" />
+    </>
+  ),
+  neraca: (
+    <>
+      <path d="M12 3v18M7 21h10M4 7h16" />
+      <path d="M4 7l-2.5 6a3 3 0 005 0zM20 7l-2.5 6a3 3 0 005 0z" />
+    </>
+  ),
+  periode: (
+    <>
+      <rect x="3" y="5" width="18" height="16" rx="2" />
+      <path d="M3 10h18M8 3v4M16 3v4" />
+      <rect x="9.5" y="13.5" width="5" height="4.5" rx="1" />
+      <path d="M10.5 13.5v-1a1.5 1.5 0 013 0v1" />
+    </>
+  ),
   tutup: <path d="M6 6l12 12M18 6L6 18" />,
   keluar: <path d="M14 4h5v16h-5M10 8l-4 4 4 4M6 12h10" />,
 }
