@@ -117,6 +117,32 @@ const JALUR: Record<string, React.ReactNode> = {
       <circle cx="12" cy="9.5" r="2.5" />
     </>
   ),
+  // tahap 4B: resep dan produksi.
+  resep: (
+    <>
+      <path d="M6 3h9l3 3v15H6z" />
+      <path d="M9 9h6M9 13h6M9 17h3" />
+    </>
+  ),
+  perintah: (
+    <>
+      <rect x="5" y="4" width="14" height="17" rx="2" />
+      <path d="M9 4V2.8h6V4M8.5 11l2 2 4-4M9 17h6" />
+    </>
+  ),
+  pengeluaran: (
+    <>
+      <path d="M4 14h8v6H4zM12 17h8" />
+      <path d="M8 14V4M5 7l3-3 3 3M17 14l3 3-3 3" />
+    </>
+  ),
+  hasil: (
+    <>
+      <path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z" />
+      <path d="M8.5 12l2.5 2.5 4.5-5" />
+    </>
+  ),
+  cepat: <path d="M13 2L4 14h7l-1 8 9-12h-7z" />,
   tutup: <path d="M6 6l12 12M18 6L6 18" />,
   keluar: <path d="M14 4h5v16h-5M10 8l-4 4 4 4M6 12h10" />,
 }

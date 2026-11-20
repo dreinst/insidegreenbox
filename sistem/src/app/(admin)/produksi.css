@@ -1,0 +1,38 @@
+/* Gaya modul resep dan produksi tahap 4B. Melengkapi globals.css, master.css, dan stok.css. */
+
+/* Daftar menu tanpa resep di halaman Resep dan BOM. */
+.tanpa-resep { margin: 0 0 18px; padding: 16px 18px; border-radius: 14px; background: #FFF6DE; box-shadow: inset 0 0 0 1px #F0D78C }
+.tanpa-resep h2 { margin: 0 0 4px; font-size: 17px }
+.tanpa-resep p { margin: 0 0 10px }
+.tanpa-resep ul { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none }
+.tanpa-resep li { display: inline-flex; align-items: center; gap: 8px; min-height: 36px; padding: 4px 6px 4px 12px; border-radius: 999px; background: #fff; box-shadow: inset 0 0 0 1px #EBD9A6; font-size: 14px }
+.tanpa-resep li small { color: var(--muted) }
+.tanpa-resep li a { display: inline-flex; align-items: center; min-height: 28px; padding: 0 10px; border-radius: 999px; background: var(--paper2); font-weight: 700; text-decoration: none }
+
+/* Ringkasan HPP dan nilai di rincian. */
+.hpp-total td { font-weight: 800; background: #ECEEE9 }
+.angka-besar-kecil { font-family: var(--f-judul); font-weight: 800; font-size: 20px }
+
+/* Progres produksi: batang tipis di bawah angka. */
+.progres { display: block; width: 100%; max-width: 160px; height: 6px; margin-top: 6px; border: 0; border-radius: 99px; background: #E1E4DD; overflow: hidden; appearance: none }
+.progres::-webkit-progress-bar { background: #E1E4DD; border-radius: 99px }
+.progres::-webkit-progress-value { background: var(--green); border-radius: 99px }
+.progres::-moz-progress-bar { background: var(--green); border-radius: 99px }
+
+/* Baris bahan yang qty-nya menyimpang dari BOM. */
+.tabel tr.menyimpang td { background: #FFF6DE }
+.tabel-qty .kolom { min-width: 110px }
+.tabel-qty .kolom input { min-height: 40px }
+.tabel-qty td { vertical-align: middle }
+
+.tautan-baris { display: flex; flex-wrap: wrap; gap: 10px; margin: 12px 0 0 }
+
+@media (max-width: 640px) {
+  .tanpa-resep { padding: 14px }
+  .tanpa-resep li { width: 100%; justify-content: space-between }
+  .tabel-qty .kolom { min-width: 0 }
+  .progres { max-width: none }
+}
+.tanpa-resep-lagi { margin-top: 10px }
+.tanpa-resep-lagi summary { display: inline-flex; align-items: center; min-height: 40px; font-weight: 700; cursor: pointer }
+.tanpa-resep-lagi ul { margin-top: 8px }
