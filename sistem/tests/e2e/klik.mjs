@@ -21,8 +21,9 @@ const AKUN = {
 }
 // tahap 3A dan 3B menambah modul kasir (Layar Kasir, Shift, Transaksi, PIN Kasir) dan master (Menu dan Harga, Promo, Member, Metode Bayar) sesuai izin tiap peran.
 const SIDEBAR_HARAP = {
-  owner: ['Beranda', 'Layar Kasir', 'Shift', 'Transaksi', 'PIN Kasir', 'Menu dan Harga', 'Promo', 'Member', 'Metode Bayar', 'Pengguna', 'Peran dan Izin', 'Saklar Fitur', 'Jejak Audit'],
-  admin: ['Beranda', 'Layar Kasir', 'Shift', 'Transaksi', 'PIN Kasir', 'Menu dan Harga', 'Promo', 'Member', 'Metode Bayar', 'Jejak Audit'],
+  // tahap 5A menambah Setoran POS, Laporan, dan Rekening Bank (Owner dan Admin; Kasir tanpa akses).
+  owner: ['Beranda', 'Layar Kasir', 'Shift', 'Transaksi', 'PIN Kasir', 'Setoran POS', 'Laporan', 'Menu dan Harga', 'Promo', 'Member', 'Metode Bayar', 'Rekening Bank', 'Pengguna', 'Peran dan Izin', 'Saklar Fitur', 'Jejak Audit'],
+  admin: ['Beranda', 'Layar Kasir', 'Shift', 'Transaksi', 'PIN Kasir', 'Setoran POS', 'Laporan', 'Menu dan Harga', 'Promo', 'Member', 'Metode Bayar', 'Rekening Bank', 'Jejak Audit'],
   kasir: ['Beranda', 'Layar Kasir', 'Shift', 'Transaksi', 'Menu dan Harga', 'Member'],
 }
 const LEBAR = [

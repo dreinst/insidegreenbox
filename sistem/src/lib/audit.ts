@@ -133,6 +133,19 @@ export const NAMA_PERISTIWA: Record<string, string> = {
   'shift.setujui': 'Setujui selisih shift',
   'penjualan.simpan': 'Simpan penjualan',
   'penjualan.void': 'Void penjualan',
+  // tahap 5A
+  'setoran.tambah': 'Buat setoran',
+  'setoran.ubah': 'Ubah setoran',
+  'setoran.ajukan': 'Ajukan setoran',
+  'setoran.kembalikan': 'Kembalikan setoran ke draf',
+  'setoran.setujui': 'Setujui setoran',
+  'setoran.posting': 'Posting setoran',
+  'setoran.batal': 'Batalkan setoran',
+  'setoran.hapus': 'Hapus draf setoran',
+  'rekening.tambah': 'Tambah rekening bank',
+  'rekening.ubah': 'Ubah rekening bank',
+  'rekening.aktifkan': 'Aktifkan rekening bank',
+  'rekening.nonaktifkan': 'Nonaktifkan rekening bank',
 }
 
 export const NAMA_ENTITAS: Record<string, string> = {
@@ -153,4 +166,7 @@ export const NAMA_ENTITAS: Record<string, string> = {
   // tahap 3B
   shift: 'Shift kasir',
   sale: 'Penjualan',
+  // tahap 5A
+  pos_settlement: 'Setoran POS',
+  bank_account: 'Rekening bank',
 }
