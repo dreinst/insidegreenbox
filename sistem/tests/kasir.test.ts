@@ -211,7 +211,12 @@ describe('shift', () => {
     assert.equal(ok.status, 'Tutup')
     assert.equal(ok.approvedBy, owner.id)
 
-    // Owner masih boleh void sesudah shift ditutup.
+    // Kasir dengan PIN Admin ditolak sesudah shift ditutup, dengan PIN Owner diterima. Owner sendiri juga boleh.
+    const jualLain = await db.sale.create({ data: { shiftId: s.id, no: 'UJI-VOID-1', mode: 'takeaway', total: 1000n, createdBy: kasir.id } })
+    await assert.rejects(voidPenjualan(db, k(kasir), kasir, jualLain.id, { alasan: 'Sesudah tutup', penyetujuId: admin.id, pinPenyetuju: '246810' }), tolakAturan(/hanya bisa oleh Owner/))
+    await aturPin(db, k(owner), owner, owner.id, { pin: '8642', ulangiPin: '8642' })
+    await voidPenjualan(db, k(kasir), kasir, jualLain.id, { alasan: 'Sesudah tutup', penyetujuId: owner.id, pinPenyetuju: '8642' })
+    assert.equal((await db.sale.findUniqueOrThrow({ where: { id: jualLain.id } })).voidApprovedBy, owner.id)
     await voidPenjualan(db, k(owner), owner, j1.id, { alasan: 'Koreksi Owner' })
     assert.equal((await db.sale.findUniqueOrThrow({ where: { id: j1.id } })).status, 'Void')
     assert.equal((await db.member.findUniqueOrThrow({ where: { id: memberId } })).visits, 5)

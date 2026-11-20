@@ -48,6 +48,8 @@ sistem/
       status.ts         status dokumen dan transisi yang sah
       nomor.ts          nomor dokumen dari doc_sequence
       pengguna.ts, peran.ts, saklar.ts   logika tiap modul (tanpa Next, bisa dites)
+      hitung-kasir.ts   hitungan kasir murni (total, bayar, kas seharusnya), dipakai klien dan server
+      shift.ts, penjualan.ts, pin.ts     modul kasir tahap 3B
     components/         komponen tampilan bersama
   tests/
     *.test.ts           tes unit dengan basis data uji
@@ -140,7 +142,7 @@ Enam aksi per menu: `L` Lihat, `T` Tambah, `U` Ubah, `H` Hapus (hanya draf), `S`
 
 ### 4.3 Kode menu
 
-Katalog lengkap ada di `src/lib/katalog.ts` beserta matriks bawaan Owner, Admin, dan Kasir dari RANCANGAN 8.2. Kode berbentuk `grup.menu`, misalnya `beli.faktur`, `stok.opname`, `kasir.shift`. Baris RANCANGAN "Pengaturan: Pengguna, peran, izin, saklar" (Owner L T U H) dipecah menjadi tiga kode supaya Owner bisa memberi akses satu per satu: `atur.pengguna` (L T U), `atur.peran` (L T U), dan `atur.saklar` (L U). Pengguna dan peran tidak pernah dihapus, cukup dinonaktifkan, dan saklar tidak ditambah dari layar, jadi aksi Hapus dan Tambah di sana tidak punya arti dan tidak dibuat. Baris "Log aktivitas" menjadi `atur.audit`.
+Katalog lengkap ada di `src/lib/katalog.ts` beserta matriks bawaan Owner, Admin, dan Kasir dari RANCANGAN 8.2. Kode berbentuk `grup.menu`, misalnya `beli.faktur`, `stok.opname`, `kasir.shift`. Baris RANCANGAN "Pengaturan: Pengguna, peran, izin, saklar" (Owner L T U H) dipecah menjadi tiga kode supaya Owner bisa memberi akses satu per satu: `atur.pengguna` (L T U), `atur.peran` (L T U), dan `atur.saklar` (L U). Pengguna dan peran tidak pernah dihapus, cukup dinonaktifkan, dan saklar tidak ditambah dari layar, jadi aksi Hapus dan Tambah di sana tidak punya arti dan tidak dibuat. Baris "Log aktivitas" menjadi `atur.audit`. Tahap 3B menambah `kasir.pin` (PIN kasir, Owner L U, Admin L U, Kasir tanpa akses) karena Admin harus bisa mengatur PIN kasir tanpa memegang `atur.pengguna`.
 
 ### 4.4 Saklar fitur
 
@@ -172,6 +174,7 @@ Semua cek lewat `src/lib/izin.ts`:
 - Isi baris: waktu, `user_id` (boleh kosong untuk login gagal dengan nama tak dikenal), `actor_name` (nama pengguna saat itu atau yang diketik), `action` (misalnya `pengguna.ubah`), `doc_type` (nama tabel), `doc_id` (teks, karena ada kunci gabungan), `summary` (kalimat pendek bahasa Indonesia), `before_json`, `after_json`, `ip`, `user_agent`.
 - `before_json` dan `after_json` dibersihkan oleh `bersihkanUntukAudit`: hash sandi dan PIN tidak pernah disimpan, diganti tanda `"[disembunyikan]"`. BigInt, Decimal, dan tanggal disimpan sebagai teks.
 - Peristiwa yang wajib tercatat sejak tahap 2: `masuk.berhasil`, `masuk.gagal`, `masuk.terkunci`, `keluar`, `izin.ditolak`, `pengguna.tambah`, `pengguna.ubah`, `pengguna.sandi`, `pengguna.aktifkan`, `pengguna.nonaktifkan`, `peran.tambah`, `peran.ubah`, `peran.izin`, `peran.aktifkan`, `peran.nonaktifkan`, `saklar.ubah`. Tahap berikutnya menambah peristiwa per dokumen (`<jenis>.tambah`, `.ubah`, `.hapus`, `.ajukan`, `.setujui`, `.posting`, `.batal`).
+- Peristiwa tahap 3B (kasir): `kasir.masuk_pin` (masuk dengan PIN), `pengguna.pin` (pasang, ganti, atau hapus PIN), `shift.buka`, `shift.kas` (kas masuk atau keluar laci), `shift.tutup`, `shift.setujui`, `penjualan.simpan`, `penjualan.void`. PIN salah dan PIN terkunci dicatat sebagai `masuk.gagal` dan `masuk.terkunci` dengan ringkasan yang menyebut tujuannya (masuk kasir atau penyetuju void). Entitas baru di audit: `shift` dan `sale`.
 - Halaman Jejak Audit hanya membaca, dengan saring tanggal, aktor, aksi, dan entitas, serta rincian sebelum dan sesudah.
 
 ## 6. Konvensi aksi server
@@ -200,7 +203,10 @@ type HasilAksi =
 - Header keamanan di setiap jawaban: `Content-Security-Policy` dengan nonce per permintaan (dari proxy), `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy` yang mematikan kamera, mikrofon, lokasi, dan pembayaran, serta `Strict-Transport-Security` di produksi.
 - Sandi minimal 8 karakter. Nama pengguna 3 sampai 32 karakter `a-z 0-9 . _ -`.
 - Rahasia hanya di `.env` (di-gitignore). `.env.example` berisi nama variabel tanpa nilai.
-- Login tahap 2 memakai nama pengguna dan sandi untuk ketiga peran. Login PIN kasir di layar kasir menyusul di tahap 3 bersama layar kasirnya.
+- Login tahap 2 memakai nama pengguna dan sandi untuk ketiga peran. Sandi tetap berlaku untuk semua peran di tahap 3.
+- Masuk dengan PIN (tahap 3B): layar masuk punya pilihan "PIN kasir" (`/masuk?cara=pin`) berisi nama pengguna aktif yang punya PIN dan boleh masuk dengan PIN, lalu PIN 4 sampai 6 angka. PIN di-hash bcryptjs (cost 12) di `app_user.pin_hash` dan tidak pernah masuk audit. Yang boleh masuk dengan PIN hanya peran yang memegang Tambah di `kasir.layar` dan tidak memegang menu `atur.*` apa pun, jadi Owner dan Admin tetap masuk dengan sandi (RANCANGAN 8.1). PIN Owner dan Admin hanya dipakai untuk menyetujui void.
+- Rate limit PIN memakai `login_attempt` dengan kunci `pin:<nama pengguna>`: 5 PIN salah per pengguna dalam 15 menit mengunci PIN pengguna itu, dan 20 gagal per IP (sandi dan PIN dihitung bersama) mengunci IP itu. Hitungan PIN terpisah dari hitungan sandi supaya penguncian satu jalur tidak menutup jalur lain, tetapi batasnya sama. Pengguna tak dikenal tetap diproses bcrypt pada hash tiruan dan pesannya selalu "Nama atau PIN salah." PIN penyetuju void memakai hitungan yang sama.
+- Owner mengatur PIN siapa saja. Pemegang `kasir.pin` lain hanya mengatur PIN dirinya sendiri dan PIN pengguna yang boleh masuk dengan PIN, supaya PIN tidak dipakai menyamar sebagai Admin lain. Memasang, mengganti, atau menghapus PIN mencabut sesi lain pengguna itu.
 
 ## 8. Sidebar per tahap
 
@@ -215,7 +221,7 @@ Syarat dari user: setiap item sidebar yang tampil berfungsi penuh ke database (d
 | 6 | Penjualan B2B, Aset, Anggaran, Lokasi dan Profil Usaha |
 | 7 | Migrasi data dari ekspor resmi ESB, uji paralel, lalu ESB dihentikan |
 
-Urutan tahap 3 sampai 5 mengikuti SERAH-TERIMA. Daftar sidebar ada di `src/lib/katalog.ts` (`SIDEBAR`) dan hanya berisi halaman yang sudah ada.
+Urutan tahap 3 sampai 5 mengikuti SERAH-TERIMA. Tahap 3B (kasir) menambah Layar Kasir (`/kasir`, `kasir.layar`), Shift (`/shift`, `kasir.shift`), Transaksi (`/transaksi`, `kasir.transaksi`), dan PIN Kasir (`/pin`, `kasir.pin`). Struk cetak ada di `/struk/[id]` di luar kerangka admin dan memakai izin Lihat `kasir.transaksi`. Daftar sidebar ada di `src/lib/katalog.ts` (`SIDEBAR`) dan hanya berisi halaman yang sudah ada.
 
 ## 9. Batas sumber daya produksi
 
@@ -242,3 +248,17 @@ Target produksi VPS gugai dalam `greenbox.slice` (1,5 GB untuk situs, app, datab
 5. Kolom `*_by` tanpa foreign key (bagian 3.1); semua tabel dokumen dan master memakai `updated_by` juga, mengikuti RANCANGAN 1 butir 9.
 6. Harga satuan per satuan dasar memakai `Decimal(18,4)` (bagian 3.1).
 7. `approval_rule` belum diisi di tahap 2. Bawaan RANCANGAN 2.2 diisi di tahap 4 bersama dokumen pembelian.
+
+Tahap 3B (kasir, migrasi `20261120130000_tahap3b_kasir`):
+
+8. Kolom tambahan di luar ERD: `shift.closed_by` (penutup shift), `shift.diff_limit` (batas selisih yang berlaku saat ditutup), `shift.approval_note` (catatan persetujuan Owner); `sale.member_pct`, `sale.svc_pct`, `sale.tax_pct` (persen yang berlaku saat transaksi, untuk struk), `sale.void_approved_by` (penyetuju void lewat PIN); `sale_line.name` dan `sale_line.category` (nama dan kategori menu saat dijual, supaya struk lama tidak berubah bila menu diganti).
+9. Jurnal akuntansi dan potong stok dari resep belum dibuat di tahap 3B. `sale.hpp` dan `sale_line.hpp` diisi 0, dan penjualan tidak ditolak walau stok bahan kurang. Jurnal penjualan (RANCANGAN 6.1) dan mutasi `stock_ledger` penjualan akan dibentuk ulang dari data `sale`, `sale_line`, dan `sale_payment` (termasuk status Void dan waktu void) saat modul stok (tahap 4) dan akuntansi (tahap 5) dibangun. Jurnal selisih kas saat tutup shift juga dibentuk ulang dari `shift.cash_diff`.
+10. Kas seharusnya = modal awal + jumlah `sale_payment.amount` metode berjenis `tunai` dari penjualan yang tidak void (sudah bersih dari kembalian) + kas masuk laci - kas keluar laci. Metode tunai dikenali dari `payment_method.kind = 'tunai'`.
+11. Batas selisih kas memakai saklar `pos.batas_selisih_kas` milik peran kasir pemilik shift (bawaan Rp 10.000), diubah Owner lewat Saklar Fitur. Saklar nyala dengan batas: selisih mutlak di atas batas membuat status `PerluPersetujuan`. Saklar nyala tanpa batas: tidak pernah perlu persetujuan. Saklar mati: setiap selisih yang bukan nol perlu persetujuan. Owner (Setujui di `kasir.shift`) menyetujui dengan catatan wajib, lalu status menjadi `Tutup`.
+12. Tutup shift memakai hitung buta: kas seharusnya, rekap per metode, dan selisih baru tampil sesudah shift ditutup. Kas dihitung boleh lewat hitung pecahan (disimpan di `shift.denominations_json`); bila pecahan diisi, totalnya yang dipakai.
+13. "Milik sendiri" di matriks Kasir (RANCANGAN 8.2) diterapkan lewat izin Lihat `laporan.penjualan`: pemegangnya (Owner dan Admin) melihat dan mengelola shift serta transaksi semua kasir, selain itu hanya shift miliknya. Ini mengikuti admin lama yang memakai izin laporan untuk riwayat semua shift.
+14. Satu pengguna hanya punya satu shift berstatus `Buka`. Buka shift mengunci baris `app_user` (FOR UPDATE), dan penjualan, void, kas laci, serta tutup shift mengunci baris `shift` lebih dulu, jadi tidak ada penjualan yang masuk sesudah kas dihitung.
+15. Void: langsung bila memegang Ubah di `kasir.transaksi` dan saklar `pos.void`. Tanpa itu, void butuh PIN penyetuju yang memegang keduanya (RANCANGAN 8.3, Kasir meminta PIN Admin). Alasan wajib, status menjadi `Void` tanpa menghapus baris, dan kunjungan member dikurangi satu. Void sesudah shift ditutup hanya boleh bila yang mengizinkan berperan Owner (Owner sendiri atau penyetuju Owner lewat PIN).
+16. Nomor penjualan `GB-YYMM-NNNN` dari `doc_sequence` (`doc_type` `sale`), berbeda dari admin lama yang memakai `GBYYMMDD-NNN` per hari.
+17. Pajak dan service diambil dari `branch.tax_pct` dan `branch.service_pct` lokasi shift. Seed membuat cabang Greenbox dan lokasi Outlet (jenis `outlet`, pajak dan service 0 persen, sama dengan admin lama) bila belum ada lokasi. Lokasi shift: `app_user.location_id`, lalu lokasi aktif berjenis outlet, lalu lokasi aktif pertama. Pengubahan persen menunggu menu Lokasi dan profil usaha (tahap 6).
+18. Potongan member: persen tingkat member bila `member.discount_on` nyala, 0 bila mati. Tingkatnya `member.tier_id` bila diisi, selain itu tingkat dengan `min_visits` tertinggi yang sudah dicapai `member.visits`. Semua `menu_item` dihitung baris reguler yang kena potongan, karena paket atau early set belum punya penanda di `menu_item`.

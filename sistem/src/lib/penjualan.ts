@@ -152,7 +152,9 @@ export async function voidPenjualan(db: Db, k: Konteks, aktor: Aktor, saleId: nu
     if (!d.penyetujuId) throw new GalatAturan('Pilih penyetuju void.', 'penyetujuId')
     if (!d.pinPenyetuju) throw new GalatAturan('Isi PIN penyetuju.', 'pinPenyetuju')
     // Cek isi transaksi dulu supaya PIN tidak dipakai menebak untuk transaksi yang memang tidak bisa di-void.
-    await cekBisaVoid(db, aktor, saleId, null)
+    // Peran calon penyetuju ikut menentukan boleh tidaknya void sesudah shift ditutup.
+    const calon = await db.appUser.findUnique({ where: { id: d.penyetujuId }, select: { role: { select: { code: true } } } })
+    await cekBisaVoid(db, aktor, saleId, { roleCode: calon?.role.code ?? '' })
     penyetuju = await periksaPenyetujuVoid(db, { userId: d.penyetujuId, pin: d.pinPenyetuju, ip: k.ip, userAgent: k.userAgent })
   }
   return db.$transaction(async (tx) => {
