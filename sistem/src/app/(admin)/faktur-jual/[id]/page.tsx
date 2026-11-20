@@ -57,8 +57,13 @@ export default async function RincianFakturJual({ params, searchParams }: { para
         isi={[
           ['Total faktur', formatRupiah(d.total)],
           ...(lihatNilai && diposting ? ([['HPP', formatRupiah(d.hpp)]] as [string, string][]) : []),
-          ['Diterima', formatRupiah(d.paidAmount)],
-          ['Sisa piutang', formatRupiah(diposting ? d.total - d.paidAmount : 0n)],
+          // Diterima dan sisa piutang baru berarti sesudah faktur Diposting.
+          ...(diposting
+            ? ([
+                ['Diterima', formatRupiah(d.paidAmount)],
+                ['Sisa piutang', formatRupiah(d.total - d.paidAmount)],
+              ] as [string, string][])
+            : []),
           ...(retur ? ([['Nota kredit retur', formatRupiah(retur)]] as [string, string][]) : []),
           ['Jatuh tempo', formatTanggal(d.dueDate)],
         ]}

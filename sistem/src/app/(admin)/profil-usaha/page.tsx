@@ -91,11 +91,11 @@ export default async function ProfilUsaha({ searchParams }: { searchParams: Prom
                 <dl className="struk-dl">
                   <div>
                     <dt>Service {persen(b.servicePct)}</dt>
-                    <dd>dari harga sesudah potongan</dd>
+                    <dd>sesudah potongan</dd>
                   </div>
                   <div>
                     <dt>Pajak {persen(b.taxPct)}</dt>
-                    <dd>dari harga ditambah service</dd>
+                    <dd>harga + service</dd>
                   </div>
                 </dl>
                 <hr />

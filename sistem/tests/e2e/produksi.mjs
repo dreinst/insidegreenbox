@@ -26,8 +26,8 @@ const LEBAR = [
   { w: 390, h: 844, menu: 'Matcha Susu' },
 ]
 const GRUP_HARAP = {
-  owner: ['Kasir', 'Menu', 'Persediaan', 'Produksi', 'Pembelian', 'Keuangan', 'Laporan', 'Pengaturan'],
-  admin: ['Kasir', 'Menu', 'Persediaan', 'Produksi', 'Pembelian', 'Keuangan', 'Laporan', 'Pengaturan'],
+  owner: ['Kasir', 'Menu', 'Persediaan', 'Produksi', 'Pembelian', 'Penjualan B2B', 'Keuangan', 'Laporan', 'Pengaturan'],
+  admin: ['Kasir', 'Menu', 'Persediaan', 'Produksi', 'Pembelian', 'Penjualan B2B', 'Keuangan', 'Laporan', 'Pengaturan'],
   kasir: ['Kasir', 'Menu'],
 }
 const tanda = Date.now().toString(36).slice(-4).toUpperCase()

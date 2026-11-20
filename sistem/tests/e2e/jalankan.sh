@@ -57,5 +57,7 @@ BASE_URL="http://127.0.0.1:$PORT" E2E_DATABASE_URL="$DB_E2E" node tests/e2e/stok
 BASE_URL="http://127.0.0.1:$PORT" E2E_DATABASE_URL="$DB_E2E" node tests/e2e/produksi.mjs || HASIL=1
 # tahap 4C: pembelian, sesudah stok.mjs karena memakai bahan dan saldo awal impor.
 BASE_URL="http://127.0.0.1:$PORT" E2E_DATABASE_URL="$DB_E2E" node tests/e2e/pembelian.mjs || HASIL=1
+# tahap 6A: penjualan B2B dan profil usaha, sesudah pembelian.mjs (konversi kg biji kopi) dan kasir.mjs (struk), sebelum klik.mjs.
+BASE_URL="http://127.0.0.1:$PORT" E2E_DATABASE_URL="$DB_E2E" node tests/e2e/b2b.mjs || HASIL=1
 BASE_URL="http://127.0.0.1:$PORT" E2E_DATABASE_URL="$DB_E2E" node tests/e2e/klik.mjs || HASIL=1
 exit $HASIL

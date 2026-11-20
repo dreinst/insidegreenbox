@@ -28,10 +28,12 @@ const STOK_4A = ['Produk dan Satuan', 'Resep dan BOM', 'Stok', 'Penyesuaian', 'O
 const PRODUKSI_4B = ['Perintah Produksi', 'Pengeluaran Bahan', 'Hasil Produksi', 'Produksi Cepat']
 // tahap 4C: grup Pembelian sesudah Produksi, Hutang Pemasok di grup Keuangan.
 const BELI_4C = ['Pemasok', 'Permintaan', 'Pesanan', 'Penerimaan', 'Faktur', 'Retur', 'Pembelian Langsung', 'Pembayaran']
+// tahap 6A: grup Penjualan B2B sesudah Pembelian, Piutang Pelanggan di grup Keuangan, Profil Usaha di grup Pengaturan.
+const B2B_6A = ['Pelanggan', 'Pesanan Penjualan', 'Faktur Penjualan', 'Terima Pembayaran', 'Retur Penjualan']
 const SIDEBAR_HARAP = {
   // tahap 5A: Setoran POS di grup Kasir, Rekening Bank di grup Keuangan, Laporan di grup Laporan (Owner dan Admin).
-  owner: ['Beranda', ...KASIR_3B, 'PIN Kasir', 'Setoran POS', 'Metode Bayar', 'Menu dan Harga', 'Promo', 'Member', ...STOK_4A, ...PRODUKSI_4B, ...BELI_4C, 'Rekening Bank', 'Hutang Pemasok', 'Laporan', 'Lokasi', 'Pengguna', 'Peran dan Izin', 'Saklar Fitur', 'Jejak Audit'],
-  admin: ['Beranda', ...KASIR_3B, 'PIN Kasir', 'Setoran POS', 'Metode Bayar', 'Menu dan Harga', 'Promo', 'Member', ...STOK_4A, ...PRODUKSI_4B, ...BELI_4C, 'Rekening Bank', 'Hutang Pemasok', 'Laporan', 'Lokasi', 'Jejak Audit'],
+  owner: ['Beranda', ...KASIR_3B, 'PIN Kasir', 'Setoran POS', 'Metode Bayar', 'Menu dan Harga', 'Promo', 'Member', ...STOK_4A, ...PRODUKSI_4B, ...BELI_4C, ...B2B_6A, 'Rekening Bank', 'Hutang Pemasok', 'Piutang Pelanggan', 'Laporan', 'Lokasi', 'Profil Usaha', 'Pengguna', 'Peran dan Izin', 'Saklar Fitur', 'Jejak Audit'],
+  admin: ['Beranda', ...KASIR_3B, 'PIN Kasir', 'Setoran POS', 'Metode Bayar', 'Menu dan Harga', 'Promo', 'Member', ...STOK_4A, ...PRODUKSI_4B, ...BELI_4C, ...B2B_6A, 'Rekening Bank', 'Hutang Pemasok', 'Piutang Pelanggan', 'Laporan', 'Lokasi', 'Profil Usaha', 'Jejak Audit'],
   kasir: ['Beranda', ...KASIR_3B, 'Menu dan Harga', 'Member'],
 }
 const LEBAR = [

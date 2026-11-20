@@ -214,7 +214,7 @@ const SIDEBAR_B2B: ItemSidebar[] = [
   { href: '/pelanggan', label: 'Pelanggan', menu: 'b2b.pelanggan', ikon: 'pelanggan' },
   { href: '/pesanan-jual', label: 'Pesanan Penjualan', menu: 'b2b.pesanan', ikon: 'pesanan' },
   { href: '/faktur-jual', label: 'Faktur Penjualan', menu: 'b2b.faktur', ikon: 'faktur' },
-  { href: '/terima-pelanggan', label: 'Penerimaan Pelanggan', menu: 'b2b.penerimaan', ikon: 'pembayaran' },
+  { href: '/terima-pelanggan', label: 'Terima Pembayaran', menu: 'b2b.penerimaan', ikon: 'pembayaran' },
   { href: '/retur-jual', label: 'Retur Penjualan', menu: 'b2b.retur', ikon: 'retur' },
 ]
 const SIDEBAR_PIUTANG: ItemSidebar = { href: '/piutang', label: 'Piutang Pelanggan', menu: 'kas.piutang', ikon: 'piutang' }
