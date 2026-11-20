@@ -15,6 +15,7 @@
     "impor:stok": "tsx scripts/impor-stok.ts",
     "impor:resep": "tsx scripts/impor-resep.ts",
     "impor:beli": "tsx scripts/impor-beli.ts",
+    "jurnal:bentuk-ulang": "tsx scripts/jurnal-bentuk-ulang.ts",
     "test": "node --import tsx --test --test-concurrency=1 tests/*.test.ts",
     "e2e": "mkdir -p tests/hasil && bash tests/e2e/jalankan.sh"
   },

@@ -2,6 +2,7 @@
 import type { NextRequest } from 'next/server'
 import { db } from '@/lib/db'
 import { wajibIzin } from '@/lib/izin'
+import { saklarNyala } from '@/lib/izin-inti'
 import { lihatVoid, rekapMenu, rekapPenjualan, ringkasanPembayaran, selisihKas, tutupHarian, type SaringLaporan } from '@/lib/laporan'
 import { JENIS_LAPORAN, keCsv, tabelBayar, tabelHarian, tabelMenu, tabelRekap, tabelSelisih, type JenisLaporan } from '@/lib/laporan-kolom'
 
@@ -16,13 +17,13 @@ export async function GET(req: NextRequest) {
   switch (jenis as JenisLaporan) {
     case 'penjualan': {
       const d = await rekapPenjualan(db, s)
-      isi = keCsv(tabelRekap(d, { void: lihatVoid(p) }))
+      isi = keCsv(tabelRekap(d, { void: lihatVoid(p), nilai: saklarNyala(p, 'stok.lihat_nilai') }))
       nama = `rekap-penjualan-${d.kelompok}_${d.rentang.dari}_${d.rentang.sampai}`
       break
     }
     case 'menu': {
       const d = await rekapMenu(db, s)
-      isi = keCsv(tabelMenu(d))
+      isi = keCsv(tabelMenu(d, { nilai: saklarNyala(p, 'stok.lihat_nilai') }))
       nama = `rekap-menu-${d.kelompok}_${d.rentang.dari}_${d.rentang.sampai}`
       break
     }

@@ -146,7 +146,7 @@ export async function ubahStatusBeli<K extends KepalaBeli>(db: Db, k: Konteks, a
         tolak()
       }
       // Dokumen yang terkena aturan persetujuan (dan semua pembayaran) butuh izin Setujui. Dokumen rencana tanpa aturan
-      // boleh dikonfirmasi pemegang Tambah atau Ubah (KONTRAK 11 butir 66).
+      // boleh dikonfirmasi pemegang Tambah atau Ubah (KONTRAK 11 butir 63).
       if (setuju || gol === 'pelaksana_setuju') pastikanIzin(aktor, inf.menu, 'S')
       else pastikanSalahSatu(aktor, inf.menu, ['T', 'U', 'S'])
       await kait.periksaIsi?.(tx, kini, aktor)

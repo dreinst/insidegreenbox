@@ -254,6 +254,17 @@ export const SIDEBAR_GRUP: GrupSidebar[] = [
   { judul: 'Pembelian', item: SIDEBAR_BELI.filter((i) => i.href !== '/hutang') },
   // tahap 5A: rekening bank dan laporan penjualan.
   { judul: 'Keuangan', item: [...SIDEBAR_REKENING, ...SIDEBAR_BELI.filter((i) => i.href === '/hutang')] },
+  // tahap 5B: akuntansi inti (RANCANGAN 8.2). Admin hanya melihat Akun dan Pemetaan; sisanya Owner.
+  {
+    judul: 'Akuntansi',
+    item: [
+      { href: '/akun', label: 'Akun dan Pemetaan', menu: 'akun.coa', ikon: 'akun' },
+      { href: '/jurnal', label: 'Jurnal Umum', menu: 'akun.jurnal', ikon: 'jurnal' },
+      { href: '/buku-besar', label: 'Buku Besar', menu: 'akun.buku_besar', ikon: 'bukubesar' },
+      { href: '/laporan-keuangan', label: 'Laporan Keuangan', menu: 'laporan.keuangan', ikon: 'neraca' },
+      { href: '/tutup-periode', label: 'Tutup Periode', menu: 'akun.tutup_periode', ikon: 'periode' },
+    ],
+  },
   { judul: 'Laporan', item: [SIDEBAR_SETORAN[1]] },
   // tahap 2, ditambah master lokasi sederhana tahap 4A (atur.lokasi).
   {

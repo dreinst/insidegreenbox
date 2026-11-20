@@ -6,6 +6,8 @@ import { isiMetodeBayar } from '../src/lib/impor-menu'
 import { isiPeranDanIzin, pastikanPengguna } from '../src/lib/seed-inti'
 // tahap 4A
 import { isiBawaanStok } from '../src/lib/stok/bawaan'
+// tahap 5B
+import { pasangBawaanAkuntansi } from '../src/lib/akuntansi/pemetaan'
 
 const db = buatKlien()
 
@@ -15,6 +17,8 @@ async function main() {
   await isiMetodeBayar(db)
   // tahap 4A: cabang dan lokasi bawaan, alasan penyesuaian, satuan, aturan persetujuan opname dan penyesuaian tambah.
   await isiBawaanStok(db)
+  // tahap 5B: bagan akun dan kunci umum sudah dari migrasi; di sini kliring per metode QRIS dan Debit.
+  await pasangBawaanAkuntansi(db)
   const adaOwner = await db.appUser.count({ where: { role: { code: 'owner' } } })
   if (adaOwner > 0) {
     console.log('Peran, izin, dan saklar siap. Owner sudah ada, tidak dibuat ulang.')

@@ -28,10 +28,12 @@ const STOK_4A = ['Produk dan Satuan', 'Resep dan BOM', 'Stok', 'Penyesuaian', 'O
 const PRODUKSI_4B = ['Perintah Produksi', 'Pengeluaran Bahan', 'Hasil Produksi', 'Produksi Cepat']
 // tahap 4C: grup Pembelian sesudah Produksi, Hutang Pemasok di grup Keuangan.
 const BELI_4C = ['Pemasok', 'Permintaan', 'Pesanan', 'Penerimaan', 'Faktur', 'Retur', 'Pembelian Langsung', 'Pembayaran']
+const AKUNTANSI_5B = ['Akun dan Pemetaan', 'Jurnal Umum', 'Buku Besar', 'Laporan Keuangan', 'Tutup Periode']
 const SIDEBAR_HARAP = {
   // tahap 5A: Setoran POS di grup Kasir, Rekening Bank di grup Keuangan, Laporan di grup Laporan (Owner dan Admin).
-  owner: ['Beranda', ...KASIR_3B, 'PIN Kasir', 'Setoran POS', 'Metode Bayar', 'Menu dan Harga', 'Promo', 'Member', ...STOK_4A, ...PRODUKSI_4B, ...BELI_4C, 'Rekening Bank', 'Hutang Pemasok', 'Laporan', 'Lokasi', 'Pengguna', 'Peran dan Izin', 'Saklar Fitur', 'Jejak Audit'],
-  admin: ['Beranda', ...KASIR_3B, 'PIN Kasir', 'Setoran POS', 'Metode Bayar', 'Menu dan Harga', 'Promo', 'Member', ...STOK_4A, ...PRODUKSI_4B, ...BELI_4C, 'Rekening Bank', 'Hutang Pemasok', 'Laporan', 'Lokasi', 'Jejak Audit'],
+  // tahap 5B: grup Akuntansi sesudah Keuangan; Admin hanya Akun dan Pemetaan.
+  owner: ['Beranda', ...KASIR_3B, 'PIN Kasir', 'Setoran POS', 'Metode Bayar', 'Menu dan Harga', 'Promo', 'Member', ...STOK_4A, ...PRODUKSI_4B, ...BELI_4C, 'Rekening Bank', 'Hutang Pemasok', ...AKUNTANSI_5B, 'Laporan', 'Lokasi', 'Pengguna', 'Peran dan Izin', 'Saklar Fitur', 'Jejak Audit'],
+  admin: ['Beranda', ...KASIR_3B, 'PIN Kasir', 'Setoran POS', 'Metode Bayar', 'Menu dan Harga', 'Promo', 'Member', ...STOK_4A, ...PRODUKSI_4B, ...BELI_4C, 'Rekening Bank', 'Hutang Pemasok', 'Akun dan Pemetaan', 'Laporan', 'Lokasi', 'Jejak Audit'],
   kasir: ['Beranda', ...KASIR_3B, 'Menu dan Harga', 'Member'],
 }
 const LEBAR = [

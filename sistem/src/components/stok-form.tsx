@@ -20,14 +20,15 @@ export function TombolAksi({ aksi, label, kelas = 'btn', konfirmasi }: { aksi: A
 }
 
 // Pembatalan dokumen. Untuk dokumen Diposting alasan wajib dan stok dibalik.
-export function FormBatal({ aksi, wajibAlasan, label, konfirmasi }: { aksi: Aksi; wajibAlasan: boolean; label: string; konfirmasi: string }) {
+// tahap 5B: labelAlasan untuk pemakaian di luar pembatalan (misalnya membuka lagi periode).
+export function FormBatal({ aksi, wajibAlasan, label, konfirmasi, labelAlasan }: { aksi: Aksi; wajibAlasan: boolean; label: string; konfirmasi: string; labelAlasan?: string }) {
   const [hasil, kirim] = useActionState(aksi, HASIL_AWAL)
   const salah = galatKolom(hasil, 'alasan')
   return (
     <form action={kirim} key={hasil.n} className="form form-batal" noValidate>
       <PesanHasil hasil={hasil} />
       <div className={`kolom${salah ? ' salah' : ''}`}>
-        <label htmlFor="k-alasan">{wajibAlasan ? 'Alasan pembatalan' : 'Alasan pembatalan (boleh kosong)'}</label>
+        <label htmlFor="k-alasan">{labelAlasan ?? (wajibAlasan ? 'Alasan pembatalan' : 'Alasan pembatalan (boleh kosong)')}</label>
         <textarea id="k-alasan" name="alasan" rows={2} maxLength={300} defaultValue={nilaiAwal(hasil, 'alasan')} aria-invalid={salah ? true : undefined} aria-describedby={salah ? 'k-alasan-g' : undefined} />
         {salah ? (
           <small id="k-alasan-g" className="galat-kolom">

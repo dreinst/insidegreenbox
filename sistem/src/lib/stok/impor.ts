@@ -2,6 +2,7 @@
 // (data contoh admin lama di localStorage) yang disalin ke sini karena berkas itu tidak bisa diimpor dari Node.
 // Idempoten: produk yang kodenya sudah ada dilewati, dan saldo awal hanya dibuat untuk produk yang belum punya gerak
 // di lokasi tujuan. Saldo awal masuk lewat satu Penyesuaian Stok berasalan "Saldo awal" yang langsung Diposting.
+import { jurnalDokStok } from '../akuntansi/dokumen'
 import { catatAudit, type Konteks } from '../audit'
 import type { Db } from '../db'
 import { ambilNomor } from '../nomor'
@@ -115,6 +116,8 @@ export async function imporStok(db: Db, opsi: { lokasi?: string; konteks?: Konte
         dok.stockAdjustmentLines.map((b) => ({ productId: b.productId, locationId: lokasi.id, qty: des(b.qty), hargaSatuan: b.unitCost, lineId: b.id })),
       )
       await tx.stockAdjustment.update({ where: { id: dok.id }, data: { status: 'Diposting', postedAt: sekarang } })
+      // tahap 5B: saldo awal dijurnal debit Persediaan kredit Ekuitas Saldo Awal (alasan saldo_awal).
+      await jurnalDokStok(tx, 'stock_adjustment', dok.id, null)
       const nilai = hasil.reduce((n, h) => n + h.nilai, 0n)
       await catatAudit(tx, k, {
         action: 'penyesuaian.posting',

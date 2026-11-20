@@ -3,6 +3,7 @@
 // Diposting -> Batal lewat gerak balik. Tanpa impor Next.
 import type { DocStatus } from '@/generated/prisma/client'
 import { GalatAturan, GalatIzin } from '../aksi'
+import { balikJurnalDokStok, jurnalDokStok } from '../akuntansi/dokumen'
 import { catatAudit, type Konteks } from '../audit'
 import type { Db, Tx } from '../db'
 import { batasSaklar, pastikanIzin, punyaIzin, saklarNyala, type Pengguna } from '../izin-inti'
@@ -31,7 +32,8 @@ export const BATAS_BARIS = 500
 export const hariIni = (sekarang = new Date()) => new Date(`${tanggalIso(sekarang)}T00:00:00Z`)
 
 // Tanggal dokumen tidak boleh di masa depan dan hanya boleh mundur sejauh saklar dok.tanggal_mundur. Saklar mati
-// berarti hanya hari ini; saklar nyala tanpa batas berarti bebas mundur (periode akuntansi belum ada sampai tahap 5).
+// berarti hanya hari ini; saklar nyala tanpa batas berarti bebas mundur sampai periode yang ditutup (tahap 5B: periode
+// tertutup ditolak oleh mesin jurnal saat posting).
 export function periksaTanggal(aktor: Aktor, tanggal: Date, kolom = 'date', sekarang = new Date()) {
   const hari = hariIni(sekarang)
   if (tanggal.getTime() > hari.getTime()) throw new GalatAturan('Tanggal dokumen tidak boleh lewat dari hari ini.', kolom)
@@ -124,8 +126,10 @@ export async function ubahStatusDok<K extends KepalaDok>(db: Db, k: Konteks, akt
       if (setuju) pastikanIzin(aktor, info.menu, 'S')
       periksaTanggal(aktor, kini.date)
       const hasil = await kait.posting(tx, kini, { docType: kait.jenis, docId: kini.id, docNo: kini.no, tanggal: kini.date, oleh: aktor.id })
+      // tahap 5B: jurnal dari gerak stok dokumen ini, ditolak bila tanggalnya di periode tertutup (KONTRAK 14.3).
+      const jurnal = await jurnalDokStok(tx, kait.jenis, kini.id, aktor.id)
       ringkas = `${setuju ? 'Menyetujui dan memposting' : 'Memposting'} ${info.nama.toLowerCase()} ${kini.no}: ${hasil.ringkas}`
-      sesudah = hasil.sesudah
+      sesudah = { ...(hasil.sesudah && typeof hasil.sesudah === 'object' ? hasil.sesudah : {}), jurnal: jurnal?.no ?? null }
       data = { status: 'Diposting', postedBy: aktor.id, postedAt: sekarang, updatedBy: aktor.id, ...(setuju ? { approvedBy: aktor.id, approvedAt: sekarang } : {}) }
     } else {
       const alasan = (opsi.alasan ?? '').trim()
@@ -137,8 +141,9 @@ export async function ubahStatusDok<K extends KepalaDok>(db: Db, k: Konteks, akt
         await kait.periksaBatalPosting?.(tx, kini)
         const balik = await balikDokumen(tx, { docType: kait.jenis, docId: kini.id, docNo: kini.no, tanggal: hariIni(sekarang), oleh: aktor.id })
         const tambahan = await kait.sesudahBatalPosting?.(tx, kini, balik)
+        const jurnal = await balikJurnalDokStok(tx, kait.jenis, kini.id, hariIni(sekarang), aktor.id)
         ringkas = `Membatalkan ${info.nama.toLowerCase()} ${kini.no} yang sudah Diposting dengan ${balik.length} gerak balik. Alasan: ${alasan}`
-        sesudah = { gerakBalik: balik.map((g) => ({ productId: g.productId, locationId: g.locationId, qty: g.qty.toString(), nilai: g.nilai })), ...(tambahan && typeof tambahan === 'object' ? tambahan : {}) }
+        sesudah = { gerakBalik: balik.map((g) => ({ productId: g.productId, locationId: g.locationId, qty: g.qty.toString(), nilai: g.nilai })), ...(tambahan && typeof tambahan === 'object' ? tambahan : {}), jurnalBalik: jurnal?.no ?? null }
       } else {
         pastikanIzin(aktor, info.menu, 'U')
         if (!transisiSah('pelaksana', kini.status, 'Batal')) tolakTransisi()
