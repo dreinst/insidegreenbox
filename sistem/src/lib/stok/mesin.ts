@@ -61,7 +61,7 @@ function periksaLangkah(l: Langkah, i: number) {
   if (!q.isFinite() || q.isZero()) throw new GalatAturan(`Gerak ke-${i + 1}: qty tidak boleh 0.`)
   if (q.decimalPlaces() > 3) throw new GalatAturan(`Gerak ke-${i + 1}: qty paling banyak 3 desimal.`)
   if (q.abs().gt(QTY_MAKS)) throw new GalatAturan(`Gerak ke-${i + 1}: qty terlalu besar.`)
-  if (q.isNeg() && (l.hargaSatuan !== undefined && l.hargaSatuan !== null)) throw new GalatAturan(`Gerak ke-${i + 1}: barang keluar selalu memakai harga rata-rata.`)
+  if (q.isNeg() && l.hargaSatuan !== undefined && l.hargaSatuan !== null) throw new GalatAturan(`Gerak ke-${i + 1}: barang keluar selalu memakai harga rata-rata.`)
   if (l.hargaSatuan !== undefined && l.hargaSatuan !== null && des(l.hargaSatuan).isNeg()) throw new GalatAturan(`Gerak ke-${i + 1}: harga satuan tidak boleh minus.`)
   if (l.nilaiIkut !== undefined && (l.nilaiIkut >= i || l.nilaiIkut < 0)) throw new GalatAturan(`Gerak ke-${i + 1}: rujukan nilai tidak sah.`)
   return q
@@ -150,7 +150,18 @@ async function terapkan(tx: Tx, dok: DokumenAsal, langkah: Langkah[], opsi: Opsi
     s.qty = qtyBaru
     s.nilai = saldoNilai
     s.rata = rataBaru
-    hasil.push({ ledgerId: baris.id, productId: l.productId, locationId: l.locationId, lineId: l.lineId ?? null, qty: q, hargaSatuan: harga, nilai, saldoQty: qtyBaru, saldoNilai, hargaRata: rataBaru })
+    hasil.push({
+      ledgerId: baris.id,
+      productId: l.productId,
+      locationId: l.locationId,
+      lineId: l.lineId ?? null,
+      qty: q,
+      hargaSatuan: harga,
+      nilai,
+      saldoQty: qtyBaru,
+      saldoNilai,
+      hargaRata: rataBaru,
+    })
   }
 
   for (const [p, l] of pasang.sort((a, b) => a[0] - b[0] || a[1] - b[1])) {
@@ -269,7 +280,10 @@ export async function periksaRantai(db: DbAtauTx) {
 export async function hitungUlangSaldo(tx: Tx, saring: { productId?: number; locationId?: number } = {}) {
   const beda = await periksaSaldo(tx, saring)
   if (!beda.length) return []
-  await kunciSaldo(tx, beda.map((b) => [b.productId, b.locationId]))
+  await kunciSaldo(
+    tx,
+    beda.map((b) => [b.productId, b.locationId]),
+  )
   const ulang = await periksaSaldo(tx, saring)
   for (const b of ulang) {
     await tx.$executeRaw`UPDATE stock_balance SET qty = ${b.ledger.qty}::numeric, value = ${BigInt(b.ledger.nilai)}, avg_cost = ${b.ledger.rata}::numeric, updated_at = now()

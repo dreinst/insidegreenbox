@@ -68,7 +68,12 @@ describe('rata-rata tertimbang', () => {
 describe('barang keluar', () => {
   test('keluar memakai harga rata-rata dan tidak mengubahnya', async () => {
     const p = await produkBaru('KL1')
-    await db.$transaction((tx) => catatGerak(tx, dok(), [{ productId: p, locationId: gudang, qty: '1000', hargaSatuan: '18' }, { productId: p, locationId: gudang, qty: '1000', hargaSatuan: '20' }]))
+    await db.$transaction((tx) =>
+      catatGerak(tx, dok(), [
+        { productId: p, locationId: gudang, qty: '1000', hargaSatuan: '18' },
+        { productId: p, locationId: gudang, qty: '1000', hargaSatuan: '20' },
+      ]),
+    )
     const [h] = await db.$transaction((tx) => catatGerak(tx, dok(), [{ productId: p, locationId: gudang, qty: '-150' }]))
     assert.equal(h.hargaSatuan.toString(), '19')
     assert.equal(h.nilai, -2850n)
@@ -87,13 +92,22 @@ describe('barang keluar', () => {
 
   test('harga satuan untuk barang keluar ditolak', async () => {
     const p = await produkBaru('KL3')
-    await assert.rejects(db.$transaction((tx) => catatGerak(tx, dok(), [{ productId: p, locationId: gudang, qty: '-1', hargaSatuan: '5' }])), galatAturan(/harga rata-rata/))
+    await assert.rejects(
+      db.$transaction((tx) => catatGerak(tx, dok(), [{ productId: p, locationId: gudang, qty: '-1', hargaSatuan: '5' }])),
+      galatAturan(/harga rata-rata/),
+    )
   })
 
   test('qty 0 dan lebih dari 3 desimal ditolak', async () => {
     const p = await produkBaru('KL4')
-    await assert.rejects(db.$transaction((tx) => catatGerak(tx, dok(), [{ productId: p, locationId: gudang, qty: '0' }])), galatAturan(/tidak boleh 0/))
-    await assert.rejects(db.$transaction((tx) => catatGerak(tx, dok(), [{ productId: p, locationId: gudang, qty: '1.2345', hargaSatuan: '1' }])), galatAturan(/3 desimal/))
+    await assert.rejects(
+      db.$transaction((tx) => catatGerak(tx, dok(), [{ productId: p, locationId: gudang, qty: '0' }])),
+      galatAturan(/tidak boleh 0/),
+    )
+    await assert.rejects(
+      db.$transaction((tx) => catatGerak(tx, dok(), [{ productId: p, locationId: gudang, qty: '1.2345', hargaSatuan: '1' }])),
+      galatAturan(/3 desimal/),
+    )
   })
 })
 
@@ -101,10 +115,20 @@ describe('stok minus', () => {
   test('ditolak bila lokasi tidak mengizinkan, dan seluruh transaksi batal', async () => {
     const p = await produkBaru('MN1')
     const q = await produkBaru('MN2')
-    await db.$transaction((tx) => catatGerak(tx, dok(), [{ productId: p, locationId: outlet, qty: '10', hargaSatuan: '100' }, { productId: q, locationId: outlet, qty: '1', hargaSatuan: '100' }]))
+    await db.$transaction((tx) =>
+      catatGerak(tx, dok(), [
+        { productId: p, locationId: outlet, qty: '10', hargaSatuan: '100' },
+        { productId: q, locationId: outlet, qty: '1', hargaSatuan: '100' },
+      ]),
+    )
     const ledgerSebelum = await db.stockLedger.count()
     await assert.rejects(
-      db.$transaction((tx) => catatGerak(tx, dok(), [{ productId: p, locationId: outlet, qty: '-4' }, { productId: q, locationId: outlet, qty: '-2' }])),
+      db.$transaction((tx) =>
+        catatGerak(tx, dok(), [
+          { productId: p, locationId: outlet, qty: '-4' },
+          { productId: q, locationId: outlet, qty: '-2' },
+        ]),
+      ),
       galatAturan(/tidak cukup: tersedia 1 g, perlu 2 g/),
     )
     assert.equal(await db.stockLedger.count(), ledgerSebelum)
@@ -133,7 +157,12 @@ describe('gerak balik', () => {
     await db.$transaction((tx) => catatGerak(tx, dok(), [{ productId: p, locationId: gudang, qty: '1000', hargaSatuan: '320' }]))
     const sebelum = await saldo(p, gudang)
     const d = dok('stock_adjustment')
-    await db.$transaction((tx) => catatGerak(tx, d, [{ productId: p, locationId: gudang, qty: '333', hargaSatuan: '411.1111' }, { productId: p, locationId: gudang, qty: '-77.7' }]))
+    await db.$transaction((tx) =>
+      catatGerak(tx, d, [
+        { productId: p, locationId: gudang, qty: '333', hargaSatuan: '411.1111' },
+        { productId: p, locationId: gudang, qty: '-77.7' },
+      ]),
+    )
     assert.notDeepEqual(await saldo(p, gudang), sebelum)
     const balik = await db.$transaction((tx) => balikDokumen(tx, { ...d, tanggal: new Date('2026-11-21T00:00:00Z') }))
     assert.equal(balik.length, 2)
@@ -142,7 +171,10 @@ describe('gerak balik', () => {
     const lawan = await db.stockLedger.findMany({ where: { docType: d.docType, docId: d.docId, isReversal: true } })
     assert.equal(asal.reduce((n, g) => n + g.value, 0n) + lawan.reduce((n, g) => n + g.value, 0n), 0n)
     assert.equal(lawan[0].date.toISOString().slice(0, 10), '2026-11-21')
-    await assert.rejects(db.$transaction((tx) => balikDokumen(tx, d)), galatAturan(/sudah pernah dibalik/))
+    await assert.rejects(
+      db.$transaction((tx) => balikDokumen(tx, d)),
+      galatAturan(/sudah pernah dibalik/),
+    )
   })
 
   test('gagal bila stok sudah terpakai, kecuali minus diizinkan', async () => {
@@ -150,7 +182,10 @@ describe('gerak balik', () => {
     const d = dok('stock_adjustment')
     await db.$transaction((tx) => catatGerak(tx, d, [{ productId: p, locationId: outlet, qty: '10', hargaSatuan: '100' }]))
     await db.$transaction((tx) => catatGerak(tx, dok(), [{ productId: p, locationId: outlet, qty: '-4' }]))
-    await assert.rejects(db.$transaction((tx) => balikDokumen(tx, d)), galatAturan(/tidak cukup/))
+    await assert.rejects(
+      db.$transaction((tx) => balikDokumen(tx, d)),
+      galatAturan(/tidak cukup/),
+    )
     await db.$transaction((tx) => balikDokumen(tx, d, { izinkanMinus: true }))
     assert.deepEqual(await saldo(p, outlet), { qty: '-4', nilai: -400n, rata: '100' })
   })
@@ -181,7 +216,12 @@ describe('gerak bersamaan', () => {
   test('dua transaksi yang menyentuh produk-lokasi yang sama tidak merusak saldo', async () => {
     const p = await produkBaru('BS1')
     const q = await produkBaru('BS2')
-    await db.$transaction((tx) => catatGerak(tx, dok(), [{ productId: p, locationId: outlet, qty: '1000', hargaSatuan: '10' }, { productId: q, locationId: outlet, qty: '1000', hargaSatuan: '10' }]))
+    await db.$transaction((tx) =>
+      catatGerak(tx, dok(), [
+        { productId: p, locationId: outlet, qty: '1000', hargaSatuan: '10' },
+        { productId: q, locationId: outlet, qty: '1000', hargaSatuan: '10' },
+      ]),
+    )
     // Dua klien terpisah supaya benar-benar memakai dua koneksi. Tiap transaksi menahan kunci sebentar.
     const a = buatKlien(url)
     const b = buatKlien(url)

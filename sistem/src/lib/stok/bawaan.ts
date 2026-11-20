@@ -37,8 +37,7 @@ export const SATUAN_BAWAAN = [
 export const ATURAN_SETUJU_STOK = ['stock_opname', 'stock_adjustment']
 
 export async function isiBawaanStok(db: Db) {
-  const cabang =
-    (await db.branch.findUnique({ where: { code: CABANG_BAWAAN.code } })) ?? (await db.branch.create({ data: { code: CABANG_BAWAAN.code, name: CABANG_BAWAAN.name } }))
+  const cabang = (await db.branch.findUnique({ where: { code: CABANG_BAWAAN.code } })) ?? (await db.branch.create({ data: { code: CABANG_BAWAAN.code, name: CABANG_BAWAAN.name } }))
   let lokasiBaru = 0
   for (const l of LOKASI_BAWAAN) {
     const ada = await db.location.findFirst({ where: { OR: [{ code: l.code }, { name: { equals: l.name, mode: 'insensitive' } }] } })
