@@ -1,0 +1,12 @@
+/* Gaya admin Greenbox. Warna dan huruf mengikuti situs (src/style.css dan src/admin.css di akar repo),
+   dipadatkan untuk kerja back office. */
+:root {
+  --ink: #272924; --paper: #E7E9E4; --paper2: #F4F5F1; --line: #CBCFC6; --muted: #5F625B;
+  --green: #1FC21B; --green-hi: #5BE357; --green-lo: #0F8C0C; --green-soft: #7FE07B; --green-tint: #E6F7E3;
+  --red: #B42318; --red-tint: #FDECEA; --butter: #F0E072; --butter-tint: #FBF6D2;
+  --side: 248px;
+  --ease: cubic-bezier(.2, .8, .2, 1);
+}
+*, *::before, *::after { box-sizing: border-box }
+html, body { margin: 0 }
+body { font-family: var(--f-teks), system-ui, sans-serif; font-size: 15px; line-height: 1.45; color: var(--ink); background: var(--paper); -webkit-font-smoothing: antialiased }

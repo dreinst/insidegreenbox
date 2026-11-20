@@ -1,0 +1,2010 @@
+// Skema admin Greenbox. Sumber: ERD rancangan (erd-data.mjs, entitas g: true) dan sistem/KONTRAK.md bagian 3.
+// Model PascalCase dipetakan ke tabel snake_case, kolom camelCase ke snake_case.
+// Uang BigInt rupiah bulat, qty Decimal(18,3), harga satuan per satuan dasar Decimal(18,4).
+// Kolom *_by berisi app_user.id tanpa foreign key (KONTRAK 3.1).
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum DocStatus {
+  Draft
+  Diajukan
+  Disetujui
+  Diposting
+  Selesai
+  Batal
+
+  @@map("doc_status")
+}
+
+enum PayStatus {
+  BelumBayar
+  Sebagian
+  Lunas
+
+  @@map("pay_status")
+}
+
+enum Progress {
+  Belum
+  Sebagian
+  Penuh
+
+  @@map("progress")
+}
+
+enum ShiftStatus {
+  Buka
+  Tutup
+  PerluPersetujuan
+
+  @@map("shift_status")
+}
+
+enum SaleStatus {
+  Selesai
+  Void
+
+  @@map("sale_status")
+}
+
+enum AccountKind {
+  Aset
+  Kewajiban
+  Ekuitas
+  Pendapatan
+  HPP
+  Beban
+
+  @@map("account_kind")
+}
+
+enum PeriodStatus {
+  Terbuka
+  Ditutup
+
+  @@map("period_status")
+}
+
+enum MatchStatus {
+  BelumCocok
+  Cocok
+
+  @@map("match_status")
+}
+
+// ===== Pengguna, izin, audit =====
+
+model AppUser {
+  id             Int            @id @default(autoincrement())
+  roleId         Int            @map("role_id")
+  role           Role           @relation(fields: [roleId], references: [id])
+  locationId     Int?           @map("location_id")
+  location       Location?      @relation(fields: [locationId], references: [id])
+  name           String
+  username       String         @unique
+  passwordHash   String         @map("password_hash")
+  pinHash        String?        @map("pin_hash")
+  active         Boolean        @default(true)
+  lastLoginAt    DateTime?      @map("last_login_at") @db.Timestamptz(6)
+  createdBy      Int?           @map("created_by")
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedBy      Int?           @map("updated_by")
+  updatedAt      DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+  sessions       UserSession[]
+  auditLogs      AuditLog[]
+  shifts         Shift[]        @relation("ShiftKasir")
+  shiftsApproved Shift[]        @relation("ShiftPenyetuju")
+  periodsClosed  FiscalPeriod[]
+
+  @@index([roleId])
+  @@map("app_user")
+}
+
+model Role {
+  id          Int                 @id @default(autoincrement())
+  code        String              @unique
+  name        String
+  isSystem    Boolean             @default(false) @map("is_system")
+  active      Boolean             @default(true)
+  createdBy   Int?                @map("created_by")
+  createdAt   DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedBy   Int?                @map("updated_by")
+  updatedAt   DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+  users       AppUser[]
+  permissions RolePermission[]
+  switches    RoleFeatureSwitch[]
+
+  @@map("role")
+}
+
+model RolePermission {
+  roleId     Int      @map("role_id")
+  role       Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  menuCode   String   @map("menu_code")
+  canView    Boolean  @default(false) @map("can_view")
+  canCreate  Boolean  @default(false) @map("can_create")
+  canUpdate  Boolean  @default(false) @map("can_update")
+  canDelete  Boolean  @default(false) @map("can_delete")
+  canApprove Boolean  @default(false) @map("can_approve")
+  canPost    Boolean  @default(false) @map("can_post")
+  updatedBy  Int?     @map("updated_by")
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@id([roleId, menuCode])
+  @@map("role_permission")
+}
+
+model FeatureSwitch {
+  id          Int                 @id @default(autoincrement())
+  code        String              @unique
+  name        String
+  description String              @default("")
+  hasLimit    Boolean             @default(false) @map("has_limit")
+  sort        Int                 @default(0)
+  roles       RoleFeatureSwitch[]
+
+  @@map("feature_switch")
+}
+
+model RoleFeatureSwitch {
+  roleId          Int           @map("role_id")
+  role            Role          @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  featureSwitchId Int           @map("feature_switch_id")
+  featureSwitch   FeatureSwitch @relation(fields: [featureSwitchId], references: [id], onDelete: Cascade)
+  enabled         Boolean       @default(false)
+  limitValue      BigInt?       @map("limit_value")
+  updatedBy       Int?          @map("updated_by")
+  updatedAt       DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@id([roleId, featureSwitchId])
+  @@map("role_feature_switch")
+}
+
+model ApprovalRule {
+  docType          String   @id @map("doc_type")
+  requiresApproval Boolean  @default(true) @map("requires_approval")
+  minAmount        BigInt?  @map("min_amount")
+  updatedBy        Int?     @map("updated_by")
+  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("approval_rule")
+}
+
+// Hanya bertambah: trigger di migrasi menolak UPDATE, DELETE, dan TRUNCATE.
+model AuditLog {
+  id         Int      @id @default(autoincrement())
+  at         DateTime @default(now()) @db.Timestamptz(6)
+  userId     Int?     @map("user_id")
+  user       AppUser? @relation(fields: [userId], references: [id])
+  actorName  String   @map("actor_name")
+  action     String
+  docType    String?  @map("doc_type")
+  docId      String?  @map("doc_id")
+  summary    String   @default("")
+  beforeJson Json?    @map("before_json")
+  afterJson  Json?    @map("after_json")
+  ip         String?
+  userAgent  String?  @map("user_agent")
+
+  @@index([at])
+  @@index([userId, at])
+  @@index([action, at])
+  @@index([docType, docId])
+  @@map("audit_log")
+}
+
+model DocSequence {
+  docType String @map("doc_type")
+  period  String @db.VarChar(4)
+  prefix  String
+  lastNo  Int    @default(0) @map("last_no")
+
+  @@id([docType, period])
+  @@map("doc_sequence")
+}
+
+// Tambahan fondasi (KONTRAK 11): sesi di database dan catatan percobaan login.
+model UserSession {
+  id         String    @id
+  userId     Int       @map("user_id")
+  user       AppUser   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  expiresAt  DateTime  @map("expires_at") @db.Timestamptz(6)
+  lastSeenAt DateTime  @default(now()) @map("last_seen_at") @db.Timestamptz(6)
+  revokedAt  DateTime? @map("revoked_at") @db.Timestamptz(6)
+  ip         String?
+  userAgent  String?   @map("user_agent")
+
+  @@index([userId])
+  @@map("user_session")
+}
+
+model LoginAttempt {
+  id       Int      @id @default(autoincrement())
+  at       DateTime @default(now()) @db.Timestamptz(6)
+  username String
+  ip       String
+  success  Boolean
+
+  @@index([username, at])
+  @@index([ip, at])
+  @@map("login_attempt")
+}
+
+// ===== Produk, resep, menu =====
+
+model Product {
+  id                   Int                   @id @default(autoincrement())
+  categoryId           Int?                  @map("category_id")
+  category             ProductCategory?      @relation(fields: [categoryId], references: [id])
+  baseUnitId           Int                   @map("base_unit_id")
+  baseUnit             Unit                  @relation("ProdukSatuanDasar", fields: [baseUnitId], references: [id])
+  bomId                Int?                  @map("bom_id")
+  bom                  Bom?                  @relation("ProdukBomAssembly", fields: [bomId], references: [id])
+  code                 String                @unique
+  name                 String
+  kind                 String                @default("bahan")
+  avgCost              Decimal               @default(0) @map("avg_cost") @db.Decimal(18, 4)
+  lastCost             Decimal               @default(0) @map("last_cost") @db.Decimal(18, 4)
+  minStock             Decimal               @default(0) @map("min_stock") @db.Decimal(18, 3)
+  receiptTolPct        Decimal               @default(0) @map("receipt_tol_pct") @db.Decimal(6, 3)
+  purchasable          Boolean               @default(true)
+  active               Boolean               @default(true)
+  createdBy            Int?                  @map("created_by")
+  createdAt            DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedBy            Int?                  @map("updated_by")
+  updatedAt            DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
+  bomsAsOutput         Bom[]                 @relation("BomHasil")
+  productUnits         ProductUnit[]
+  bomLines             BomLine[]
+  purchaseRequestLines PurchaseRequestLine[]
+  purchaseOrderLines   PurchaseOrderLine[]
+  goodsReceiptLines    GoodsReceiptLine[]
+  purchaseInvoiceLines PurchaseInvoiceLine[]
+  purchaseReturnLines  PurchaseReturnLine[]
+  directPurchaseLines  DirectPurchaseLine[]
+  stockBalances        StockBalance[]
+  stockLedgers         StockLedger[]
+  stockAdjustmentLines StockAdjustmentLine[]
+  stockOpnameLines     StockOpnameLine[]
+  stockTransferLines   StockTransferLine[]
+  productionOrderLines ProductionOrderLine[]
+  materialIssueLines   MaterialIssueLine[]
+  quickProductionLines QuickProductionLine[]
+  salesOrderLines      SalesOrderLine[]
+  salesInvoiceLines    SalesInvoiceLine[]
+  salesReturnLines     SalesReturnLine[]
+
+  @@map("product")
+}
+
+model ProductCategory {
+  id           Int           @id @default(autoincrement())
+  name         String
+  kind         String        @default("bahan")
+  active       Boolean       @default(true)
+  products     Product[]
+  stockOpnames StockOpname[]
+
+  @@map("product_category")
+}
+
+model Unit {
+  id                   Int                   @id @default(autoincrement())
+  name                 String                @unique
+  symbol               String
+  productsBase         Product[]             @relation("ProdukSatuanDasar")
+  productUnits         ProductUnit[]
+  boms                 Bom[]
+  bomLines             BomLine[]
+  purchaseRequestLines PurchaseRequestLine[]
+  purchaseOrderLines   PurchaseOrderLine[]
+  goodsReceiptLines    GoodsReceiptLine[]
+  directPurchaseLines  DirectPurchaseLine[]
+  salesOrderLines      SalesOrderLine[]
+
+  @@map("unit")
+}
+
+model ProductUnit {
+  productId    Int     @map("product_id")
+  product      Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  unitId       Int     @map("unit_id")
+  unit         Unit    @relation(fields: [unitId], references: [id])
+  factorToBase Decimal @map("factor_to_base") @db.Decimal(18, 6)
+  isPurchase   Boolean @default(false) @map("is_purchase")
+  isDefault    Boolean @default(false) @map("is_default")
+
+  @@id([productId, unitId])
+  @@map("product_unit")
+}
+
+model Bom {
+  id               Int               @id @default(autoincrement())
+  productId        Int?              @map("product_id")
+  product          Product?          @relation("BomHasil", fields: [productId], references: [id])
+  unitId           Int?              @map("unit_id")
+  unit             Unit?             @relation(fields: [unitId], references: [id])
+  code             String            @unique
+  name             String
+  kind             String            @default("menu")
+  outputQty        Decimal           @default(1) @map("output_qty") @db.Decimal(18, 3)
+  extraCost        BigInt            @default(0) @map("extra_cost")
+  active           Boolean           @default(true)
+  version          Int               @default(1)
+  createdBy        Int?              @map("created_by")
+  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedBy        Int?              @map("updated_by")
+  updatedAt        DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  productsAssembly Product[]         @relation("ProdukBomAssembly")
+  bomLines         BomLine[]
+  menuItems        MenuItem[]
+  productionOrders ProductionOrder[]
+  quickProductions QuickProduction[]
+
+  @@map("bom")
+}
+
+model BomLine {
+  id        Int     @id @default(autoincrement())
+  bomId     Int     @map("bom_id")
+  bom       Bom     @relation(fields: [bomId], references: [id], onDelete: Cascade)
+  productId Int     @map("product_id")
+  product   Product @relation(fields: [productId], references: [id])
+  unitId    Int?    @map("unit_id")
+  unit      Unit?   @relation(fields: [unitId], references: [id])
+  qty       Decimal @db.Decimal(18, 3)
+  wastePct  Decimal @default(0) @map("waste_pct") @db.Decimal(6, 3)
+  tolPct    Decimal @default(0) @map("tol_pct") @db.Decimal(6, 3)
+
+  @@index([bomId])
+  @@map("bom_line")
+}
+
+model MenuItem {
+  id        Int        @id @default(autoincrement())
+  bomId     Int?       @map("bom_id")
+  bom       Bom?       @relation(fields: [bomId], references: [id])
+  name      String
+  category  String
+  price     BigInt
+  active    Boolean    @default(true)
+  featured  Boolean    @default(false)
+  image     String?
+  createdBy Int?       @map("created_by")
+  createdAt DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedBy Int?       @map("updated_by")
+  updatedAt DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+  saleLines SaleLine[]
+
+  @@map("menu_item")
+}
+
+model StockReason {
+  id                   Int                   @id @default(autoincrement())
+  accountId            Int?                  @map("account_id")
+  account              Account?              @relation(fields: [accountId], references: [id])
+  name                 String
+  appliesTo            String                @default("sesuai") @map("applies_to")
+  active               Boolean               @default(true)
+  stockAdjustmentLines StockAdjustmentLine[]
+  stockOpnameLines     StockOpnameLine[]
+
+  @@map("stock_reason")
+}
+
+// ===== Pembelian =====
+
+model Supplier {
+  id               Int               @id @default(autoincrement())
+  payableAccountId Int?              @map("payable_account_id")
+  payableAccount   Account?          @relation("PemasokAkunHutang", fields: [payableAccountId], references: [id])
+  code             String            @unique
+  name             String
+  contact          String            @default("")
+  phone            String            @default("")
+  address          String            @default("")
+  npwp             String            @default("")
+  creditDays       Int               @default(0) @map("credit_days")
+  bankName         String            @default("") @map("bank_name")
+  bankAccountNo    String            @default("") @map("bank_account_no")
+  active           Boolean           @default(true)
+  createdBy        Int?              @map("created_by")
+  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedBy        Int?              @map("updated_by")
+  updatedAt        DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  purchaseOrders   PurchaseOrder[]
+  goodsReceipts    GoodsReceipt[]
+  purchaseInvoices PurchaseInvoice[]
+  purchaseReturns  PurchaseReturn[]
+  directPurchases  DirectPurchase[]
+  purchasePayments PurchasePayment[]
+  journalLines     JournalLine[]
+
+  @@map("supplier")
+}
+
+model PurchaseRequest {
+  id                   Int                   @id @default(autoincrement())
+  locationId           Int                   @map("location_id")
+  location             Location              @relation(fields: [locationId], references: [id])
+  no                   String                @unique
+  date                 DateTime              @db.Date
+  requiredDate         DateTime?             @map("required_date") @db.Date
+  orderProgress        Progress              @default(Belum) @map("order_progress")
+  note                 String                @default("")
+  status               DocStatus             @default(Draft)
+  submittedBy          Int?                  @map("submitted_by")
+  submittedAt          DateTime?             @map("submitted_at") @db.Timestamptz(6)
+  approvedBy           Int?                  @map("approved_by")
+  approvedAt           DateTime?             @map("approved_at") @db.Timestamptz(6)
+  cancelledBy          Int?                  @map("cancelled_by")
+  cancelledAt          DateTime?             @map("cancelled_at") @db.Timestamptz(6)
+  cancelReason         String?               @map("cancel_reason")
+  closeReason          String?               @map("close_reason")
+  closedAt             DateTime?             @map("closed_at") @db.Timestamptz(6)
+  createdBy            Int?                  @map("created_by")
+  createdAt            DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedBy            Int?                  @map("updated_by")
+  updatedAt            DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
+  purchaseRequestLines PurchaseRequestLine[]
+
+  @@map("purchase_request")
+}
+
+model PurchaseRequestLine {
+  id                 Int                 @id @default(autoincrement())
+  purchaseRequestId  Int                 @map("purchase_request_id")
+  purchaseRequest    PurchaseRequest     @relation(fields: [purchaseRequestId], references: [id], onDelete: Cascade)
+  productId          Int                 @map("product_id")
+  product            Product             @relation(fields: [productId], references: [id])
+  unitId             Int                 @map("unit_id")
+  unit               Unit                @relation(fields: [unitId], references: [id])
+  qty                Decimal             @db.Decimal(18, 3)
+  qtyOrdered         Decimal             @default(0) @map("qty_ordered") @db.Decimal(18, 3)
+  note               String              @default("")
+  purchaseOrderLines PurchaseOrderLine[]
+
+  @@index([purchaseRequestId])
+  @@map("purchase_request_line")
+}
+
+model PurchaseOrder {
+  id                 Int                 @id @default(autoincrement())
+  supplierId         Int                 @map("supplier_id")
+  supplier           Supplier            @relation(fields: [supplierId], references: [id])
+  locationId         Int                 @map("location_id")
+  location           Location            @relation(fields: [locationId], references: [id])
+  no                 String              @unique
+  date               DateTime            @db.Date
+  expectedDate       DateTime?           @map("expected_date") @db.Date
+  receiveProgress    Progress            @default(Belum) @map("receive_progress")
+  taxOn              Boolean             @default(false) @map("tax_on")
+  subtotal           BigInt              @default(0)
+  tax                BigInt              @default(0)
+  total              BigInt              @default(0)
+  note               String              @default("")
+  status             DocStatus           @default(Draft)
+  submittedBy        Int?                @map("submitted_by")
+  submittedAt        DateTime?           @map("submitted_at") @db.Timestamptz(6)
+  approvedBy         Int?                @map("approved_by")
+  approvedAt         DateTime?           @map("approved_at") @db.Timestamptz(6)
+  cancelledBy        Int?                @map("cancelled_by")
+  cancelledAt        DateTime?           @map("cancelled_at") @db.Timestamptz(6)
+  cancelReason       String?             @map("cancel_reason")
+  closeReason        String?             @map("close_reason")
+  closedAt           DateTime?           @map("closed_at") @db.Timestamptz(6)
+  createdBy          Int?                @map("created_by")
+  createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedBy          Int?                @map("updated_by")
+  updatedAt          DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+  purchaseOrderLines PurchaseOrderLine[]
+  goodsReceipts      GoodsReceipt[]
+
+  @@index([supplierId, date])
+  @@map("purchase_order")
+}
+
+model PurchaseOrderLine {
+  id                    Int                  @id @default(autoincrement())
+  purchaseOrderId       Int                  @map("purchase_order_id")
+  purchaseOrder         PurchaseOrder        @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  purchaseRequestLineId Int?                 @map("purchase_request_line_id")
+  purchaseRequestLine   PurchaseRequestLine? @relation(fields: [purchaseRequestLineId], references: [id])
+  productId             Int                  @map("product_id")
+  product               Product              @relation(fields: [productId], references: [id])
+  unitId                Int                  @map("unit_id")
+  unit                  Unit                 @relation(fields: [unitId], references: [id])
+  qty                   Decimal              @db.Decimal(18, 3)
+  price                 BigInt
+  disc                  BigInt               @default(0)
+  taxPct                Decimal              @default(0) @map("tax_pct") @db.Decimal(6, 3)
+  qtyReceived           Decimal              @default(0) @map("qty_received") @db.Decimal(18, 3)
+  qtyReplace            Decimal              @default(0) @map("qty_replace") @db.Decimal(18, 3)
+  isFree                Boolean              @default(false) @map("is_free")
+  goodsReceiptLines     GoodsReceiptLine[]
+
+  @@index([purchaseOrderId])
+  @@map("purchase_order_line")
+}
+
+model GoodsReceipt {
+  id                   Int                   @id @default(autoincrement())
+  purchaseOrderId      Int                   @map("purchase_order_id")
+  purchaseOrder        PurchaseOrder         @relation(fields: [purchaseOrderId], references: [id])
+  supplierId           Int                   @map("supplier_id")
+  supplier             Supplier              @relation(fields: [supplierId], references: [id])
+  locationId           Int                   @map("location_id")
+  location             Location              @relation(fields: [locationId], references: [id])
+  no                   String                @unique
+  date                 DateTime              @db.Date
+  deliveryNoteNo       String                @default("") @map("delivery_note_no")
+  subtotal             BigInt                @default(0)
+  extraCost            BigInt                @default(0) @map("extra_cost")
+  invoiceProgress      Progress              @default(Belum) @map("invoice_progress")
+  note                 String                @default("")
+  status               DocStatus             @default(Draft)
+  submittedBy          Int?                  @map("submitted_by")
+  submittedAt          DateTime?             @map("submitted_at") @db.Timestamptz(6)
+  approvedBy           Int?                  @map("approved_by")
+  approvedAt           DateTime?             @map("approved_at") @db.Timestamptz(6)
+  cancelledBy          Int?                  @map("cancelled_by")
+  cancelledAt          DateTime?             @map("cancelled_at") @db.Timestamptz(6)
+  cancelReason         String?               @map("cancel_reason")
+  postedBy             Int?                  @map("posted_by")
+  postedAt             DateTime?             @map("posted_at") @db.Timestamptz(6)
+  reversalJournalId    Int?                  @map("reversal_journal_id")
+  createdBy            Int?                  @map("created_by")
+  createdAt            DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedBy            Int?                  @map("updated_by")
+  updatedAt            DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
+  goodsReceiptLines    GoodsReceiptLine[]
+  purchaseInvoiceLines PurchaseInvoiceLine[]
+  purchaseReturns      PurchaseReturn[]
+
+  @@index([purchaseOrderId])
+  @@index([supplierId, date])
+  @@map("goods_receipt")
+}
+
+model GoodsReceiptLine {
+  id                   Int                   @id @default(autoincrement())
+  goodsReceiptId       Int                   @map("goods_receipt_id")
+  goodsReceipt         GoodsReceipt          @relation(fields: [goodsReceiptId], references: [id], onDelete: Cascade)
+  purchaseOrderLineId  Int                   @map("purchase_order_line_id")
+  purchaseOrderLine    PurchaseOrderLine     @relation(fields: [purchaseOrderLineId], references: [id])
+  productId            Int                   @map("product_id")
+  product              Product               @relation(fields: [productId], references: [id])
+  unitId               Int                   @map("unit_id")
+  unit                 Unit                  @relation(fields: [unitId], references: [id])
+  qty                  Decimal               @db.Decimal(18, 3)
+  price                BigInt
+  unitCost             Decimal               @default(0) @map("unit_cost") @db.Decimal(18, 4)
+  qtyInvoiced          Decimal               @default(0) @map("qty_invoiced") @db.Decimal(18, 3)
+  qtyReturned          Decimal               @default(0) @map("qty_returned") @db.Decimal(18, 3)
+  purchaseInvoiceLines PurchaseInvoiceLine[]
+  purchaseReturnLines  PurchaseReturnLine[]
+
+  @@index([goodsReceiptId])
+  @@map("goods_receipt_line")
+}
+
+// Nomor faktur pemasok unik per pemasok untuk faktur yang tidak Batal; dicek di modul pembelian (tahap 4).
+model PurchaseInvoice {
+  id                    Int                    @id @default(autoincrement())
+  supplierId            Int                    @map("supplier_id")
+  supplier              Supplier               @relation(fields: [supplierId], references: [id])
+  locationId            Int?                   @map("location_id")
+  location              Location?              @relation(fields: [locationId], references: [id])
+  no                    String                 @unique
+  date                  DateTime               @db.Date
+  dueDate               DateTime?              @map("due_date") @db.Date
+  supplierInvoiceNo     String                 @map("supplier_invoice_no")
+  taxOn                 Boolean                @default(false) @map("tax_on")
+  subtotal              BigInt                 @default(0)
+  tax                   BigInt                 @default(0)
+  total                 BigInt                 @default(0)
+  priceDiff             BigInt                 @default(0) @map("price_diff")
+  paidAmount            BigInt                 @default(0) @map("paid_amount")
+  payStatus             PayStatus              @default(BelumBayar) @map("pay_status")
+  note                  String                 @default("")
+  status                DocStatus              @default(Draft)
+  submittedBy           Int?                   @map("submitted_by")
+  submittedAt           DateTime?              @map("submitted_at") @db.Timestamptz(6)
+  approvedBy            Int?                   @map("approved_by")
+  approvedAt            DateTime?              @map("approved_at") @db.Timestamptz(6)
+  cancelledBy           Int?                   @map("cancelled_by")
+  cancelledAt           DateTime?              @map("cancelled_at") @db.Timestamptz(6)
+  cancelReason          String?                @map("cancel_reason")
+  postedBy              Int?                   @map("posted_by")
+  postedAt              DateTime?              @map("posted_at") @db.Timestamptz(6)
+  reversalJournalId     Int?                   @map("reversal_journal_id")
+  createdBy             Int?                   @map("created_by")
+  createdAt             DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedBy             Int?                   @map("updated_by")
+  updatedAt             DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
+  purchaseInvoiceLines  PurchaseInvoiceLine[]
+  purchasePaymentAllocs PurchasePaymentAlloc[]
+
+  @@index([supplierId, supplierInvoiceNo])
+  @@map("purchase_invoice")
+}
+
+model PurchaseInvoiceLine {
+  id                 Int               @id @default(autoincrement())
+  purchaseInvoiceId  Int               @map("purchase_invoice_id")
+  purchaseInvoice    PurchaseInvoice   @relation(fields: [purchaseInvoiceId], references: [id], onDelete: Cascade)
+  goodsReceiptLineId Int?              @map("goods_receipt_line_id")
+  goodsReceiptLine   GoodsReceiptLine? @relation(fields: [goodsReceiptLineId], references: [id])
+  goodsReceiptId     Int?              @map("goods_receipt_id")
+  goodsReceipt       GoodsReceipt?     @relation(fields: [goodsReceiptId], references: [id])
+  productId          Int?              @map("product_id")
+  product            Product?          @relation(fields: [productId], references: [id])
+  expenseAccountId   Int?              @map("expense_account_id")
+  expenseAccount     Account?          @relation("FakturBeliAkunBeban", fields: [expenseAccountId], references: [id])
+  qty                Decimal           @default(0) @db.Decimal(18, 3)
+  price              BigInt            @default(0)
+  disc               BigInt            @default(0)
+  taxPct             Decimal           @default(0) @map("tax_pct") @db.Decimal(6, 3)
+  receiptValue       BigInt            @default(0) @map("receipt_value")
+  priceDiff          BigInt            @default(0) @map("price_diff")
+
+  @@index([purchaseInvoiceId])
+  @@map("purchase_invoice_line")
+}
+
+model PurchaseReturn {
+  id                    Int                    @id @default(autoincrement())
+  supplierId            Int                    @map("supplier_id")
+  supplier              Supplier               @relation(fields: [supplierId], references: [id])
+  locationId            Int                    @map("location_id")
+  location              Location               @relation(fields: [locationId], references: [id])
+  goodsReceiptId        Int?                   @map("goods_receipt_id")
+  goodsReceipt          GoodsReceipt?          @relation(fields: [goodsReceiptId], references: [id])
+  directPurchaseId      Int?                   @map("direct_purchase_id")
+  directPurchase        DirectPurchase?        @relation(fields: [directPurchaseId], references: [id])
+  no                    String                 @unique
+  date                  DateTime               @db.Date
+  reason                String
+  settleMode            String                 @default("potong") @map("settle_mode")
+  subtotal              BigInt                 @default(0)
+  tax                   BigInt                 @default(0)
+  total                 BigInt                 @default(0)
+  debitNoteAmount       BigInt                 @default(0) @map("debit_note_amount")
+  status                DocStatus              @default(Draft)
+  submittedBy           Int?                   @map("submitted_by")
+  submittedAt           DateTime?              @map("submitted_at") @db.Timestamptz(6)
+  approvedBy            Int?                   @map("approved_by")
+  approvedAt            DateTime?              @map("approved_at") @db.Timestamptz(6)
+  cancelledBy           Int?                   @map("cancelled_by")
+  cancelledAt           DateTime?              @map("cancelled_at") @db.Timestamptz(6)
+  cancelReason          String?                @map("cancel_reason")
+  postedBy              Int?                   @map("posted_by")
+  postedAt              DateTime?              @map("posted_at") @db.Timestamptz(6)
+  reversalJournalId     Int?                   @map("reversal_journal_id")
+  createdBy             Int?                   @map("created_by")
+  createdAt             DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedBy             Int?                   @map("updated_by")
+  updatedAt             DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
+  purchaseReturnLines   PurchaseReturnLine[]
+  purchasePaymentAllocs PurchasePaymentAlloc[]
+
+  @@map("purchase_return")
+}
+
+model PurchaseReturnLine {
+  id                   Int                 @id @default(autoincrement())
+  purchaseReturnId     Int                 @map("purchase_return_id")
+  purchaseReturn       PurchaseReturn      @relation(fields: [purchaseReturnId], references: [id], onDelete: Cascade)
+  goodsReceiptLineId   Int?                @map("goods_receipt_line_id")
+  goodsReceiptLine     GoodsReceiptLine?   @relation(fields: [goodsReceiptLineId], references: [id])
+  directPurchaseLineId Int?                @map("direct_purchase_line_id")
+  directPurchaseLine   DirectPurchaseLine? @relation(fields: [directPurchaseLineId], references: [id])
+  productId            Int                 @map("product_id")
+  product              Product             @relation(fields: [productId], references: [id])
+  qty                  Decimal             @db.Decimal(18, 3)
+  unitCost             Decimal             @default(0) @map("unit_cost") @db.Decimal(18, 4)
+  qtyUninvoiced        Decimal             @default(0) @map("qty_uninvoiced") @db.Decimal(18, 3)
+  qtyInvoiced          Decimal             @default(0) @map("qty_invoiced") @db.Decimal(18, 3)
+  invoicePrice         BigInt              @default(0) @map("invoice_price")
+
+  @@index([purchaseReturnId])
+  @@map("purchase_return_line")
+}
+
+model DirectPurchase {
+  id                    Int                    @id @default(autoincrement())
+  supplierId            Int                    @map("supplier_id")
+  supplier              Supplier               @relation(fields: [supplierId], references: [id])
+  locationId            Int                    @map("location_id")
+  location              Location               @relation(fields: [locationId], references: [id])
+  cashAccountId         Int?                   @map("cash_account_id")
+  cashAccount           Account?               @relation("BeliLangsungAkunKas", fields: [cashAccountId], references: [id])
+  no                    String                 @unique
+  date                  DateTime               @db.Date
+  payMode               String                 @default("tunai") @map("pay_mode")
+  supplierInvoiceNo     String                 @default("") @map("supplier_invoice_no")
+  dueDate               DateTime?              @map("due_date") @db.Date
+  subtotal              BigInt                 @default(0)
+  tax                   BigInt                 @default(0)
+  total                 BigInt                 @default(0)
+  extraCost             BigInt                 @default(0) @map("extra_cost")
+  paidAmount            BigInt                 @default(0) @map("paid_amount")
+  payStatus             PayStatus              @default(BelumBayar) @map("pay_status")
+  note                  String                 @default("")
+  status                DocStatus              @default(Draft)
+  submittedBy           Int?                   @map("submitted_by")
+  submittedAt           DateTime?              @map("submitted_at") @db.Timestamptz(6)
+  approvedBy            Int?                   @map("approved_by")
+  approvedAt            DateTime?              @map("approved_at") @db.Timestamptz(6)
+  cancelledBy           Int?                   @map("cancelled_by")
+  cancelledAt           DateTime?              @map("cancelled_at") @db.Timestamptz(6)
+  cancelReason          String?                @map("cancel_reason")
+  postedBy              Int?                   @map("posted_by")
+  postedAt              DateTime?              @map("posted_at") @db.Timestamptz(6)
+  reversalJournalId     Int?                   @map("reversal_journal_id")
+  createdBy             Int?                   @map("created_by")
+  createdAt             DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedBy             Int?                   @map("updated_by")
+  updatedAt             DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
+  purchaseReturns       PurchaseReturn[]
+  directPurchaseLines   DirectPurchaseLine[]
+  purchasePaymentAllocs PurchasePaymentAlloc[]
+
+  @@index([supplierId, date])
+  @@map("direct_purchase")
+}
+
+model DirectPurchaseLine {
+  id                  Int                  @id @default(autoincrement())
+  directPurchaseId    Int                  @map("direct_purchase_id")
+  directPurchase      DirectPurchase       @relation(fields: [directPurchaseId], references: [id], onDelete: Cascade)
+  productId           Int?                 @map("product_id")
+  product             Product?             @relation(fields: [productId], references: [id])
+  unitId              Int?                 @map("unit_id")
+  unit                Unit?                @relation(fields: [unitId], references: [id])
+  expenseAccountId    Int?                 @map("expense_account_id")
+  expenseAccount      Account?             @relation("BeliLangsungAkunBeban", fields: [expenseAccountId], references: [id])
+  qty                 Decimal              @db.Decimal(18, 3)
+  price               BigInt
+  disc                BigInt               @default(0)
+  taxPct              Decimal              @default(0) @map("tax_pct") @db.Decimal(6, 3)
+  unitCost            Decimal              @default(0) @map("unit_cost") @db.Decimal(18, 4)
+  qtyReturned         Decimal              @default(0) @map("qty_returned") @db.Decimal(18, 3)
+  purchaseReturnLines PurchaseReturnLine[]
+  fixedAssets         FixedAsset[]
+
+  @@index([directPurchaseId])
+  @@map("direct_purchase_line")
+}
+
+model PurchasePayment {
+  id                    Int                    @id @default(autoincrement())
+  supplierId            Int                    @map("supplier_id")
+  supplier              Supplier               @relation(fields: [supplierId], references: [id])
+  fromAccountId         Int                    @map("from_account_id")
+  fromAccount           Account                @relation("BayarBeliAkunSumber", fields: [fromAccountId], references: [id])
+  no                    String                 @unique
+  date                  DateTime               @db.Date
+  amount                BigInt                 @default(0)
+  bankFee               BigInt                 @default(0) @map("bank_fee")
+  discount              BigInt                 @default(0)
+  unallocated           BigInt                 @default(0)
+  proofFile             String?                @map("proof_file")
+  note                  String                 @default("")
+  status                DocStatus              @default(Draft)
+  submittedBy           Int?                   @map("submitted_by")
+  submittedAt           DateTime?              @map("submitted_at") @db.Timestamptz(6)
+  approvedBy            Int?                   @map("approved_by")
+  approvedAt            DateTime?              @map("approved_at") @db.Timestamptz(6)
+  cancelledBy           Int?                   @map("cancelled_by")
+  cancelledAt           DateTime?              @map("cancelled_at") @db.Timestamptz(6)
+  cancelReason          String?                @map("cancel_reason")
+  postedBy              Int?                   @map("posted_by")
+  postedAt              DateTime?              @map("posted_at") @db.Timestamptz(6)
+  reversalJournalId     Int?                   @map("reversal_journal_id")
+  createdBy             Int?                   @map("created_by")
+  createdAt             DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedBy             Int?                   @map("updated_by")
+  updatedAt             DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
+  purchasePaymentAllocs PurchasePaymentAlloc[]
+
+  @@index([supplierId, date])
+  @@map("purchase_payment")
+}
+
+// Satu dari tiga FK tagihan terisi per baris.
+model PurchasePaymentAlloc {
+  id                Int              @id @default(autoincrement())
+  purchasePaymentId Int              @map("purchase_payment_id")
+  purchasePayment   PurchasePayment  @relation(fields: [purchasePaymentId], references: [id], onDelete: Cascade)
+  purchaseInvoiceId Int?             @map("purchase_invoice_id")
+  purchaseInvoice   PurchaseInvoice? @relation(fields: [purchaseInvoiceId], references: [id])
+  directPurchaseId  Int?             @map("direct_purchase_id")
+  directPurchase    DirectPurchase?  @relation(fields: [directPurchaseId], references: [id])
+  purchaseReturnId  Int?             @map("purchase_return_id")
+  purchaseReturn    PurchaseReturn?  @relation(fields: [purchaseReturnId], references: [id])
+  amount            BigInt
+
+  @@index([purchasePaymentId])
+  @@map("purchase_payment_alloc")
+}
+
+// ===== Lokasi dan persediaan =====
+
+model Branch {
+  id            Int        @id @default(autoincrement())
+  code          String     @unique
+  name          String
+  address       String     @default("")
+  taxPct        Decimal    @default(0) @map("tax_pct") @db.Decimal(6, 3)
+  servicePct    Decimal    @default(0) @map("service_pct") @db.Decimal(6, 3)
+  receiptHeader String     @default("") @map("receipt_header")
+  receiptFooter String     @default("") @map("receipt_footer")
+  active        Boolean    @default(true)
+  locations     Location[]
+
+  @@map("branch")
+}
+
+model Location {
+  id                   Int                @id @default(autoincrement())
+  branchId             Int                @map("branch_id")
+  branch               Branch             @relation(fields: [branchId], references: [id])
+  name                 String
+  kind                 String             @default("gudang")
+  allowNegativeStock   Boolean            @default(false) @map("allow_negative_stock")
+  active               Boolean            @default(true)
+  transfersFrom        StockTransfer[]    @relation("PindahDari")
+  transfersTo          StockTransfer[]    @relation("PindahKe")
+  productionsMaterial  ProductionOrder[]  @relation("ProduksiLokasiBahan")
+  productionsOutput    ProductionOrder[]  @relation("ProduksiLokasiHasil")
+  quickProductionsFrom QuickProduction[]  @relation("ProduksiCepatDari")
+  quickProductionsTo   QuickProduction[]  @relation("ProduksiCepatKe")
+  appUsers             AppUser[]
+  purchaseRequests     PurchaseRequest[]
+  purchaseOrders       PurchaseOrder[]
+  goodsReceipts        GoodsReceipt[]
+  purchaseInvoices     PurchaseInvoice[]
+  purchaseReturns      PurchaseReturn[]
+  directPurchases      DirectPurchase[]
+  stockBalances        StockBalance[]
+  stockLedgers         StockLedger[]
+  stockAdjustments     StockAdjustment[]
+  stockOpnames         StockOpname[]
+  materialIssues       MaterialIssue[]
+  productionResults    ProductionResult[]
+  shifts               Shift[]
+  salesOrders          SalesOrder[]
+  salesInvoices        SalesInvoice[]
+  salesReturns         SalesReturn[]
+  fixedAssets          FixedAsset[]
+
+  @@map("location")
+}
+
+model StockBalance {
+  productId   Int      @map("product_id")
+  product     Product  @relation(fields: [productId], references: [id])
+  locationId  Int      @map("location_id")
+  location    Location @relation(fields: [locationId], references: [id])
+  qty         Decimal  @default(0) @db.Decimal(18, 3)
+  reservedQty Decimal  @default(0) @map("reserved_qty") @db.Decimal(18, 3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@id([productId, locationId])
+  @@map("stock_balance")
+}
+
+model StockLedger {
+  id           Int      @id @default(autoincrement())
+  productId    Int      @map("product_id")
+  product      Product  @relation(fields: [productId], references: [id])
+  locationId   Int      @map("location_id")
+  location     Location @relation(fields: [locationId], references: [id])
+  at           DateTime @default(now()) @db.Timestamptz(6)
+  date         DateTime @db.Date
+  qty          Decimal  @db.Decimal(18, 3)
+  unitCost     Decimal  @map("unit_cost") @db.Decimal(18, 4)
+  value        BigInt
+  balanceQty   Decimal  @map("balance_qty") @db.Decimal(18, 3)
+  avgCostAfter Decimal  @map("avg_cost_after") @db.Decimal(18, 4)
+  docType      String   @map("doc_type")
+  docId        Int      @map("doc_id")
+  lineId       Int?     @map("line_id")
+  isReversal   Boolean  @default(false) @map("is_reversal")
+  createdBy    Int?     @map("created_by")
+
+  @@index([productId, locationId, at])
+  @@index([docType, docId])
+  @@map("stock_ledger")
+}
+
+model StockAdjustment {
+  id                   Int                   @id @default(autoincrement())
+  locationId           Int                   @map("location_id")
+  location             Location              @relation(fields: [locationId], references: [id])
+  no                   String                @unique
+  date                 DateTime              @db.Date
+  note                 String                @default("")
+  status               DocStatus             @default(Draft)
+  submittedBy          Int?                  @map("submitted_by")
+  submittedAt          DateTime?             @map("submitted_at") @db.Timestamptz(6)
+  approvedBy           Int?                  @map("approved_by")
+  approvedAt           DateTime?             @map("approved_at") @db.Timestamptz(6)
+  cancelledBy          Int?                  @map("cancelled_by")
+  cancelledAt          DateTime?             @map("cancelled_at") @db.Timestamptz(6)
+  cancelReason         String?               @map("cancel_reason")
+  postedBy             Int?                  @map("posted_by")
+  postedAt             DateTime?             @map("posted_at") @db.Timestamptz(6)
+  reversalJournalId    Int?                  @map("reversal_journal_id")
+  createdBy            Int?                  @map("created_by")
+  createdAt            DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedBy            Int?                  @map("updated_by")
+  updatedAt            DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
+  stockAdjustmentLines StockAdjustmentLine[]
+
+  @@map("stock_adjustment")
+}
+
+model StockAdjustmentLine {
+  id                Int             @id @default(autoincrement())
+  stockAdjustmentId Int             @map("stock_adjustment_id")
+  stockAdjustment   StockAdjustment @relation(fields: [stockAdjustmentId], references: [id], onDelete: Cascade)
+  productId         Int             @map("product_id")
+  product           Product         @relation(fields: [productId], references: [id])
+  reasonId          Int             @map("reason_id")
+  reason            StockReason     @relation(fields: [reasonId], references: [id])
+  direction         String
+  qty               Decimal         @db.Decimal(18, 3)
+  unitCost          Decimal         @default(0) @map("unit_cost") @db.Decimal(18, 4)
+
+  @@index([stockAdjustmentId])
+  @@map("stock_adjustment_line")
+}
+
+model StockOpname {
+  id                Int               @id @default(autoincrement())
+  locationId        Int               @map("location_id")
+  location          Location          @relation(fields: [locationId], references: [id])
+  categoryId        Int?              @map("category_id")
+  category          ProductCategory?  @relation(fields: [categoryId], references: [id])
+  no                String            @unique
+  date              DateTime          @db.Date
+  frozenAt          DateTime?         @map("frozen_at") @db.Timestamptz(6)
+  note              String            @default("")
+  status            DocStatus         @default(Draft)
+  submittedBy       Int?              @map("submitted_by")
+  submittedAt       DateTime?         @map("submitted_at") @db.Timestamptz(6)
+  approvedBy        Int?              @map("approved_by")
+  approvedAt        DateTime?         @map("approved_at") @db.Timestamptz(6)
+  cancelledBy       Int?              @map("cancelled_by")
+  cancelledAt       DateTime?         @map("cancelled_at") @db.Timestamptz(6)
+  cancelReason      String?           @map("cancel_reason")
+  postedBy          Int?              @map("posted_by")
+  postedAt          DateTime?         @map("posted_at") @db.Timestamptz(6)
+  reversalJournalId Int?              @map("reversal_journal_id")
+  createdBy         Int?              @map("created_by")
+  createdAt         DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedBy         Int?              @map("updated_by")
+  updatedAt         DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  stockOpnameLines  StockOpnameLine[]
+
+  @@map("stock_opname")
+}
+
+model StockOpnameLine {
+  id            Int          @id @default(autoincrement())
+  stockOpnameId Int          @map("stock_opname_id")
+  stockOpname   StockOpname  @relation(fields: [stockOpnameId], references: [id], onDelete: Cascade)
+  productId     Int          @map("product_id")
+  product       Product      @relation(fields: [productId], references: [id])
+  reasonId      Int?         @map("reason_id")
+  reason        StockReason? @relation(fields: [reasonId], references: [id])
+  systemQty     Decimal      @map("system_qty") @db.Decimal(18, 3)
+  countedQty    Decimal?     @map("counted_qty") @db.Decimal(18, 3)
+  unitCost      Decimal      @default(0) @map("unit_cost") @db.Decimal(18, 4)
+
+  @@index([stockOpnameId])
+  @@map("stock_opname_line")
+}
+
+model StockTransfer {
+  id                 Int                 @id @default(autoincrement())
+  fromLocationId     Int                 @map("from_location_id")
+  fromLocation       Location            @relation("PindahDari", fields: [fromLocationId], references: [id])
+  toLocationId       Int                 @map("to_location_id")
+  toLocation         Location            @relation("PindahKe", fields: [toLocationId], references: [id])
+  no                 String              @unique
+  date               DateTime            @db.Date
+  note               String              @default("")
+  status             DocStatus           @default(Draft)
+  submittedBy        Int?                @map("submitted_by")
+  submittedAt        DateTime?           @map("submitted_at") @db.Timestamptz(6)
+  approvedBy         Int?                @map("approved_by")
+  approvedAt         DateTime?           @map("approved_at") @db.Timestamptz(6)
+  cancelledBy        Int?                @map("cancelled_by")
+  cancelledAt        DateTime?           @map("cancelled_at") @db.Timestamptz(6)
+  cancelReason       String?             @map("cancel_reason")
+  postedBy           Int?                @map("posted_by")
+  postedAt           DateTime?           @map("posted_at") @db.Timestamptz(6)
+  reversalJournalId  Int?                @map("reversal_journal_id")
+  createdBy          Int?                @map("created_by")
+  createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedBy          Int?                @map("updated_by")
+  updatedAt          DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+  stockTransferLines StockTransferLine[]
+
+  @@map("stock_transfer")
+}
+
+model StockTransferLine {
+  id              Int           @id @default(autoincrement())
+  stockTransferId Int           @map("stock_transfer_id")
+  stockTransfer   StockTransfer @relation(fields: [stockTransferId], references: [id], onDelete: Cascade)
+  productId       Int           @map("product_id")
+  product         Product       @relation(fields: [productId], references: [id])
+  qty             Decimal       @db.Decimal(18, 3)
+  unitCost        Decimal       @default(0) @map("unit_cost") @db.Decimal(18, 4)
+
+  @@index([stockTransferId])
+  @@map("stock_transfer_line")
+}
+
+// ===== Produksi =====
+
+model ProductionOrder {
+  id                   Int                   @id @default(autoincrement())
+  bomId                Int                   @map("bom_id")
+  bom                  Bom                   @relation(fields: [bomId], references: [id])
+  materialLocationId   Int                   @map("material_location_id")
+  materialLocation     Location              @relation("ProduksiLokasiBahan", fields: [materialLocationId], references: [id])
+  outputLocationId     Int                   @map("output_location_id")
+  outputLocation       Location              @relation("ProduksiLokasiHasil", fields: [outputLocationId], references: [id])
+  no                   String                @unique
+  date                 DateTime              @db.Date
+  plannedQty           Decimal               @map("planned_qty") @db.Decimal(18, 3)
+  producedQty          Decimal               @default(0) @map("produced_qty") @db.Decimal(18, 3)
+  wipValue             BigInt                @default(0) @map("wip_value")
+  note                 String                @default("")
+  status               DocStatus             @default(Draft)
+  submittedBy          Int?                  @map("submitted_by")
+  submittedAt          DateTime?             @map("submitted_at") @db.Timestamptz(6)
+  approvedBy           Int?                  @map("approved_by")
+  approvedAt           DateTime?             @map("approved_at") @db.Timestamptz(6)
+  cancelledBy          Int?                  @map("cancelled_by")
+  cancelledAt          DateTime?             @map("cancelled_at") @db.Timestamptz(6)
+  cancelReason         String?               @map("cancel_reason")
+  closeReason          String?               @map("close_reason")
+  closedAt             DateTime?             @map("closed_at") @db.Timestamptz(6)
+  createdBy            Int?                  @map("created_by")
+  createdAt            DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedBy            Int?                  @map("updated_by")
+  updatedAt            DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
+  productionOrderLines ProductionOrderLine[]
+  materialIssues       MaterialIssue[]
+  productionResults    ProductionResult[]
+
+  @@map("production_order")
+}
+
+model ProductionOrderLine {
+  id                 Int                 @id @default(autoincrement())
+  productionOrderId  Int                 @map("production_order_id")
+  productionOrder    ProductionOrder     @relation(fields: [productionOrderId], references: [id], onDelete: Cascade)
+  productId          Int                 @map("product_id")
+  product            Product             @relation(fields: [productId], references: [id])
+  requiredQty        Decimal             @map("required_qty") @db.Decimal(18, 3)
+  issuedQty          Decimal             @default(0) @map("issued_qty") @db.Decimal(18, 3)
+  returnedQty        Decimal             @default(0) @map("returned_qty") @db.Decimal(18, 3)
+  materialIssueLines MaterialIssueLine[]
+
+  @@index([productionOrderId])
+  @@map("production_order_line")
+}
+
+model MaterialIssue {
+  id                 Int                 @id @default(autoincrement())
+  productionOrderId  Int                 @map("production_order_id")
+  productionOrder    ProductionOrder     @relation(fields: [productionOrderId], references: [id])
+  locationId         Int                 @map("location_id")
+  location           Location            @relation(fields: [locationId], references: [id])
+  no                 String              @unique
+  date               DateTime            @db.Date
+  kind               String              @default("keluar")
+  note               String              @default("")
+  status             DocStatus           @default(Draft)
+  submittedBy        Int?                @map("submitted_by")
+  submittedAt        DateTime?           @map("submitted_at") @db.Timestamptz(6)
+  approvedBy         Int?                @map("approved_by")
+  approvedAt         DateTime?           @map("approved_at") @db.Timestamptz(6)
+  cancelledBy        Int?                @map("cancelled_by")
+  cancelledAt        DateTime?           @map("cancelled_at") @db.Timestamptz(6)
+  cancelReason       String?             @map("cancel_reason")
+  postedBy           Int?                @map("posted_by")
+  postedAt           DateTime?           @map("posted_at") @db.Timestamptz(6)
+  reversalJournalId  Int?                @map("reversal_journal_id")
+  createdBy          Int?                @map("created_by")
+  createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedBy          Int?                @map("updated_by")
+  updatedAt          DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+  materialIssueLines MaterialIssueLine[]
+
+  @@map("material_issue")
+}
+
+model MaterialIssueLine {
+  id                    Int                 @id @default(autoincrement())
+  materialIssueId       Int                 @map("material_issue_id")
+  materialIssue         MaterialIssue       @relation(fields: [materialIssueId], references: [id], onDelete: Cascade)
+  productionOrderLineId Int                 @map("production_order_line_id")
+  productionOrderLine   ProductionOrderLine @relation(fields: [productionOrderLineId], references: [id])
+  productId             Int                 @map("product_id")
+  product               Product             @relation(fields: [productId], references: [id])
+  qty                   Decimal             @db.Decimal(18, 3)
+  unitCost              Decimal             @default(0) @map("unit_cost") @db.Decimal(18, 4)
+
+  @@index([materialIssueId])
+  @@map("material_issue_line")
+}
+
+model ProductionResult {
+  id                Int             @id @default(autoincrement())
+  productionOrderId Int             @map("production_order_id")
+  productionOrder   ProductionOrder @relation(fields: [productionOrderId], references: [id])
+  locationId        Int             @map("location_id")
+  location          Location        @relation(fields: [locationId], references: [id])
+  no                String          @unique
+  date              DateTime        @db.Date
+  qty               Decimal         @db.Decimal(18, 3)
+  wasteQty          Decimal         @default(0) @map("waste_qty") @db.Decimal(18, 3)
+  unitCost          Decimal         @default(0) @map("unit_cost") @db.Decimal(18, 4)
+  value             BigInt          @default(0)
+  note              String          @default("")
+  status            DocStatus       @default(Draft)
+  submittedBy       Int?            @map("submitted_by")
+  submittedAt       DateTime?       @map("submitted_at") @db.Timestamptz(6)
+  approvedBy        Int?            @map("approved_by")
+  approvedAt        DateTime?       @map("approved_at") @db.Timestamptz(6)
+  cancelledBy       Int?            @map("cancelled_by")
+  cancelledAt       DateTime?       @map("cancelled_at") @db.Timestamptz(6)
+  cancelReason      String?         @map("cancel_reason")
+  postedBy          Int?            @map("posted_by")
+  postedAt          DateTime?       @map("posted_at") @db.Timestamptz(6)
+  reversalJournalId Int?            @map("reversal_journal_id")
+  createdBy         Int?            @map("created_by")
+  createdAt         DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedBy         Int?            @map("updated_by")
+  updatedAt         DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("production_result")
+}
+
+model QuickProduction {
+  id                   Int                   @id @default(autoincrement())
+  bomId                Int                   @map("bom_id")
+  bom                  Bom                   @relation(fields: [bomId], references: [id])
+  fromLocationId       Int                   @map("from_location_id")
+  fromLocation         Location              @relation("ProduksiCepatDari", fields: [fromLocationId], references: [id])
+  toLocationId         Int                   @map("to_location_id")
+  toLocation           Location              @relation("ProduksiCepatKe", fields: [toLocationId], references: [id])
+  no                   String                @unique
+  date                 DateTime              @db.Date
+  note                 String                @default("")
+  qty                  Decimal               @db.Decimal(18, 3)
+  outputQty            Decimal               @map("output_qty") @db.Decimal(18, 3)
+  unitCost             Decimal               @default(0) @map("unit_cost") @db.Decimal(18, 4)
+  extraCost            BigInt                @default(0) @map("extra_cost")
+  status               DocStatus             @default(Draft)
+  submittedBy          Int?                  @map("submitted_by")
+  submittedAt          DateTime?             @map("submitted_at") @db.Timestamptz(6)
+  approvedBy           Int?                  @map("approved_by")
+  approvedAt           DateTime?             @map("approved_at") @db.Timestamptz(6)
+  cancelledBy          Int?                  @map("cancelled_by")
+  cancelledAt          DateTime?             @map("cancelled_at") @db.Timestamptz(6)
+  cancelReason         String?               @map("cancel_reason")
+  postedBy             Int?                  @map("posted_by")
+  postedAt             DateTime?             @map("posted_at") @db.Timestamptz(6)
+  reversalJournalId    Int?                  @map("reversal_journal_id")
+  createdBy            Int?                  @map("created_by")
+  createdAt            DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedBy            Int?                  @map("updated_by")
+  updatedAt            DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
+  quickProductionLines QuickProductionLine[]
+
+  @@map("quick_production")
+}
+
+model QuickProductionLine {
+  id                Int             @id @default(autoincrement())
+  quickProductionId Int             @map("quick_production_id")
+  quickProduction   QuickProduction @relation(fields: [quickProductionId], references: [id], onDelete: Cascade)
+  productId         Int             @map("product_id")
+  product           Product         @relation(fields: [productId], references: [id])
+  systemQty         Decimal         @map("system_qty") @db.Decimal(18, 3)
+  qty               Decimal         @db.Decimal(18, 3)
+  unitCost          Decimal         @default(0) @map("unit_cost") @db.Decimal(18, 4)
+
+  @@index([quickProductionId])
+  @@map("quick_production_line")
+}
+
+// ===== Kasir, shift, setoran =====
+
+model MemberTier {
+  id          Int      @id @default(autoincrement())
+  name        String
+  minVisits   Int      @default(0) @map("min_visits")
+  discountPct Decimal  @default(0) @map("discount_pct") @db.Decimal(6, 3)
+  perk        String   @default("")
+  members     Member[]
+
+  @@map("member_tier")
+}
+
+model Member {
+  id         Int         @id @default(autoincrement())
+  tierId     Int?        @map("tier_id")
+  tier       MemberTier? @relation(fields: [tierId], references: [id])
+  name       String
+  wa         String      @unique
+  visits     Int         @default(0)
+  discountOn Boolean     @default(false) @map("discount_on")
+  joinedAt   DateTime    @default(now()) @map("joined_at") @db.Timestamptz(6)
+  note       String      @default("")
+  createdBy  Int?        @map("created_by")
+  createdAt  DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedBy  Int?        @map("updated_by")
+  updatedAt  DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
+  sales      Sale[]
+
+  @@map("member")
+}
+
+model Shift {
+  id                 Int                 @id @default(autoincrement())
+  userId             Int                 @map("user_id")
+  user               AppUser             @relation("ShiftKasir", fields: [userId], references: [id])
+  locationId         Int                 @map("location_id")
+  location           Location            @relation(fields: [locationId], references: [id])
+  approvedBy         Int?                @map("approved_by")
+  approver           AppUser?            @relation("ShiftPenyetuju", fields: [approvedBy], references: [id])
+  approvedAt         DateTime?           @map("approved_at") @db.Timestamptz(6)
+  openedAt           DateTime            @default(now()) @map("opened_at") @db.Timestamptz(6)
+  openCash           BigInt              @default(0) @map("open_cash")
+  closedAt           DateTime?           @map("closed_at") @db.Timestamptz(6)
+  expectedCash       BigInt?             @map("expected_cash")
+  countedCash        BigInt?             @map("counted_cash")
+  cashDiff           BigInt?             @map("cash_diff")
+  denominationsJson  Json?               @map("denominations_json")
+  note               String              @default("")
+  status             ShiftStatus         @default(Buka)
+  shiftCashMoves     ShiftCashMove[]
+  sales              Sale[]
+  posSettlementLines PosSettlementLine[]
+
+  @@index([userId, openedAt])
+  @@map("shift")
+}
+
+model ShiftCashMove {
+  id        Int      @id @default(autoincrement())
+  shiftId   Int      @map("shift_id")
+  shift     Shift    @relation(fields: [shiftId], references: [id])
+  at        DateTime @default(now()) @db.Timestamptz(6)
+  kind      String
+  amount    BigInt
+  reason    String
+  createdBy Int?     @map("created_by")
+
+  @@index([shiftId])
+  @@map("shift_cash_move")
+}
+
+model Sale {
+  id           Int           @id @default(autoincrement())
+  shiftId      Int           @map("shift_id")
+  shift        Shift         @relation(fields: [shiftId], references: [id])
+  memberId     Int?          @map("member_id")
+  member       Member?       @relation(fields: [memberId], references: [id])
+  no           String        @unique
+  at           DateTime      @default(now()) @db.Timestamptz(6)
+  mode         String
+  tableNo      String?       @map("table_no")
+  sub          BigInt        @default(0)
+  disc         BigInt        @default(0)
+  svc          BigInt        @default(0)
+  tax          BigInt        @default(0)
+  total        BigInt        @default(0)
+  hpp          BigInt        @default(0)
+  status       SaleStatus    @default(Selesai)
+  voidBy       Int?          @map("void_by")
+  voidAt       DateTime?     @map("void_at") @db.Timestamptz(6)
+  voidReason   String?       @map("void_reason")
+  createdBy    Int?          @map("created_by")
+  saleLines    SaleLine[]
+  salePayments SalePayment[]
+
+  @@index([shiftId])
+  @@index([at])
+  @@map("sale")
+}
+
+model SaleLine {
+  id         Int      @id @default(autoincrement())
+  saleId     Int      @map("sale_id")
+  sale       Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  menuItemId Int      @map("menu_item_id")
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id])
+  qty        Int
+  price      BigInt
+  note       String   @default("")
+  hpp        BigInt   @default(0)
+
+  @@index([saleId])
+  @@map("sale_line")
+}
+
+model SalePayment {
+  id              Int           @id @default(autoincrement())
+  saleId          Int           @map("sale_id")
+  sale            Sale          @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  paymentMethodId Int           @map("payment_method_id")
+  paymentMethod   PaymentMethod @relation(fields: [paymentMethodId], references: [id])
+  amount          BigInt
+  paid            BigInt
+  change          BigInt        @default(0)
+
+  @@index([saleId])
+  @@map("sale_payment")
+}
+
+model PosSettlement {
+  id                 Int                 @id @default(autoincrement())
+  paymentMethodId    Int                 @map("payment_method_id")
+  paymentMethod      PaymentMethod       @relation(fields: [paymentMethodId], references: [id])
+  toAccountId        Int                 @map("to_account_id")
+  toAccount          Account             @relation("SetoranAkunTujuan", fields: [toAccountId], references: [id])
+  no                 String              @unique
+  date               DateTime            @db.Date
+  expectedTotal      BigInt              @default(0) @map("expected_total")
+  actualTotal        BigInt              @default(0) @map("actual_total")
+  mdrFee             BigInt              @default(0) @map("mdr_fee")
+  diff               BigInt              @default(0)
+  proofFile          String?             @map("proof_file")
+  note               String              @default("")
+  status             DocStatus           @default(Draft)
+  submittedBy        Int?                @map("submitted_by")
+  submittedAt        DateTime?           @map("submitted_at") @db.Timestamptz(6)
+  approvedBy         Int?                @map("approved_by")
+  approvedAt         DateTime?           @map("approved_at") @db.Timestamptz(6)
+  cancelledBy        Int?                @map("cancelled_by")
+  cancelledAt        DateTime?           @map("cancelled_at") @db.Timestamptz(6)
+  cancelReason       String?             @map("cancel_reason")
+  postedBy           Int?                @map("posted_by")
+  postedAt           DateTime?           @map("posted_at") @db.Timestamptz(6)
+  reversalJournalId  Int?                @map("reversal_journal_id")
+  createdBy          Int?                @map("created_by")
+  createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedBy          Int?                @map("updated_by")
+  updatedAt          DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+  posSettlementLines PosSettlementLine[]
+
+  @@map("pos_settlement")
+}
+
+// Satu shift dan metode hanya boleh masuk satu setoran yang tidak Batal; dicek di modul setoran.
+model PosSettlementLine {
+  id              Int           @id @default(autoincrement())
+  posSettlementId Int           @map("pos_settlement_id")
+  posSettlement   PosSettlement @relation(fields: [posSettlementId], references: [id], onDelete: Cascade)
+  shiftId         Int           @map("shift_id")
+  shift           Shift         @relation(fields: [shiftId], references: [id])
+  expected        BigInt        @default(0)
+  actual          BigInt        @default(0)
+  diff            BigInt        @default(0)
+  note            String        @default("")
+
+  @@index([posSettlementId])
+  @@index([shiftId])
+  @@map("pos_settlement_line")
+}
+
+// ===== Akun, jurnal, kas, bank =====
+
+model Account {
+  id                    Int                   @id @default(autoincrement())
+  parentId              Int?                  @map("parent_id")
+  parent                Account?              @relation("PohonAkun", fields: [parentId], references: [id])
+  children              Account[]             @relation("PohonAkun")
+  code                  String                @unique
+  name                  String
+  kind                  AccountKind
+  isCashBank            Boolean               @default(false) @map("is_cash_bank")
+  isPostable            Boolean               @default(true) @map("is_postable")
+  active                Boolean               @default(true)
+  suppliersPayable      Supplier[]            @relation("PemasokAkunHutang")
+  purchaseInvoiceLines  PurchaseInvoiceLine[] @relation("FakturBeliAkunBeban")
+  directPurchasesCash   DirectPurchase[]      @relation("BeliLangsungAkunKas")
+  directPurchaseLines   DirectPurchaseLine[]  @relation("BeliLangsungAkunBeban")
+  purchasePaymentsFrom  PurchasePayment[]     @relation("BayarBeliAkunSumber")
+  posSettlementsTo      PosSettlement[]       @relation("SetoranAkunTujuan")
+  paymentMethodsClear   PaymentMethod[]       @relation("MetodeAkunKliring")
+  paymentMethodsDeposit PaymentMethod[]       @relation("MetodeAkunSetoran")
+  cashTransactions      CashTransaction[]     @relation("KasAkun")
+  cashTransactionsTo    CashTransaction[]     @relation("KasAkunTujuan")
+  customersReceivable   Customer[]            @relation("PelangganAkunPiutang")
+  customerPaymentsTo    CustomerPayment[]     @relation("TerimaPelangganAkun")
+  fixedAssetsAsset      FixedAsset[]          @relation("AsetAkunAset")
+  fixedAssetsAccum      FixedAsset[]          @relation("AsetAkunAkumulasi")
+  fixedAssetsExpense    FixedAsset[]          @relation("AsetAkunBeban")
+  assetDisposalsCash    AssetDisposal[]       @relation("LepasAsetAkunKas")
+  stockReasons          StockReason[]
+  accountMappings       AccountMapping[]
+  bankAccounts          BankAccount[]
+  journalLines          JournalLine[]
+  cashTransactionLines  CashTransactionLine[]
+  budgetLines           BudgetLine[]
+
+  @@map("account")
+}
+
+model AccountMapping {
+  key       String   @id
+  accountId Int      @map("account_id")
+  account   Account  @relation(fields: [accountId], references: [id])
+  updatedBy Int?     @map("updated_by")
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("account_mapping")
+}
+
+model FiscalPeriod {
+  id                 Int                 @id @default(autoincrement())
+  yearMonth          String              @unique @map("year_month") @db.VarChar(7)
+  stockClosedAt      DateTime?           @map("stock_closed_at") @db.Timestamptz(6)
+  closedAt           DateTime?           @map("closed_at") @db.Timestamptz(6)
+  closedBy           Int?                @map("closed_by")
+  closer             AppUser?            @relation(fields: [closedBy], references: [id])
+  status             PeriodStatus        @default(Terbuka)
+  journals           Journal[]
+  assetDepreciations AssetDepreciation[]
+
+  @@map("fiscal_period")
+}
+
+model PaymentMethod {
+  id                Int             @id @default(autoincrement())
+  clearingAccountId Int?            @map("clearing_account_id")
+  clearingAccount   Account?        @relation("MetodeAkunKliring", fields: [clearingAccountId], references: [id])
+  depositAccountId  Int?            @map("deposit_account_id")
+  depositAccount    Account?        @relation("MetodeAkunSetoran", fields: [depositAccountId], references: [id])
+  name              String          @unique
+  kind              String          @default("tunai")
+  mdrPct            Decimal         @default(0) @map("mdr_pct") @db.Decimal(6, 3)
+  openDrawer        Boolean         @default(false) @map("open_drawer")
+  active            Boolean         @default(true)
+  salePayments      SalePayment[]
+  posSettlements    PosSettlement[]
+
+  @@map("payment_method")
+}
+
+model BankAccount {
+  id                 Int                 @id @default(autoincrement())
+  accountId          Int                 @map("account_id")
+  account            Account             @relation(fields: [accountId], references: [id])
+  bankName           String              @map("bank_name")
+  accountNo          String              @map("account_no")
+  holderName         String              @default("") @map("holder_name")
+  active             Boolean             @default(true)
+  bankStatementLines BankStatementLine[]
+  bankReconciles     BankReconcile[]
+
+  @@map("bank_account")
+}
+
+model Journal {
+  id           Int           @id @default(autoincrement())
+  periodId     Int?          @map("period_id")
+  period       FiscalPeriod? @relation(fields: [periodId], references: [id])
+  reversalOfId Int?          @map("reversal_of_id")
+  reversalOf   Journal?      @relation("JurnalBalik", fields: [reversalOfId], references: [id])
+  reversals    Journal[]     @relation("JurnalBalik")
+  no           String        @unique
+  date         DateTime      @db.Date
+  sourceType   String        @map("source_type")
+  sourceId     Int?          @map("source_id")
+  memo         String        @default("")
+  postedBy     Int?          @map("posted_by")
+  postedAt     DateTime      @default(now()) @map("posted_at") @db.Timestamptz(6)
+  journalLines JournalLine[]
+
+  @@index([sourceType, sourceId])
+  @@index([date])
+  @@map("journal")
+}
+
+model JournalLine {
+  id                 Int                 @id @default(autoincrement())
+  journalId          Int                 @map("journal_id")
+  journal            Journal             @relation(fields: [journalId], references: [id], onDelete: Cascade)
+  accountId          Int                 @map("account_id")
+  account            Account             @relation(fields: [accountId], references: [id])
+  supplierId         Int?                @map("supplier_id")
+  supplier           Supplier?           @relation(fields: [supplierId], references: [id])
+  customerId         Int?                @map("customer_id")
+  customer           Customer?           @relation(fields: [customerId], references: [id])
+  debit              BigInt              @default(0)
+  credit             BigInt              @default(0)
+  memo               String              @default("")
+  clearedAt          DateTime?           @map("cleared_at") @db.Date
+  bankReconcileMatch BankReconcileMatch?
+
+  @@index([journalId])
+  @@index([accountId])
+  @@map("journal_line")
+}
+
+model CashTransaction {
+  id                   Int                   @id @default(autoincrement())
+  accountId            Int                   @map("account_id")
+  account              Account               @relation("KasAkun", fields: [accountId], references: [id])
+  toAccountId          Int?                  @map("to_account_id")
+  toAccount            Account?              @relation("KasAkunTujuan", fields: [toAccountId], references: [id])
+  no                   String                @unique
+  date                 DateTime              @db.Date
+  kind                 String
+  partyName            String                @default("") @map("party_name")
+  amount               BigInt                @default(0)
+  note                 String                @default("")
+  status               DocStatus             @default(Draft)
+  submittedBy          Int?                  @map("submitted_by")
+  submittedAt          DateTime?             @map("submitted_at") @db.Timestamptz(6)
+  approvedBy           Int?                  @map("approved_by")
+  approvedAt           DateTime?             @map("approved_at") @db.Timestamptz(6)
+  cancelledBy          Int?                  @map("cancelled_by")
+  cancelledAt          DateTime?             @map("cancelled_at") @db.Timestamptz(6)
+  cancelReason         String?               @map("cancel_reason")
+  postedBy             Int?                  @map("posted_by")
+  postedAt             DateTime?             @map("posted_at") @db.Timestamptz(6)
+  reversalJournalId    Int?                  @map("reversal_journal_id")
+  createdBy            Int?                  @map("created_by")
+  createdAt            DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedBy            Int?                  @map("updated_by")
+  updatedAt            DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
+  cashTransactionLines CashTransactionLine[]
+
+  @@map("cash_transaction")
+}
+
+model CashTransactionLine {
+  id                Int             @id @default(autoincrement())
+  cashTransactionId Int             @map("cash_transaction_id")
+  cashTransaction   CashTransaction @relation(fields: [cashTransactionId], references: [id], onDelete: Cascade)
+  accountId         Int             @map("account_id")
+  account           Account         @relation(fields: [accountId], references: [id])
+  amount            BigInt
+  memo              String          @default("")
+
+  @@index([cashTransactionId])
+  @@map("cash_transaction_line")
+}
+
+model BankStatementLine {
+  id                   Int                  @id @default(autoincrement())
+  bankAccountId        Int                  @map("bank_account_id")
+  bankAccount          BankAccount          @relation(fields: [bankAccountId], references: [id])
+  bankReconcileId      Int?                 @map("bank_reconcile_id")
+  bankReconcile        BankReconcile?       @relation(fields: [bankReconcileId], references: [id])
+  date                 DateTime             @db.Date
+  description          String
+  ref                  String               @default("")
+  debit                BigInt               @default(0)
+  credit               BigInt               @default(0)
+  balance              BigInt?
+  importBatch          String               @map("import_batch")
+  matchStatus          MatchStatus          @default(BelumCocok) @map("match_status")
+  bankReconcileMatches BankReconcileMatch[]
+
+  @@index([bankAccountId, date])
+  @@map("bank_statement_line")
+}
+
+model BankReconcile {
+  id                 Int                 @id @default(autoincrement())
+  bankAccountId      Int                 @map("bank_account_id")
+  bankAccount        BankAccount         @relation(fields: [bankAccountId], references: [id])
+  no                 String              @unique
+  periodFrom         DateTime            @map("period_from") @db.Date
+  periodTo           DateTime            @map("period_to") @db.Date
+  stmtOpening        BigInt              @default(0) @map("stmt_opening")
+  stmtClosing        BigInt              @default(0) @map("stmt_closing")
+  bookClosing        BigInt              @default(0) @map("book_closing")
+  diff               BigInt              @default(0)
+  note               String              @default("")
+  status             DocStatus           @default(Draft)
+  submittedBy        Int?                @map("submitted_by")
+  submittedAt        DateTime?           @map("submitted_at") @db.Timestamptz(6)
+  approvedBy         Int?                @map("approved_by")
+  approvedAt         DateTime?           @map("approved_at") @db.Timestamptz(6)
+  cancelledBy        Int?                @map("cancelled_by")
+  cancelledAt        DateTime?           @map("cancelled_at") @db.Timestamptz(6)
+  cancelReason       String?             @map("cancel_reason")
+  postedBy           Int?                @map("posted_by")
+  postedAt           DateTime?           @map("posted_at") @db.Timestamptz(6)
+  reversalJournalId  Int?                @map("reversal_journal_id")
+  createdBy          Int?                @map("created_by")
+  createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedBy          Int?                @map("updated_by")
+  updatedAt          DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+  bankStatementLines BankStatementLine[]
+
+  @@map("bank_reconcile")
+}
+
+model BankReconcileMatch {
+  id                  Int               @id @default(autoincrement())
+  bankStatementLineId Int               @map("bank_statement_line_id")
+  bankStatementLine   BankStatementLine @relation(fields: [bankStatementLineId], references: [id])
+  journalLineId       Int               @unique @map("journal_line_id")
+  journalLine         JournalLine       @relation(fields: [journalLineId], references: [id])
+  amount              BigInt
+  matchedBy           Int?              @map("matched_by")
+  matchedAt           DateTime          @default(now()) @map("matched_at") @db.Timestamptz(6)
+
+  @@index([bankStatementLineId])
+  @@map("bank_reconcile_match")
+}
+
+// ===== Penjualan B2B =====
+
+model Customer {
+  id                  Int               @id @default(autoincrement())
+  receivableAccountId Int?              @map("receivable_account_id")
+  receivableAccount   Account?          @relation("PelangganAkunPiutang", fields: [receivableAccountId], references: [id])
+  code                String            @unique
+  name                String
+  category            String            @default("")
+  contact             String            @default("")
+  phone               String            @default("")
+  address             String            @default("")
+  paymentDays         Int               @default(0) @map("payment_days")
+  active              Boolean           @default(true)
+  createdBy           Int?              @map("created_by")
+  createdAt           DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedBy           Int?              @map("updated_by")
+  updatedAt           DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  journalLines        JournalLine[]
+  salesOrders         SalesOrder[]
+  salesInvoices       SalesInvoice[]
+  customerPayments    CustomerPayment[]
+
+  @@map("customer")
+}
+
+model SalesOrder {
+  id              Int              @id @default(autoincrement())
+  customerId      Int              @map("customer_id")
+  customer        Customer         @relation(fields: [customerId], references: [id])
+  locationId      Int              @map("location_id")
+  location        Location         @relation(fields: [locationId], references: [id])
+  no              String           @unique
+  date            DateTime         @db.Date
+  requiredDate    DateTime?        @map("required_date") @db.Date
+  subtotal        BigInt           @default(0)
+  tax             BigInt           @default(0)
+  total           BigInt           @default(0)
+  invoiceProgress Progress         @default(Belum) @map("invoice_progress")
+  note            String           @default("")
+  status          DocStatus        @default(Draft)
+  submittedBy     Int?             @map("submitted_by")
+  submittedAt     DateTime?        @map("submitted_at") @db.Timestamptz(6)
+  approvedBy      Int?             @map("approved_by")
+  approvedAt      DateTime?        @map("approved_at") @db.Timestamptz(6)
+  cancelledBy     Int?             @map("cancelled_by")
+  cancelledAt     DateTime?        @map("cancelled_at") @db.Timestamptz(6)
+  cancelReason    String?          @map("cancel_reason")
+  closeReason     String?          @map("close_reason")
+  closedAt        DateTime?        @map("closed_at") @db.Timestamptz(6)
+  createdBy       Int?             @map("created_by")
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedBy       Int?             @map("updated_by")
+  updatedAt       DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  salesOrderLines SalesOrderLine[]
+  salesInvoices   SalesInvoice[]
+
+  @@map("sales_order")
+}
+
+model SalesOrderLine {
+  id                Int                @id @default(autoincrement())
+  salesOrderId      Int                @map("sales_order_id")
+  salesOrder        SalesOrder         @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
+  productId         Int                @map("product_id")
+  product           Product            @relation(fields: [productId], references: [id])
+  unitId            Int                @map("unit_id")
+  unit              Unit               @relation(fields: [unitId], references: [id])
+  qty               Decimal            @db.Decimal(18, 3)
+  price             BigInt
+  disc              BigInt             @default(0)
+  taxPct            Decimal            @default(0) @map("tax_pct") @db.Decimal(6, 3)
+  qtyInvoiced       Decimal            @default(0) @map("qty_invoiced") @db.Decimal(18, 3)
+  salesInvoiceLines SalesInvoiceLine[]
+
+  @@index([salesOrderId])
+  @@map("sales_order_line")
+}
+
+model SalesInvoice {
+  id                    Int                    @id @default(autoincrement())
+  customerId            Int                    @map("customer_id")
+  customer              Customer               @relation(fields: [customerId], references: [id])
+  salesOrderId          Int?                   @map("sales_order_id")
+  salesOrder            SalesOrder?            @relation(fields: [salesOrderId], references: [id])
+  locationId            Int                    @map("location_id")
+  location              Location               @relation(fields: [locationId], references: [id])
+  no                    String                 @unique
+  date                  DateTime               @db.Date
+  dueDate               DateTime?              @map("due_date") @db.Date
+  subtotal              BigInt                 @default(0)
+  tax                   BigInt                 @default(0)
+  total                 BigInt                 @default(0)
+  paidAmount            BigInt                 @default(0) @map("paid_amount")
+  payStatus             PayStatus              @default(BelumBayar) @map("pay_status")
+  note                  String                 @default("")
+  status                DocStatus              @default(Draft)
+  submittedBy           Int?                   @map("submitted_by")
+  submittedAt           DateTime?              @map("submitted_at") @db.Timestamptz(6)
+  approvedBy            Int?                   @map("approved_by")
+  approvedAt            DateTime?              @map("approved_at") @db.Timestamptz(6)
+  cancelledBy           Int?                   @map("cancelled_by")
+  cancelledAt           DateTime?              @map("cancelled_at") @db.Timestamptz(6)
+  cancelReason          String?                @map("cancel_reason")
+  postedBy              Int?                   @map("posted_by")
+  postedAt              DateTime?              @map("posted_at") @db.Timestamptz(6)
+  reversalJournalId     Int?                   @map("reversal_journal_id")
+  createdBy             Int?                   @map("created_by")
+  createdAt             DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedBy             Int?                   @map("updated_by")
+  updatedAt             DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
+  salesInvoiceLines     SalesInvoiceLine[]
+  customerPaymentAllocs CustomerPaymentAlloc[]
+  salesReturns          SalesReturn[]
+
+  @@map("sales_invoice")
+}
+
+model SalesInvoiceLine {
+  id               Int               @id @default(autoincrement())
+  salesInvoiceId   Int               @map("sales_invoice_id")
+  salesInvoice     SalesInvoice      @relation(fields: [salesInvoiceId], references: [id], onDelete: Cascade)
+  salesOrderLineId Int?              @map("sales_order_line_id")
+  salesOrderLine   SalesOrderLine?   @relation(fields: [salesOrderLineId], references: [id])
+  productId        Int               @map("product_id")
+  product          Product           @relation(fields: [productId], references: [id])
+  qty              Decimal           @db.Decimal(18, 3)
+  price            BigInt
+  disc             BigInt            @default(0)
+  taxPct           Decimal           @default(0) @map("tax_pct") @db.Decimal(6, 3)
+  unitCost         Decimal           @default(0) @map("unit_cost") @db.Decimal(18, 4)
+  qtyReturned      Decimal           @default(0) @map("qty_returned") @db.Decimal(18, 3)
+  salesReturnLines SalesReturnLine[]
+
+  @@index([salesInvoiceId])
+  @@map("sales_invoice_line")
+}
+
+model CustomerPayment {
+  id                    Int                    @id @default(autoincrement())
+  customerId            Int                    @map("customer_id")
+  customer              Customer               @relation(fields: [customerId], references: [id])
+  toAccountId           Int                    @map("to_account_id")
+  toAccount             Account                @relation("TerimaPelangganAkun", fields: [toAccountId], references: [id])
+  no                    String                 @unique
+  date                  DateTime               @db.Date
+  amount                BigInt                 @default(0)
+  bankFee               BigInt                 @default(0) @map("bank_fee")
+  unallocated           BigInt                 @default(0)
+  note                  String                 @default("")
+  status                DocStatus              @default(Draft)
+  submittedBy           Int?                   @map("submitted_by")
+  submittedAt           DateTime?              @map("submitted_at") @db.Timestamptz(6)
+  approvedBy            Int?                   @map("approved_by")
+  approvedAt            DateTime?              @map("approved_at") @db.Timestamptz(6)
+  cancelledBy           Int?                   @map("cancelled_by")
+  cancelledAt           DateTime?              @map("cancelled_at") @db.Timestamptz(6)
+  cancelReason          String?                @map("cancel_reason")
+  postedBy              Int?                   @map("posted_by")
+  postedAt              DateTime?              @map("posted_at") @db.Timestamptz(6)
+  reversalJournalId     Int?                   @map("reversal_journal_id")
+  createdBy             Int?                   @map("created_by")
+  createdAt             DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedBy             Int?                   @map("updated_by")
+  updatedAt             DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
+  customerPaymentAllocs CustomerPaymentAlloc[]
+
+  @@map("customer_payment")
+}
+
+model CustomerPaymentAlloc {
+  id                Int             @id @default(autoincrement())
+  customerPaymentId Int             @map("customer_payment_id")
+  customerPayment   CustomerPayment @relation(fields: [customerPaymentId], references: [id], onDelete: Cascade)
+  salesInvoiceId    Int             @map("sales_invoice_id")
+  salesInvoice      SalesInvoice    @relation(fields: [salesInvoiceId], references: [id])
+  amount            BigInt
+
+  @@index([customerPaymentId])
+  @@map("customer_payment_alloc")
+}
+
+model SalesReturn {
+  id                Int               @id @default(autoincrement())
+  salesInvoiceId    Int               @map("sales_invoice_id")
+  salesInvoice      SalesInvoice      @relation(fields: [salesInvoiceId], references: [id])
+  locationId        Int               @map("location_id")
+  location          Location          @relation(fields: [locationId], references: [id])
+  no                String            @unique
+  date              DateTime          @db.Date
+  reason            String
+  subtotal          BigInt            @default(0)
+  tax               BigInt            @default(0)
+  total             BigInt            @default(0)
+  status            DocStatus         @default(Draft)
+  submittedBy       Int?              @map("submitted_by")
+  submittedAt       DateTime?         @map("submitted_at") @db.Timestamptz(6)
+  approvedBy        Int?              @map("approved_by")
+  approvedAt        DateTime?         @map("approved_at") @db.Timestamptz(6)
+  cancelledBy       Int?              @map("cancelled_by")
+  cancelledAt       DateTime?         @map("cancelled_at") @db.Timestamptz(6)
+  cancelReason      String?           @map("cancel_reason")
+  postedBy          Int?              @map("posted_by")
+  postedAt          DateTime?         @map("posted_at") @db.Timestamptz(6)
+  reversalJournalId Int?              @map("reversal_journal_id")
+  createdBy         Int?              @map("created_by")
+  createdAt         DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedBy         Int?              @map("updated_by")
+  updatedAt         DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  salesReturnLines  SalesReturnLine[]
+
+  @@map("sales_return")
+}
+
+model SalesReturnLine {
+  id                 Int              @id @default(autoincrement())
+  salesReturnId      Int              @map("sales_return_id")
+  salesReturn        SalesReturn      @relation(fields: [salesReturnId], references: [id], onDelete: Cascade)
+  salesInvoiceLineId Int              @map("sales_invoice_line_id")
+  salesInvoiceLine   SalesInvoiceLine @relation(fields: [salesInvoiceLineId], references: [id])
+  productId          Int              @map("product_id")
+  product            Product          @relation(fields: [productId], references: [id])
+  qty                Decimal          @db.Decimal(18, 3)
+  unitCost           Decimal          @default(0) @map("unit_cost") @db.Decimal(18, 4)
+
+  @@index([salesReturnId])
+  @@map("sales_return_line")
+}
+
+// ===== Aset dan anggaran =====
+
+model FixedAsset {
+  id                   Int                 @id @default(autoincrement())
+  locationId           Int?                @map("location_id")
+  location             Location?           @relation(fields: [locationId], references: [id])
+  assetAccountId       Int?                @map("asset_account_id")
+  assetAccount         Account?            @relation("AsetAkunAset", fields: [assetAccountId], references: [id])
+  accumAccountId       Int?                @map("accum_account_id")
+  accumAccount         Account?            @relation("AsetAkunAkumulasi", fields: [accumAccountId], references: [id])
+  expenseAccountId     Int?                @map("expense_account_id")
+  expenseAccount       Account?            @relation("AsetAkunBeban", fields: [expenseAccountId], references: [id])
+  directPurchaseLineId Int?                @map("direct_purchase_line_id")
+  directPurchaseLine   DirectPurchaseLine? @relation(fields: [directPurchaseLineId], references: [id])
+  code                 String              @unique
+  name                 String
+  category             String              @default("")
+  acquiredDate         DateTime            @map("acquired_date") @db.Date
+  cost                 BigInt
+  salvage              BigInt              @default(0)
+  usefulMonths         Int                 @map("useful_months")
+  method               String              @default("garis_lurus")
+  bookValue            BigInt              @default(0) @map("book_value")
+  status               String              @default("aktif")
+  createdBy            Int?                @map("created_by")
+  createdAt            DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedBy            Int?                @map("updated_by")
+  updatedAt            DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+  assetDepreciations   AssetDepreciation[]
+  assetDisposals       AssetDisposal[]
+
+  @@map("fixed_asset")
+}
+
+model AssetDepreciation {
+  id           Int          @id @default(autoincrement())
+  fixedAssetId Int          @map("fixed_asset_id")
+  fixedAsset   FixedAsset   @relation(fields: [fixedAssetId], references: [id])
+  periodId     Int          @map("period_id")
+  period       FiscalPeriod @relation(fields: [periodId], references: [id])
+  amount       BigInt
+  kind         String       @default("komersial")
+  postedBy     Int?         @map("posted_by")
+  postedAt     DateTime     @default(now()) @map("posted_at") @db.Timestamptz(6)
+
+  @@index([fixedAssetId])
+  @@map("asset_depreciation")
+}
+
+model AssetDisposal {
+  id                Int        @id @default(autoincrement())
+  fixedAssetId      Int        @map("fixed_asset_id")
+  fixedAsset        FixedAsset @relation(fields: [fixedAssetId], references: [id])
+  cashAccountId     Int?       @map("cash_account_id")
+  cashAccount       Account?   @relation("LepasAsetAkunKas", fields: [cashAccountId], references: [id])
+  no                String     @unique
+  date              DateTime   @db.Date
+  proceeds          BigInt     @default(0)
+  gainLoss          BigInt     @default(0) @map("gain_loss")
+  note              String     @default("")
+  status            DocStatus  @default(Draft)
+  submittedBy       Int?       @map("submitted_by")
+  submittedAt       DateTime?  @map("submitted_at") @db.Timestamptz(6)
+  approvedBy        Int?       @map("approved_by")
+  approvedAt        DateTime?  @map("approved_at") @db.Timestamptz(6)
+  cancelledBy       Int?       @map("cancelled_by")
+  cancelledAt       DateTime?  @map("cancelled_at") @db.Timestamptz(6)
+  cancelReason      String?    @map("cancel_reason")
+  postedBy          Int?       @map("posted_by")
+  postedAt          DateTime?  @map("posted_at") @db.Timestamptz(6)
+  reversalJournalId Int?       @map("reversal_journal_id")
+  createdBy         Int?       @map("created_by")
+  createdAt         DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedBy         Int?       @map("updated_by")
+  updatedAt         DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("asset_disposal")
+}
+
+model Budget {
+  id           Int          @id @default(autoincrement())
+  name         String
+  year         Int
+  status       DocStatus    @default(Draft)
+  submittedBy  Int?         @map("submitted_by")
+  submittedAt  DateTime?    @map("submitted_at") @db.Timestamptz(6)
+  approvedBy   Int?         @map("approved_by")
+  approvedAt   DateTime?    @map("approved_at") @db.Timestamptz(6)
+  cancelledBy  Int?         @map("cancelled_by")
+  cancelledAt  DateTime?    @map("cancelled_at") @db.Timestamptz(6)
+  cancelReason String?      @map("cancel_reason")
+  closeReason  String?      @map("close_reason")
+  closedAt     DateTime?    @map("closed_at") @db.Timestamptz(6)
+  createdBy    Int?         @map("created_by")
+  createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedBy    Int?         @map("updated_by")
+  updatedAt    DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  budgetLines  BudgetLine[]
+
+  @@map("budget")
+}
+
+model BudgetLine {
+  id        Int     @id @default(autoincrement())
+  budgetId  Int     @map("budget_id")
+  budget    Budget  @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  accountId Int     @map("account_id")
+  account   Account @relation(fields: [accountId], references: [id])
+  month     Int
+  amount    BigInt
+  note      String  @default("")
+
+  @@index([budgetId])
+  @@map("budget_line")
+}

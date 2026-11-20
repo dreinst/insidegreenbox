@@ -96,7 +96,7 @@ Draft | Diajukan | Disetujui -> Batal
 Diposting -> Batal            (gerak balik, butuh saklar dok.batal_posting dan alasan)
 ```
 
-Enum lain: `pay_status` (`BelumBayar`, `Sebagian`, `Lunas`), `progress` (`Belum`, `Sebagian`, `Penuh`), `shift_status` (`Buka`, `Tutup`, `PerluPersetujuan`), `sale_status` (`Selesai`, `Void`), `account_kind` (`Aset`, `Kewajiban`, `Ekuitas`, `Pendapatan`, `HPP`, `Beban`), `period_status` (`Terbuka`, `Ditutup`). Kolom `kind` lain berupa teks dengan nilai yang divalidasi zod di modulnya.
+Enum lain: `pay_status` (`BelumBayar`, `Sebagian`, `Lunas`), `progress` (`Belum`, `Sebagian`, `Penuh`), `shift_status` (`Buka`, `Tutup`, `PerluPersetujuan`), `sale_status` (`Selesai`, `Void`), `account_kind` (`Aset`, `Kewajiban`, `Ekuitas`, `Pendapatan`, `HPP`, `Beban`), `period_status` (`Terbuka`, `Ditutup`), `match_status` (`BelumCocok`, `Cocok`). Kolom `kind` lain berupa teks dengan nilai yang divalidasi zod di modulnya.
 
 Dokumen Diposting tidak diubah dan tidak dihapus. Pembatalannya membuat jurnal dan mutasi stok balik (RANCANGAN 2.3). Hapus hanya untuk Draft.
 
@@ -140,7 +140,7 @@ Enam aksi per menu: `L` Lihat, `T` Tambah, `U` Ubah, `H` Hapus (hanya draf), `S`
 
 ### 4.3 Kode menu
 
-Katalog lengkap ada di `src/lib/katalog.ts` beserta matriks bawaan Owner, Admin, dan Kasir dari RANCANGAN 8.2. Kode berbentuk `grup.menu`, misalnya `beli.faktur`, `stok.opname`, `kasir.shift`. Baris RANCANGAN "Pengaturan: Pengguna, peran, izin, saklar" dipecah menjadi tiga kode (`atur.pengguna`, `atur.peran`, `atur.saklar`) supaya Owner bisa memberi akses satu per satu. Baris "Log aktivitas" menjadi `atur.audit`.
+Katalog lengkap ada di `src/lib/katalog.ts` beserta matriks bawaan Owner, Admin, dan Kasir dari RANCANGAN 8.2. Kode berbentuk `grup.menu`, misalnya `beli.faktur`, `stok.opname`, `kasir.shift`. Baris RANCANGAN "Pengaturan: Pengguna, peran, izin, saklar" (Owner L T U H) dipecah menjadi tiga kode supaya Owner bisa memberi akses satu per satu: `atur.pengguna` (L T U), `atur.peran` (L T U), dan `atur.saklar` (L U). Pengguna dan peran tidak pernah dihapus, cukup dinonaktifkan, dan saklar tidak ditambah dari layar, jadi aksi Hapus dan Tambah di sana tidak punya arti dan tidak dibuat. Baris "Log aktivitas" menjadi `atur.audit`.
 
 ### 4.4 Saklar fitur
 
@@ -238,7 +238,7 @@ Target produksi VPS gugai dalam `greenbox.slice` (1,5 GB untuk situs, app, datab
 1. Tabel tambahan `user_session` dan `login_attempt` untuk sesi di database dan rate limit (bagian 7).
 2. `audit_log` menambah kolom `actor_name`, `summary`, dan `user_agent`; `doc_id` bertipe teks.
 3. `feature_switch` menambah kolom `sort` untuk urutan tampilan; saklar ke-24 `log.lihat_semua` (bagian 4.4).
-4. Satu baris matriks "Pengguna, peran, izin, saklar" menjadi tiga kode menu (bagian 4.3).
+4. Satu baris matriks "Pengguna, peran, izin, saklar" menjadi tiga kode menu dengan aksi L T U, L T U, dan L U (bagian 4.3).
 5. Kolom `*_by` tanpa foreign key (bagian 3.1); semua tabel dokumen dan master memakai `updated_by` juga, mengikuti RANCANGAN 1 butir 9.
 6. Harga satuan per satuan dasar memakai `Decimal(18,4)` (bagian 3.1).
 7. `approval_rule` belum diisi di tahap 2. Bawaan RANCANGAN 2.2 diisi di tahap 4 bersama dokumen pembelian.
