@@ -1,0 +1,681 @@
+# Kontrak sistem admin Greenbox
+
+Dokumen ini mengikat semua tahap pembangunan admin Greenbox pengganti ESB Core. Rancangan bisnisnya ada di `~/ndru/greenbox-aset/esb/RANCANGAN-greenbox.md` (disebut RANCANGAN di bawah) dan ERD-nya di `~/ndru/greenbox-aset/esb/diagram/erd-data.mjs` (entitas `g: true`). Kalau kode dan dokumen ini berbeda, salah satunya diperbaiki di commit yang sama. Perubahan kontrak ditulis di bagian 11.
+
+Ditulis 20 November 2026 untuk tahap 2.
+
+## 1. Teknologi
+
+- App ada di folder `sistem/` dengan `package.json` sendiri. Situs publik Vite di akar repo dan admin lama (`src/Admin.tsx`, `src/admin/`, `src/store.ts`) tidak disentuh sampai tahap 3.
+- Next.js 16 (App Router, Server Components, Server Actions), React 19, TypeScript ketat.
+- PostgreSQL 18 lewat Prisma 7 dengan `@prisma/adapter-pg`. Klien Prisma dibuat ke `src/generated/prisma` (tidak di-commit).
+- Validasi masukan dengan zod. Sesi ditandatangani jose (HS256). Sandi di-hash bcryptjs (cost 12).
+- CSS biasa di `src/app/globals.css` dengan warna dan huruf situs Greenbox (`--ink`, `--paper`, `--green`, huruf Bricolage Grotesque dan Unbounded lewat `next/font`, jadi tidak ada permintaan ke Google Fonts saat dipakai).
+- Tes unit `node --import tsx --test`, uji klik Playwright (Chromium tanpa kepala).
+
+## 2. Struktur folder
+
+```
+sistem/
+  KONTRAK.md            dokumen ini
+  .env.example          daftar variabel lingkungan tanpa nilai rahasia
+  prisma/
+    schema.prisma       83 tabel rancangan + tabel fondasi (bagian 3)
+    migrations/         migrasi SQL berurutan, tidak pernah diubah sesudah di-commit
+    seed.ts             peran, matriks izin, saklar, Owner pertama (dari env)
+  scripts/
+    seed-contoh.ts      Admin dan Kasir contoh untuk lokal dan uji (sandi dari env)
+  src/
+    proxy.ts            cek cepat cookie sesi, nonce CSP, header keamanan
+    app/
+      masuk/            halaman login
+      (admin)/          semua halaman yang butuh login, berbagi layout sidebar
+        page.tsx        Beranda
+        pengguna/       daftar, baru, [id]
+        peran/          daftar, baru, [id] (matriks izin)
+        saklar/         saklar fitur per peran
+        audit/          jejak audit, [id] rincian
+        menu/           tahap 3A: menu, kategori/, paket/, harga/ (massal), riwayat/
+        promo/, metode-bayar/, member/ (dengan tingkat/)   tahap 3A
+        produk/ (kategori/, satuan/), stok/ (kartu/), penyesuaian/, opname/, pindah-stok/,
+        alasan-stok/, lokasi/   tahap 4A
+        setoran/        tahap 5A: daftar dan buat setoran, [id] (isi, alur status, bukti/ untuk berkas bukti setor)
+        laporan/        tahap 5A: lima laporan penjualan dan POS sebagai tab, unduh/ untuk CSV
+        rekening/       tahap 5A: master rekening bank
+        resep/, perintah-produksi/, pengeluaran-bahan/, hasil-produksi/, produksi-cepat/   tahap 4B
+        pemasok/, permintaan/, pesanan/, penerimaan/, faktur/, retur-beli/, beli-langsung/, pembayaran/
+                        tahap 4C: daftar, baru, [id] (isi, alur status); hutang/ (baca saja, unduh/ untuk CSV)
+        _beli/          tahap 4C: aksi server bersama dokumen pembelian dan pengikat panel status (folder privat)
+        akun/ (pemetaan/), jurnal/, buku-besar/, laporan-keuangan/ (laba-rugi/, neraca/, unduh/), tutup-periode/   tahap 5B
+        pelanggan/, pesanan-jual/, faktur-jual/, terima-pelanggan/, retur-jual/
+                        tahap 6A: penjualan B2B, daftar, baru, [id]; piutang/ (baca saja, unduh/ untuk CSV)
+        _jual/          tahap 6A: aksi server dokumen penjualan B2B dan pengikat panel status (folder privat)
+        profil-usaha/   tahap 6A: profil usaha per cabang (atur.lokasi)
+        kas/ (aksi.ts dipakai bersama), pindah-dana/   tahap 5C: daftar, baru, [id]
+        rekonsiliasi/   tahap 5C: daftar, impor/, baru/, [id] (pencocokan)
+    lib/
+      db.ts             klien Prisma dengan pool kecil
+      sesi.ts           baca sesi dari cookie dan database (server-only)
+      sesi-token.ts     tanda tangan dan verifikasi token (dipakai proxy)
+      izin.ts           wajibMasuk, wajibIzin, wajibSaklar, aksiBerizin
+      izin-inti.ts      logika izin murni (tanpa Next), dipakai halaman dan tes
+      katalog.ts        katalog menu izin, matriks bawaan, saklar bawaan, sidebar
+      audit.ts          catatAudit, bersihkanUntukAudit
+      masuk.ts          logika login, rate limit, sesi di database
+      aksi.ts           bentuk hasil aksi server, bantu zod
+      status.ts         status dokumen dan transisi yang sah
+      nomor.ts          nomor dokumen dari doc_sequence
+      pengguna.ts, peran.ts, saklar.ts   logika tiap modul (tanpa Next, bisa dites)
+      hitung-kasir.ts   hitungan kasir murni (total, bayar, kas seharusnya), dipakai klien dan server
+      wa.ts             normalisasi dan tampilan nomor WA member, dipakai modul member dan kasir
+      shift.ts, penjualan.ts, pin.ts     modul kasir tahap 3B
+      stok/             tahap 4A: mesin.ts (mesin stok, bagian 12), angka.ts, dokumen.ts (alur status),
+                        produk.ts, lokasi.ts, alasan.ts, penyesuaian.ts, opname.ts, pindah.ts, posisi.ts,
+                        bawaan.ts (isi bawaan), impor.ts (saldo awal admin lama)
+      setoran.ts, rekening.ts, bukti.ts  setoran POS, rekening bank, dan berkas bukti setor (tahap 5A)
+      kas.ts            tahap 5C: kas masuk, kas keluar, pindah dana
+      rekonsiliasi.ts, mutasi-csv.ts   tahap 5C: rekonsiliasi bank dan pengurai CSV mutasi
+      laporan.ts        kueri laporan penjualan dan POS (tahap 5A)
+      laporan-kolom.ts  kolom tiap laporan, dipakai bersama tabel halaman dan CSV
+      produksi/         tahap 4B: resep.ts (resep dan BOM, HPP, pemakaian bahan penjualan), perintah.ts,
+                        pengeluaran.ts, hasil.ts, cepat.ts (dokumen produksi), impor.ts (resep admin lama)
+      beli/             tahap 4C: dokumen.ts (satu pintu alur status pembelian), pemasok.ts, permintaan.ts, pesanan.ts,
+                        penerimaan.ts, faktur.ts, retur.ts, langsung.ts, pembayaran.ts, hutang.ts, impor.ts (admin lama)
+      akuntansi/        tahap 5B: jurnal.ts (mesin jurnal, bagian 14), pemetaan.ts (kunci pemetaan dan penerjemahnya),
+                        dokumen.ts (jurnal otomatis per dokumen), akun.ts (bagan akun dan pemetaan), memorial.ts (jurnal
+                        memorial dan daftar jurnal), periode.ts (tutup periode), laporan.ts dan laporan-kolom.ts (buku
+                        besar, neraca saldo, laba rugi, neraca), bentuk-ulang.ts (jurnal dokumen lama)
+      b2b/              tahap 6A: umum.ts (pelanggan aktif, harga khusus, saringan), pelanggan.ts, pesanan.ts, faktur.ts,
+                        penerimaan.ts, retur.ts, piutang.ts; status lewat ubahStatusBeli di beli/dokumen.ts
+      profil.ts         tahap 6A: profil usaha (branch)
+                        tahap 5C: beli.ts (jurnal dokumen pembelian)
+    components/         komponen tampilan bersama
+  tests/
+    *.test.ts           tes unit dengan basis data uji
+    e2e/                uji klik Playwright
+    potret/             hasil potret (di-gitignore)
+```
+
+Aturan lapisan: berkas di `src/lib/*.ts` selain `sesi.ts` dan `izin.ts` tidak mengimpor `next/*`, supaya bisa dites langsung dengan basis data uji. Halaman dan aksi server tipis: membaca sesi, memanggil `wajibIzin`, memvalidasi dengan zod, lalu memanggil fungsi modul.
+
+## 3. Skema database
+
+Sumber kebenaran: `prisma/schema.prisma`. Model PascalCase dipetakan ke tabel snake_case (`@@map`), kolom camelCase dipetakan ke snake_case (`@map`). Semua 83 tabel rancangan sudah dibuat di migrasi awal walau modulnya belum punya halaman, supaya kontrak data tidak berubah di tengah jalan.
+
+### 3.1 Aturan umum
+
+- Kunci utama `id` integer autoincrement, kecuali tabel yang di ERD memakai kunci gabungan (`role_permission`, `role_feature_switch`, `product_unit`, `stock_balance`, `doc_sequence`) atau kunci teks (`approval_rule.doc_type`, `account_mapping.key`).
+- Uang: `BigInt` rupiah bulat (kolom `bigint`). Berlaku untuk harga, subtotal, pajak, total, nilai, saldo, dan batas rupiah.
+- Harga satuan per satuan dasar (`avg_cost`, `last_cost`, `unit_cost`): `Decimal(18,4)`. Harga per gram atau per ml sering tidak bulat, dan pembulatan di harga satuan akan menggeser nilai persediaan. Nilai baris (`value`) tetap rupiah bulat. Ini tafsiran atas RANCANGAN bagian 1 butir 6.
+- Qty: `Decimal(18,3)` dalam satuan dasar produk. Faktor satuan `Decimal(18,6)`. Persen `Decimal(6,3)`.
+- Waktu: `timestamptz`. Tanggal dokumen: `date`.
+- Kolom audit di tabel master dan dokumen: `created_by`, `created_at`, `updated_by`, `updated_at`. Tabel dokumen menambah jejak status `submitted_by/at`, `approved_by/at`, `posted_by/at`, `cancelled_by/at`, `cancel_reason`, dan `reversal_journal_id` bila dokumen menggerakkan jurnal.
+- Kolom `*_by` berisi `app_user.id` tanpa foreign key, kecuali relasi yang digambar di ERD (`app_user.role_id`, `audit_log.user_id`, `shift.user_id`, `shift.approved_by`, `fiscal_period.closed_by`). Pengguna tidak pernah dihapus (hanya dinonaktifkan), jadi id di kolom itu tetap bisa dibaca. Pilihan ini menghindari ratusan relasi balik di model `AppUser`.
+- Master tidak memakai status dokumen; cukup kolom `active`. Baris master yang sudah dipakai transaksi tidak dihapus, hanya dinonaktifkan.
+
+### 3.2 Status dokumen
+
+Enum PostgreSQL `doc_status`: `Draft`, `Diajukan`, `Disetujui`, `Diposting`, `Selesai`, `Batal` (RANCANGAN 2.1). Transisi yang sah ada di `src/lib/status.ts` dan wajib dicek oleh setiap aksi yang mengubah status:
+
+Dokumen rencana (`purchase_request`, `purchase_order`, `production_order`, `sales_order`):
+
+```
+Draft -> Diajukan -> Disetujui -> Selesai
+Draft -> Disetujui            (jenis dokumen tanpa aturan persetujuan)
+Diajukan -> Draft             (dikembalikan)
+Draft | Diajukan | Disetujui -> Batal
+```
+
+Dokumen pelaksana (semua dokumen lain yang punya kolom `status`):
+
+```
+Draft -> Diposting            (tanpa aturan persetujuan)
+Draft -> Diajukan -> Diposting
+Draft -> Diajukan -> Disetujui -> Diposting   (purchase_payment dan cash_transaction)
+Diajukan -> Draft
+Draft | Diajukan | Disetujui -> Batal
+Diposting -> Batal            (gerak balik, butuh saklar dok.batal_posting dan alasan)
+```
+
+Enum lain: `pay_status` (`BelumBayar`, `Sebagian`, `Lunas`), `progress` (`Belum`, `Sebagian`, `Penuh`), `shift_status` (`Buka`, `Tutup`, `PerluPersetujuan`), `sale_status` (`Selesai`, `Void`), `account_kind` (`Aset`, `Kewajiban`, `Ekuitas`, `Pendapatan`, `HPP`, `Beban`), `period_status` (`Terbuka`, `Ditutup`), `match_status` (`BelumCocok`, `Cocok`). Kolom `kind` lain berupa teks dengan nilai yang divalidasi zod di modulnya.
+
+Dokumen Diposting tidak diubah dan tidak dihapus. Pembatalannya membuat jurnal dan mutasi stok balik (RANCANGAN 2.3). Hapus hanya untuk Draft.
+
+### 3.3 Nomor dokumen
+
+`doc_sequence` berkunci (`doc_type`, `period`), dengan `period` berbentuk `YYMM`. Fungsi `ambilNomor(tx, docType, prefix, tanggal)` di `src/lib/nomor.ts` menjalankan `INSERT ... ON CONFLICT DO UPDATE SET last_no = last_no + 1 RETURNING last_no` di dalam transaksi pembuat dokumen, lalu membentuk `PREFIX-YYMM-NNNN` (misalnya `PO-2611-0007`). Nomor diambil saat Draft dibuat. Nomor yang sudah keluar tidak dipakai ulang walau draf dihapus atau dokumen dibatalkan, jadi lubang nomor itu wajar.
+
+### 3.4 Ringkasan per domain
+
+| Domain | Tabel | Catatan |
+|---|---|---|
+| Pengguna, izin, audit | `app_user`, `role`, `role_permission`, `feature_switch`, `role_feature_switch`, `approval_rule`, `audit_log`, `doc_sequence`, ditambah `user_session` dan `login_attempt` | dipakai sejak tahap 2 |
+| Produk, resep, menu | `product`, `product_category`, `unit`, `product_unit`, `bom`, `bom_line`, `menu_item`, `stock_reason` | `bom.kind` menu atau assembly |
+| Pembelian | `supplier`, `purchase_request(_line)`, `purchase_order(_line)`, `goods_receipt(_line)`, `purchase_invoice(_line)`, `purchase_return(_line)`, `direct_purchase(_line)`, `purchase_payment`, `purchase_payment_alloc` | RANCANGAN 3 |
+| Lokasi dan persediaan | `branch`, `location`, `stock_balance`, `stock_ledger`, `stock_adjustment(_line)`, `stock_opname(_line)`, `stock_transfer(_line)` | semua gerak qty lewat `stock_ledger`; `stock_balance` bisa dihitung ulang dari ledger |
+| Produksi | `production_order(_line)`, `material_issue(_line)`, `production_result`, `quick_production(_line)` | RANCANGAN 5 |
+| Kasir, shift, setoran | `member_tier`, `member`, `shift`, `shift_cash_move`, `sale`, `sale_line`, `sale_payment`, `pos_settlement(_line)` | `pos_settlement_line` unik per shift dan metode lewat `pos_settlement` |
+| Akun, jurnal, kas, bank | `account`, `account_mapping`, `fiscal_period`, `payment_method`, `bank_account`, `journal`, `journal_line`, `cash_transaction(_line)`, `bank_statement_line`, `bank_reconcile`, `bank_reconcile_match` | satu jurnal seimbang per dokumen diposting |
+| Penjualan B2B | `customer`, `sales_order(_line)`, `sales_invoice(_line)`, `customer_payment`, `customer_payment_alloc`, `sales_return(_line)` | dibangun sesudah alur harian |
+| Aset dan anggaran | `fixed_asset`, `asset_depreciation`, `asset_disposal`, `budget`, `budget_line` | dibangun sesudah alur harian |
+
+### 3.5 Tabel fondasi tahap 2
+
+- `app_user`: `username` unik huruf kecil, `password_hash`, `pin_hash` (dipakai tahap 3), `active`, `last_login_at`, `role_id`, `location_id` (lokasi bawaan kasir, kosong di tahap 2).
+- `role`: `code` unik (`owner`, `admin`, `kasir`, atau buatan Owner), `name`, `is_system`, `active`. Peran sistem tidak bisa dinonaktifkan.
+- `role_permission`: satu baris per peran per kode menu dengan 6 kolom boolean `can_view`, `can_create`, `can_update`, `can_delete`, `can_approve`, `can_post`.
+- `feature_switch` dan `role_feature_switch`: 25 saklar (bagian 4.4) dengan nilai `enabled` dan `limit_value` per peran.
+- `user_session`: sesi login di database (bagian 7).
+- `login_attempt`: catatan percobaan login untuk rate limit (bagian 7).
+- `audit_log`: bagian 5.
+
+## 4. Peran, aksi, dan cara cek izin
+
+### 4.1 Peran
+
+Owner (setara SUPERADMIN ESB), Admin (operasional dan back office), Kasir (layar kasir dan shift sendiri), sesuai RANCANGAN 8.1. Pengguna lama superadmin dan owner menjadi Owner, admin lama menjadi Kasir; pengguna Admin ditambahkan Owner belakangan. Owner bisa membuat peran tambahan (misalnya SPV) dan mengatur izinnya dari menu Peran dan Izin.
+
+### 4.2 Aksi
+
+Enam aksi per menu: `L` Lihat, `T` Tambah, `U` Ubah, `H` Hapus (hanya draf), `S` Setujui, `P` Posting. Aksi yang berlaku untuk sebuah menu sama dengan aksi milik Owner di matriks RANCANGAN 8.2. Aksi di luar itu tidak ditampilkan dan tidak bisa dinyalakan.
+
+### 4.3 Kode menu
+
+Katalog lengkap ada di `src/lib/katalog.ts` beserta matriks bawaan Owner, Admin, dan Kasir dari RANCANGAN 8.2. Kode berbentuk `grup.menu`, misalnya `beli.faktur`, `stok.opname`, `kasir.shift`. Baris RANCANGAN "Pengaturan: Pengguna, peran, izin, saklar" (Owner L T U H) dipecah menjadi tiga kode supaya Owner bisa memberi akses satu per satu: `atur.pengguna` (L T U), `atur.peran` (L T U), dan `atur.saklar` (L U). Pengguna dan peran tidak pernah dihapus, cukup dinonaktifkan, dan saklar tidak ditambah dari layar, jadi aksi Hapus dan Tambah di sana tidak punya arti dan tidak dibuat. Baris "Log aktivitas" menjadi `atur.audit`. Tahap 3B menambah `kasir.pin` (PIN kasir, Owner L U, Admin L U, Kasir tanpa akses) karena Admin harus bisa mengatur PIN kasir tanpa memegang `atur.pengguna`. Tahap 6A menambah `kas.piutang` (Piutang Pelanggan, Owner L, Admin L, Kasir tanpa akses; bagian 11 butir 95).
+
+### 4.4 Saklar fitur
+
+23 saklar dari RANCANGAN 8.3 ditambah saklar `log.lihat_semua` (Owner Ya, Admin Tidak, Kasir Tidak) dan, sejak tahap 4B, `pos.jual_stok_minus` (Owner, Admin, Kasir Ya; bagian 11 butir 50). Saklar itu menggantikan catatan "Admin: L (aktivitas sendiri)" di matriks: pemegang izin Lihat `atur.audit` tanpa `log.lihat_semua` hanya melihat aktivitasnya sendiri. Saklar yang punya angka (`pos.batas_selisih_kas`, `dok.tanggal_mundur`) memakai `limit_value`; `limit_value` kosong berarti tanpa batas.
+
+### 4.5 Cara cek izin
+
+Semua cek lewat `src/lib/izin.ts`:
+
+- `wajibMasuk()` membaca sesi (cookie lalu database). Tanpa sesi sah, pengguna dialihkan ke `/masuk`.
+- `wajibIzin(menu, aksi)` dipanggil di baris pertama setiap halaman server dan setiap aksi server, termasuk aksi yang tombolnya disembunyikan. Tanpa izin, halaman menampilkan layar "Akses ditolak" (status 403) dan aksi mengembalikan galat. Penolakan dicatat di audit sebagai `izin.ditolak`.
+- `wajibSaklar(kode)` dan `nilaiSaklar(kode)` untuk saklar fitur, dipanggil sesudah `wajibIzin`.
+- Izin dan saklar dibaca ulang dari database di setiap permintaan (sekali per permintaan lewat `cache` React), jadi perubahan matriks langsung berlaku tanpa login ulang.
+- Menyembunyikan tombol di tampilan hanya untuk kenyamanan. Yang menentukan selalu cek di server.
+
+### 4.6 Pengaman
+
+- Peran `owner` selalu memegang semua aksi yang berlaku di `atur.pengguna`, `atur.peran`, `atur.saklar`, dan `atur.audit`, serta saklar `log.lihat_semua`. Penyimpanan matriks yang mencabutnya ditolak.
+- Peran sistem (`owner`, `admin`, `kasir`) tidak bisa dinonaktifkan. Kode peran apa pun tidak bisa diubah sesudah disimpan, karena kode dipakai di audit dan di kode program. Peran nonaktif membuat penggunanya tidak bisa masuk sampai diaktifkan lagi.
+- Owner aktif terakhir tidak bisa dinonaktifkan dan perannya tidak bisa diganti.
+- Pengguna tidak bisa menonaktifkan dirinya sendiri dan tidak bisa mengganti perannya sendiri.
+- Hanya pengguna berperan Owner yang bisa membuat atau mengubah pengguna berperan Owner, memberi peran Owner, atau mengatur ulang sandi Owner.
+- Pengguna bukan Owner tidak bisa mengubah matriks izin atau saklar perannya sendiri, dan tidak bisa memberi izin atau menyalakan saklar yang tidak ia miliki (termasuk lewat salin izin saat membuat peran).
+
+## 5. Audit trail
+
+- Tabel `audit_log` hanya bertambah. Trigger PostgreSQL menolak `UPDATE`, `DELETE`, dan `TRUNCATE` di tabel itu. Tidak ada halaman, aksi, atau fungsi untuk mengubah atau menghapus audit.
+- Setiap perubahan data ditulis lewat `catatAudit(tx, konteks, entri)` di dalam transaksi Prisma yang sama dengan perubahannya. Kalau perubahan gagal, audit ikut batal; kalau audit gagal, perubahan ikut batal.
+- Isi baris: waktu, `user_id` (boleh kosong untuk login gagal dengan nama tak dikenal), `actor_name` (nama pengguna saat itu atau yang diketik), `action` (misalnya `pengguna.ubah`), `doc_type` (nama tabel), `doc_id` (teks, karena ada kunci gabungan), `summary` (kalimat pendek bahasa Indonesia), `before_json`, `after_json`, `ip`, `user_agent`.
+- `before_json` dan `after_json` dibersihkan oleh `bersihkanUntukAudit`: hash sandi dan PIN tidak pernah disimpan, diganti tanda `"[disembunyikan]"`. BigInt, Decimal, dan tanggal disimpan sebagai teks.
+- Peristiwa yang wajib tercatat sejak tahap 2: `masuk.berhasil`, `masuk.gagal`, `masuk.terkunci`, `keluar`, `izin.ditolak`, `pengguna.tambah`, `pengguna.ubah`, `pengguna.sandi`, `pengguna.aktifkan`, `pengguna.nonaktifkan`, `peran.tambah`, `peran.ubah`, `peran.izin`, `peran.aktifkan`, `peran.nonaktifkan`, `saklar.ubah`. Tahap 3A menambah (semua dengan `before_json` dan `after_json` untuk kolom yang berubah): `kategori.tambah/ubah/aktifkan/nonaktifkan` (`menu_category`), `menu.tambah/ubah/aktifkan/nonaktifkan` (`menu_item`), `harga.massal` (`menu_price_batch`, berisi aturan, jumlah, dan contoh lima menu; riwayat lengkapnya di `menu_price_history`), `paket.tambah/ubah/aktifkan/nonaktifkan` (`menu_set`), `promo.tambah/ubah/aktifkan/nonaktifkan` (`promo`), `metode_bayar.tambah/ubah/aktifkan/nonaktifkan` (`payment_method`), `tingkat.tambah/ubah/aktifkan/nonaktifkan` (`member_tier`), `member.tambah/ubah/aktifkan/nonaktifkan` (`member`), dan `impor.menu` (satu baris per jalan impor yang menambah data). Mengubah satu harga lewat formulir menu menulis `menu.ubah` dan satu baris riwayat harga. Tahap 4A menambah `produk.tambah/ubah/aktifkan/nonaktifkan` (`product`), `produk.satuan_tambah/satuan_ubah/satuan_hapus` (`product_unit`), `kategori_produk.*` (`product_category`), `satuan.*` (`unit`), `lokasi.*` (`location`), `alasan.*` (`stock_reason`), dan untuk tiap dokumen persediaan dengan awalan `penyesuaian` (`stock_adjustment`), `opname` (`stock_opname`), `pindah` (`stock_transfer`): `.tambah` (draf dibuat), `.ubah` (kepala), `.baris_tambah` dan `.baris_hapus` (penyesuaian dan pindah), `.hitung` (opname), `.hapus` (draf), `.ajukan`, `.kembalikan`, `.posting` (berisi jumlah baris dan nilai bersih), `.batal` (berisi gerak balik bila dari Diposting), serta `impor.stok`. Persetujuan dan posting dokumen stok terjadi dalam satu langkah ("Setujui dan posting"), jadi tidak ada peristiwa `.setujui` terpisah; penyetujunya tercatat di `approved_by`. Tahap berikutnya menambah peristiwa per dokumen dengan pola yang sama.
+- Peristiwa tahap 4B: `resep.tambah`, `resep.ubah`, `resep.bahan_tambah`, `resep.bahan_ubah`, `resep.bahan_hapus`, `resep.aktifkan`, `resep.nonaktifkan` (`bom`), `impor.resep`; perintah produksi (`production_order`) `perintah.tambah`, `.ubah`, `.hapus`, `.ajukan`, `.kembalikan`, `.setujui`, `.batal`, `.tutup` (tutup manual, berisi sisa nilai yang dibuang), `.selesai` (otomatis saat hasil terakhir diposting); dan untuk tiap dokumen pelaksana produksi dengan awalan `pengeluaran` (`material_issue`), `hasil` (`production_result`), `produksi_cepat` (`quick_production`): `.tambah`, `.ubah`, `.baris_ubah` (qty bahan, tidak ada untuk hasil), `.hapus`, `.ajukan`, `.kembalikan`, `.posting`, `.batal`. `penjualan.simpan` kini memuat `hpp`, `tanpaResep` (menu tanpa resep di transaksi itu), dan `stokMinus` (bahan yang saldonya minus sesudahnya); `penjualan.void` memuat jumlah gerak balik dan nilai yang kembali.
+- Peristiwa tahap 3B (kasir): `kasir.masuk_pin` (masuk dengan PIN), `pengguna.pin` (pasang, ganti, atau hapus PIN), `shift.buka`, `shift.kas` (kas masuk atau keluar laci), `shift.tutup`, `shift.setujui`, `penjualan.simpan`, `penjualan.void`. PIN salah dan PIN terkunci dicatat sebagai `masuk.gagal` dan `masuk.terkunci` dengan ringkasan yang menyebut tujuannya (masuk kasir atau penyetuju void). Entitas baru di audit: `shift` dan `sale`.
+- Peristiwa tahap 5A: `setoran.tambah`, `setoran.ubah` (isi kepala dan baris, juga muat ulang baris), `setoran.ajukan`, `setoran.kembalikan`, `setoran.setujui`, `setoran.posting`, `setoran.batal`, `setoran.hapus` (entitas `pos_settlement`), serta `rekening.tambah`, `rekening.ubah`, `rekening.aktifkan`, `rekening.nonaktifkan` (entitas `bank_account`). Setoran yang disetujui sekaligus diposting menulis `setoran.setujui` lalu `setoran.posting` dalam transaksi yang sama. Mengunduh CSV laporan tidak dicatat karena tidak mengubah data.
+- Peristiwa tahap 4C (pembelian): `pemasok.tambah/ubah/aktifkan/nonaktifkan` (`supplier`); untuk dokumen dengan awalan `permintaan` (`purchase_request`), `pesanan` (`purchase_order`), `penerimaan` (`goods_receipt`), `faktur` (`purchase_invoice`), `retur_beli` (`purchase_return`), `beli_langsung` (`direct_purchase`), dan `pembayaran` (`purchase_payment`): `.tambah`, `.ubah` (kepala), `.baris_tambah`, `.baris_ubah` (simpan qty dan harga semua baris), `.baris_hapus`, `.hapus` (draf), `.ajukan`, `.kembalikan`, `.setujui` (permintaan, pesanan, pembayaran), `.posting` (dokumen pelaksana, berisi ringkasan nilai), `.tutup` (tutup sisa permintaan dan pesanan, berisi alasan), `.batal` (berisi gerak balik bila dari Diposting); `pembayaran.alokasi` (isi alokasi sebelum dan sesudah); dan `impor.beli` (satu baris per pesanan admin lama yang diimpor). Faktur dan dokumen pelaksana lain yang terkena aturan persetujuan memakai "Setujui dan posting" satu langkah, jadi hanya menulis `.posting` dengan `approved_by` terisi.
+- Peristiwa tahap 5B: `akun.tambah`, `akun.ubah`, `akun.aktifkan`, `akun.nonaktifkan` (entitas `account`); `pemetaan.ubah` (entitas `account_mapping`, satu baris per simpan berisi semua kunci yang berubah, sebelum dan sesudah sebagai kode dan nama akun); jurnal memorial `memorial.tambah`, `.ubah`, `.baris_tambah`, `.baris_hapus`, `.hapus`, `.ajukan`, `.kembalikan`, `.posting` (Setujui dan posting dalam satu langkah, penyetuju di `approved_by`), `.batal` (dari Diposting berisi nomor jurnal balik) dengan entitas `journal`; `periode.tutup` dan `periode.buka` (berisi alasan) dengan entitas `fiscal_period`. Jurnal otomatis tidak menulis baris audit sendiri: nomornya ikut di `after_json` peristiwa dokumennya (`jurnal` atau `jurnalBalik`), yaitu `penjualan.simpan`, `penjualan.void`, `shift.tutup`, `shift.kas`, `setoran.posting`, `setoran.batal`, `<dokumen stok>.posting`, `<dokumen stok>.batal`, dan `perintah.tutup`. Sejak tahap 5C juga `penerimaan`, `faktur`, `retur_beli`, `beli_langsung`, dan `pembayaran` `.posting` dan `.batal`.
+- Peristiwa tahap 6A (penjualan B2B dan profil usaha): `pelanggan.tambah/ubah/aktifkan/nonaktifkan` dan `pelanggan.harga_tambah`, `pelanggan.harga_ubah`, `pelanggan.harga_hapus` (entitas `customer`, harga khusus dicatat di pelanggannya); untuk dokumen dengan awalan `pesanan_jual` (`sales_order`), `faktur_jual` (`sales_invoice`), `terima_pelanggan` (`customer_payment`), dan `retur_jual` (`sales_return`): `.tambah`, `.ubah` (kepala), `.baris_tambah` (pesanan dan faktur tanpa pesanan), `.baris_ubah` (simpan qty dan harga semua baris, atau qty retur), `.baris_hapus`, `.hapus` (draf), `.ajukan`, `.kembalikan`, `.setujui` dan `.tutup` (pesanan), `.posting` (faktur berisi total dan HPP, penerimaan berisi uang masuk dan nota kredit, retur berisi HPP kembali dan nota kredit), `.batal` (berisi gerak balik bila dari Diposting); `terima_pelanggan.alokasi` (isi alokasi sebelum dan sesudah); dan `profil.ubah` (entitas `branch`, kolom yang berubah saja).
+- Peristiwa tahap 5C (entitas `cash_transaction`): untuk awalan `kas_masuk`, `kas_keluar`, dan `pindah_dana`: `.tambah`, `.ubah` (kepala), `.baris_tambah` dan `.baris_hapus` (kas masuk dan keluar), `.hapus` (draf), `.ajukan`, `.kembalikan`, `.setujui`, `.posting` (berisi jumlah dan nomor `jurnal`), `.batal` (dari Diposting berisi `jurnalBalik`). Rekonsiliasi Bank: `mutasi.impor`, `mutasi.hapus`, dan `rekonsiliasi.*` (bagian 11 butir 111).
+- Halaman Jejak Audit hanya membaca, dengan saring tanggal, aktor, aksi, dan entitas, serta rincian sebelum dan sesudah.
+
+## 6. Konvensi aksi server
+
+- Setiap aksi: `wajibIzin` dulu, lalu validasi `FormData` dengan skema zod, lalu fungsi modul di dalam `db.$transaction` bersama `catatAudit`.
+- Bentuk hasil (`src/lib/aksi.ts`):
+
+```ts
+type HasilAksi =
+  | { ok: true; pesan?: string }
+  | { ok: false; pesan: string; galat?: Record<string, string>; isian?: Record<string, string>; n: number }
+```
+
+- Pesan galat berbahasa Indonesia dan menyebut kolomnya ("Nama pengguna sudah dipakai."). Galat per kolom tampil di bawah kolomnya dan ringkasannya di atas formulir dengan `role="alert"`.
+- Isian terjaga saat galat: aksi mengembalikan `isian` (semua nilai yang dikirim kecuali sandi), dan formulir memakai `defaultValue` dari `isian` dengan `key` yang berganti tiap kiriman (`n`), sehingga React memasang ulang kolom dengan nilai terakhir walau formulir direset sesudah aksi.
+- Sesudah simpan berhasil, aksi memanggil `revalidatePath` lalu `redirect` ke halaman tujuan dengan `?pesan=<kode>` (misalnya `/pengguna/12?pesan=tersimpan`). Teks pesannya diambil dari daftar tetap, bukan dari query. Pengalihan tidak boleh hanya berbeda jangkar (`#`), karena layar tidak dimuat ulang.
+- Galat tak terduga dicatat di log server dan pengguna melihat "Terjadi galat di server. Coba lagi." tanpa rincian teknis.
+
+## 7. Keamanan
+
+- Cookie sesi `gb_sesi`: `httpOnly`, `SameSite=Lax`, `Secure` di produksi, `path=/`, umur 12 jam. Isinya JWT HS256 berisi id sesi, ditandatangani dengan `SESSION_SECRET` (minimal 32 karakter, dari env; app menolak jalan tanpa itu).
+- Setiap permintaan ke halaman atau aksi memeriksa baris `user_session` di database: belum dicabut, belum kedaluwarsa, pengguna aktif, peran aktif. Menonaktifkan pengguna, mengatur ulang sandinya, atau keluar mencabut sesi di database, jadi aksesnya hilang di permintaan berikutnya. Proxy hanya memeriksa tanda tangan token untuk mengalihkan cepat ke `/masuk`; otorisasi tetap di server.
+- Rate limit login tersimpan di `login_attempt`: 5 kali gagal untuk satu nama pengguna dalam 15 menit mengunci nama itu, dan 20 kali gagal dari satu IP dalam 15 menit mengunci IP itu, sampai jendela 15 menit lewat. Login berhasil mengosongkan hitungan untuk nama pengguna itu. Nama pengguna yang tidak dikenal tetap diproses dengan bcrypt pada hash tiruan supaya waktu jawabnya sama, dan pesan galat selalu "Nama pengguna atau sandi salah."
+- IP diambil dari header `x-forwarded-for` atau `x-real-ip` hanya bila `TRUST_PROXY=1` (di produksi di belakang proxy balik). Tanpa itu IP dicatat sebagai `tidak-diketahui`.
+- Aksi server Next.js memeriksa kecocokan header Origin dan Host; ditambah `SameSite=Lax`, itu perlindungan CSRF-nya.
+- Header keamanan di setiap jawaban: `Content-Security-Policy` dengan nonce per permintaan (dari proxy), `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy` yang mematikan kamera, mikrofon, lokasi, dan pembayaran, serta `Strict-Transport-Security` di produksi.
+- Sandi minimal 8 karakter. Nama pengguna 3 sampai 32 karakter `a-z 0-9 . _ -`.
+- Rahasia hanya di `.env` (di-gitignore). `.env.example` berisi nama variabel tanpa nilai.
+- Login tahap 2 memakai nama pengguna dan sandi untuk ketiga peran. Sandi tetap berlaku untuk semua peran di tahap 3.
+- Masuk dengan PIN (tahap 3B): layar masuk punya pilihan "PIN kasir" (`/masuk?cara=pin`) berisi nama pengguna aktif yang punya PIN dan boleh masuk dengan PIN, lalu PIN 4 sampai 6 angka. PIN di-hash bcryptjs (cost 12) di `app_user.pin_hash` dan tidak pernah masuk audit. Yang boleh masuk dengan PIN hanya peran yang memegang Tambah di `kasir.layar` dan tidak memegang menu `atur.*` apa pun, jadi Owner dan Admin tetap masuk dengan sandi (RANCANGAN 8.1). PIN Owner dan Admin hanya dipakai untuk menyetujui void.
+- Rate limit PIN memakai `login_attempt` dengan kunci `pin:<nama pengguna>`: 5 PIN salah per pengguna dalam 15 menit mengunci PIN pengguna itu, dan 20 gagal per IP (sandi dan PIN dihitung bersama) mengunci IP itu. Hitungan PIN terpisah dari hitungan sandi supaya penguncian satu jalur tidak menutup jalur lain, tetapi batasnya sama. Pengguna tak dikenal tetap diproses bcrypt pada hash tiruan dan pesannya selalu "Nama atau PIN salah." PIN penyetuju void memakai hitungan yang sama.
+- Owner mengatur PIN siapa saja. Pemegang `kasir.pin` lain hanya mengatur PIN dirinya sendiri dan PIN pengguna yang boleh masuk dengan PIN, supaya PIN tidak dipakai menyamar sebagai Admin lain. Memasang, mengganti, atau menghapus PIN mencabut sesi lain pengguna itu.
+
+## 8. Sidebar per tahap
+
+Syarat dari user: setiap item sidebar yang tampil berfungsi penuh ke database (daftar, tambah, ubah, alur status). Tidak ada menu kosong, "segera hadir", atau tautan mati. Item tampil hanya bila peran punya izin Lihat di kode menunya. Modul yang belum dibangun tidak punya item sidebar.
+
+| Tahap | Item sidebar (kode menu) |
+|---|---|
+| 2 | Beranda (semua pengguna), Pengguna (`atur.pengguna`), Peran dan Izin (`atur.peran`), Saklar Fitur (`atur.saklar`), Jejak Audit (`atur.audit`) |
+| 3 | Layar Kasir, Shift, Transaksi, Menu dan Harga, Promo, Member, Metode Bayar; login PIN kasir; admin lama dipindah dari data browser ke server. Tahap 3A (master) sudah tayang: Menu dan Harga (`menu.menu`, dengan tab Kategori, Paket set, Ubah harga, Riwayat harga), Promo (`menu.promo`), Member (`menu.member`, dengan tab Tingkat Greenbox Key di `menu.tingkat`), dan Metode Bayar (`akun.metode_bayar`) |
+| 4 | Produk dan Satuan, Resep dan BOM, Stok, Penyesuaian, Opname, Pindah Stok, Alasan, Pemasok, Permintaan, Pesanan, Penerimaan, Faktur, Retur, Pembelian Langsung, Pembayaran, Perintah Produksi, Pengeluaran Bahan, Hasil Produksi, Produksi Cepat. Tahap 4A sudah tayang: Produk dan Satuan (`stok.produk`, tab Kategori dan Satuan), Stok (`stok.saldo`, tab Kartu stok), Penyesuaian (`stok.penyesuaian`), Opname (`stok.opname`), Pindah Stok (`stok.pindah`), Alasan (`stok.alasan`), dan Lokasi (`atur.lokasi`, master sederhana yang dimajukan dari tahap 6) |
+| 5 | Laporan, Akun dan Pemetaan, Jurnal Umum, Buku Besar, Tutup Periode, Kas dan Bank, Rekonsiliasi, Setoran POS, Hutang Pemasok |
+| 6 | Penjualan B2B, Aset, Anggaran, Lokasi dan Profil Usaha |
+| 7 | Migrasi data dari ekspor resmi ESB, uji paralel, lalu ESB dihentikan |
+
+Tahap 4B sudah tayang: Resep dan BOM (`/resep`, `stok.resep`), Perintah Produksi (`/perintah-produksi`, `produksi.perintah`), Pengeluaran Bahan (`/pengeluaran-bahan`, `produksi.pengeluaran`), Hasil Produksi (`/hasil-produksi`, `produksi.hasil`), dan Produksi Cepat (`/produksi-cepat`, `produksi.cepat`). Sejak tahap 4B sidebar dikelompokkan (`SIDEBAR_GRUP` di `katalog.ts`): tanpa judul (Beranda), Kasir (Layar Kasir, Shift, Transaksi, PIN Kasir, Metode Bayar), Menu (Menu dan Harga, Promo, Member), Persediaan (Produk dan Satuan, Resep dan BOM, Stok, Penyesuaian, Opname, Pindah Stok, Alasan), Produksi (empat menu produksi), dan Pengaturan (Lokasi, Pengguna, Peran dan Izin, Saklar Fitur, Jejak Audit). Grup yang semua itemnya tidak boleh dilihat tidak tampil. Sidebar lebih tinggi dari layar 900 px, jadi sidebar digulir dan item aktif digulir ke dalam pandangan saat halaman berganti.
+
+Urutan tahap 3 sampai 5 mengikuti SERAH-TERIMA. Tahap 3B (kasir) menambah Layar Kasir (`/kasir`, `kasir.layar`), Shift (`/shift`, `kasir.shift`), Transaksi (`/transaksi`, `kasir.transaksi`), dan PIN Kasir (`/pin`, `kasir.pin`). Struk cetak ada di `/struk/[id]` di luar kerangka admin dan memakai izin Lihat `kasir.transaksi`. Daftar sidebar ada di `src/lib/katalog.ts` (`SIDEBAR`) dan hanya berisi halaman yang sudah ada.
+
+Tahap 4C menambah Pemasok (`/pemasok`, `beli.pemasok`), Permintaan (`/permintaan`, `beli.permintaan`), Pesanan (`/pesanan`, `beli.pesanan`), Penerimaan (`/penerimaan`, `beli.penerimaan`), Faktur (`/faktur`, `beli.faktur`), Retur (`/retur-beli`, `beli.retur`), Pembelian Langsung (`/beli-langsung`, `beli.langsung`), Pembayaran (`/pembayaran`, `beli.pembayaran`), dan Hutang Pemasok (`/hutang`, `kas.hutang`, dimajukan dari tahap 5). Izinnya sudah ada di matriks RANCANGAN 8.2, jadi matriks bawaan tidak berubah. Item ditulis dalam blok `SIDEBAR_BELI` di `katalog.ts` dan dipindah ke grup Pembelian saat sidebar berkelompok digabung.
+
+Tahap 6A menambah grup Penjualan B2B sesudah Pembelian: Pelanggan (`/pelanggan`, `b2b.pelanggan`), Pesanan Penjualan (`/pesanan-jual`, `b2b.pesanan`), Faktur Penjualan (`/faktur-jual`, `b2b.faktur`), Penerimaan Pelanggan (`/terima-pelanggan`, `b2b.penerimaan`, label sidebar "Terima Pembayaran" supaya muat satu baris), dan Retur Penjualan (`/retur-jual`, `b2b.retur`); Piutang Pelanggan (`/piutang`, kode baru `kas.piutang`, Owner L dan Admin L) di grup Keuangan sesudah Hutang Pemasok; dan Profil Usaha (`/profil-usaha`, `atur.lokasi`) di grup Pengaturan sesudah Lokasi. Izin B2B sudah ada di matriks RANCANGAN 8.2 (Owner memegang Posting, Admin L T U H), jadi Admin menyiapkan dan mengajukan dokumen pelaksana B2B dan Owner memostingnya.
+
+Tahap 5A menambah Setoran POS (`/setoran`, `kasir.setoran`), Laporan (`/laporan`, tampil bila memegang Lihat di salah satu kode `laporan.*` yang dibangun; sekarang `laporan.penjualan`), dan Rekening Bank (`/rekening`, `kas.rekening`). Laporan berisi lima tab: Rekap Penjualan, Rekap Penjualan Menu, Ringkasan Pembayaran, Tutup Harian POS, dan Selisih Kas per Kasir. `ItemSidebar.menu` boleh berisi beberapa kode; item tampil bila salah satunya boleh dilihat (`itemTampil`).
+
+Tahap 5C menambah Kas Masuk/Keluar (`/kas`, `kas.transaksi`, rincian `/kas/[id]`), Pindah Dana (`/pindah-dana`, `kas.pindah`), dan Rekonsiliasi Bank (`/rekonsiliasi`, `kas.rekonsiliasi`, dengan `impor/`, `baru/`, dan `[id]`) di awal grup Keuangan, sebelum Rekening Bank dan Hutang Pemasok. Admin melihat Kas Masuk/Keluar; Pindah Dana dan Rekonsiliasi Bank hanya Owner.
+
+Tahap 5B menambah grup Akuntansi sesudah Keuangan: Akun dan Pemetaan (`/akun`, tab Bagan akun dan Pemetaan, `akun.coa`), Jurnal Umum (`/jurnal`, `akun.jurnal`), Buku Besar (`/buku-besar`, `akun.buku_besar`), Laporan Keuangan (`/laporan-keuangan`, tab Neraca Saldo, Laba Rugi, Neraca, `laporan.keuangan`), dan Tutup Periode (`/tutup-periode`, `akun.tutup_periode`). Dengan matriks bawaan, Owner melihat kelima item, Admin hanya Akun dan Pemetaan (Lihat), dan Kasir tidak melihat grup ini.
+
+## 9. Batas sumber daya produksi
+
+Target produksi VPS gugai dalam `greenbox.slice` (1,5 GB untuk situs, app, database, dan WAHA Greenbox). Karena itu:
+
+- Pool koneksi Prisma `DB_POOL_MAX` bawaan 3, koneksi menganggur ditutup sesudah 30 detik.
+- Node dijalankan dengan `NODE_OPTIONS=--max-old-space-size=256`, build `output: 'standalone'`.
+- PostgreSQL disetel kecil (`shared_buffers` sekitar 128 MB, `max_connections` 20).
+- Halaman daftar selalu berhalaman (bawaan 50 baris), tidak ada kueri tanpa batas.
+- Tidak ada deploy di tahap 2.
+
+## 10. Lokal dan uji
+
+- PostgreSQL lokal di container `greenbox-pg-dev` (`postgres:18-alpine`, hanya `127.0.0.1:55441`, volume `greenbox-pg-dev-data`). Basis data dev `greenbox`. Tes membuat basis data baru `greenbox_uji_<acak>` per berkas tes, memigrasinya, dan menghapusnya sesudahnya.
+- Server dev di port 3241.
+- Perintah: `npm run db:setup` (migrasi dan seed), `npm run seed:contoh`, `npm run impor:menu`, `npm run impor:stok`, `npm run impor:resep` (sesudah impor:menu dan impor:stok), `npm run impor:beli` (sesudah impor:stok), `npm run jurnal:bentuk-ulang` (tahap 5B, bagian 14.5), `npm run dev`, `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`, `npm run e2e`.
+
+## 11. Penyimpangan dari ERD dan perubahan kontrak
+
+1. Tabel tambahan `user_session` dan `login_attempt` untuk sesi di database dan rate limit (bagian 7).
+2. `audit_log` menambah kolom `actor_name`, `summary`, dan `user_agent`; `doc_id` bertipe teks.
+3. `feature_switch` menambah kolom `sort` untuk urutan tampilan; saklar ke-24 `log.lihat_semua` (bagian 4.4).
+4. Satu baris matriks "Pengguna, peran, izin, saklar" menjadi tiga kode menu dengan aksi L T U, L T U, dan L U (bagian 4.3).
+5. Kolom `*_by` tanpa foreign key (bagian 3.1); semua tabel dokumen dan master memakai `updated_by` juga, mengikuti RANCANGAN 1 butir 9.
+6. Harga satuan per satuan dasar memakai `Decimal(18,4)` (bagian 3.1).
+7. `approval_rule` belum diisi di tahap 2. Bawaan RANCANGAN 2.2 diisi di tahap 4 bersama dokumen pembelian.
+
+Tahap 3A (master, migrasi `20261120095737_tahap3a_master`):
+
+8. Tahap 3A, skema: `menu_category` baru, dan `menu_item.category` tetap berupa teks tetapi kini menjadi kunci asing ke `menu_category.code` (kode yang membaca kolom itu tetap jalan, nama kategori lewat relasi `categoryRef`). `menu_item` menambah `description`, `kcal`, `sort`. Tabel baru `menu_price_batch` dan `menu_price_history` (setiap perubahan harga, satuan maupun massal, satu batch), `menu_set` (paket set: satu menu utama, satu minuman, harga normal, harga paket, foto), dan `promo` (jenis `persen`, `nominal`, atau `hadiah` dengan masa berlaku). `member` dan `member_tier` menambah kolom `active`. Migrasi `tahap3a_master` mengisi `menu_category` dari nilai `menu_item.category` yang sudah ada sebelum kunci asing dipasang.
+9. Kode menu `menu.tingkat` (L T U H untuk Owner, L T U Admin, L Kasir) dipisah dari `menu.member`, supaya Kasir yang boleh mendaftarkan member (L T) tidak ikut mengatur tingkat dan potongan. Paket set memakai izin `menu.menu`.
+10. Aturan modul master: master tidak dihapus, hanya dinonaktifkan; harga menu dan paket rupiah bulat lebih dari 0 dan paling besar Rp 10.000.000; nama menu, paket, promo, metode bayar, tingkat unik tanpa peduli huruf besar; kategori dengan menu aktif tidak bisa dinonaktifkan; menu yang dipakai paket aktif tidak bisa dinonaktifkan; metode tunai selalu ber-MDR 0 dan minimal satu metode bayar harus aktif; nomor WA member dinormalisasi ke format 62 (nomor seluler Indonesia saja) dan unik; tingkat member dihitung dari kunjungan (tingkat aktif dengan syarat tertinggi yang terpenuhi) dan dihitung ulang untuk semua member saat tingkat berubah.
+11. Foto menu dan paket: kolom `image` berisi nama berkas di `public/img` situs tanpa `.webp` (dibaca dari `SITUS_IMG_DIR`, bawaan `../public/img`) atau `unggahan/<16 heksa>.<webp|png|jpg>` (folder `UNGGAHAN_DIR`, bawaan `data/unggahan`, di-gitignore). Keduanya dilayani route `/foto/[jenis]/[nama]` yang butuh sesi sah, karena Next tidak melayani berkas baru di `public/` saat berjalan. Unggahan paling besar 2 MB dan diperiksa isinya (bukan hanya ekstensi); batas badan aksi server dinaikkan ke 3 MB di `next.config.ts`. Di produksi, folder foto situs harus tersedia lewat `SITUS_IMG_DIR` atau fotonya diunggah ulang.
+12. Impor: `npm run impor:menu` (`scripts/impor-menu.ts`, logika di `src/lib/impor-menu.ts`) mengisi kategori, menu beserta harga dan kalori, tingkat member, paket set, dan metode bayar Tunai, QRIS, Debit (MDR 0, diatur Owner) dari `src/data.ts` dan bawaan `src/store.ts` yang disalin ke berkas impor. Baris yang sudah ada dilewati, bukan ditimpa. Atribut minuman `level`, `serve`, `beans`, bahan visual `mat`, dan promo langkah harian (`dailyGift`) tidak dibawa. Member contoh ada di `seed:contoh`, bukan di impor.
+
+Tahap 3B (kasir, migrasi `20261120130000_tahap3b_kasir`):
+
+13. Kolom tambahan di luar ERD: `shift.closed_by` (penutup shift), `shift.diff_limit` (batas selisih yang berlaku saat ditutup), `shift.approval_note` (catatan persetujuan Owner); `sale.member_pct`, `sale.svc_pct`, `sale.tax_pct` (persen yang berlaku saat transaksi, untuk struk), `sale.void_approved_by` (penyetuju void lewat PIN); `sale_line.name` dan `sale_line.category` (nama dan kategori menu saat dijual, supaya struk lama tidak berubah bila menu diganti).
+14. Jurnal akuntansi belum dibuat di tahap 3B. Sejak tahap 4B potong stok dari resep sudah berjalan (bagian 13.2): penjualan baru memotong bahan dan mengisi `sale.hpp` serta `sale_line.hpp`. Penjualan yang tersimpan sebelum tahap 4B tetap ber-HPP 0 dan tanpa gerak stok; tidak dibentuk ulang, karena stok awalnya diambil dari saldo admin lama sesudah penjualan itu. Jurnal penjualan (RANCANGAN 6.1) dibentuk saat modul akuntansi (tahap 5) dari `sale`, `sale_line`, `sale_payment`, dan gerak `stock_ledger` ber-`doc_type` `sale` (termasuk gerak balik void). Jurnal selisih kas saat tutup shift juga dibentuk dari `shift.cash_diff`.
+15. Kas seharusnya = modal awal + jumlah `sale_payment.amount` metode berjenis `tunai` dari penjualan yang tidak void (sudah bersih dari kembalian) + kas masuk laci - kas keluar laci. Metode tunai dikenali dari `payment_method.kind = 'tunai'`.
+16. Batas selisih kas memakai saklar `pos.batas_selisih_kas` milik peran kasir pemilik shift (bawaan Rp 10.000), diubah Owner lewat Saklar Fitur. Saklar nyala dengan batas: selisih mutlak di atas batas membuat status `PerluPersetujuan`. Saklar nyala tanpa batas: tidak pernah perlu persetujuan. Saklar mati: setiap selisih yang bukan nol perlu persetujuan. Owner (Setujui di `kasir.shift`) menyetujui dengan catatan wajib, lalu status menjadi `Tutup`.
+17. Tutup shift memakai hitung buta: kas seharusnya, rekap per metode, dan selisih baru tampil sesudah shift ditutup. Kas dihitung boleh lewat hitung pecahan (disimpan di `shift.denominations_json`); bila pecahan diisi, totalnya yang dipakai.
+18. "Milik sendiri" di matriks Kasir (RANCANGAN 8.2) diterapkan lewat izin Lihat `laporan.penjualan`: pemegangnya (Owner dan Admin) melihat dan mengelola shift serta transaksi semua kasir, selain itu hanya shift miliknya. Ini mengikuti admin lama yang memakai izin laporan untuk riwayat semua shift.
+19. Satu pengguna hanya punya satu shift berstatus `Buka`. Buka shift mengunci baris `app_user` (FOR UPDATE), dan penjualan, void, kas laci, serta tutup shift mengunci baris `shift` lebih dulu, jadi tidak ada penjualan yang masuk sesudah kas dihitung.
+20. Void: langsung bila memegang Ubah di `kasir.transaksi` dan saklar `pos.void`. Tanpa itu, void butuh PIN penyetuju yang memegang keduanya (RANCANGAN 8.3, Kasir meminta PIN Admin). Alasan wajib, status menjadi `Void` tanpa menghapus baris, dan kunjungan member dikurangi satu. Void sesudah shift ditutup hanya boleh bila yang mengizinkan berperan Owner (Owner sendiri atau penyetuju Owner lewat PIN).
+21. Nomor penjualan `GB-YYMM-NNNN` dari `doc_sequence` (`doc_type` `sale`), berbeda dari admin lama yang memakai `GBYYMMDD-NNN` per hari.
+22. Pajak dan service diambil dari `branch.tax_pct` dan `branch.service_pct` lokasi shift. Seed membuat cabang Greenbox dan lokasi Outlet (jenis `outlet`, pajak dan service 0 persen, sama dengan admin lama) bila belum ada lokasi. Lokasi shift: `app_user.location_id`, lalu lokasi aktif berjenis outlet, lalu lokasi aktif pertama. Pengubahan persen menunggu menu Lokasi dan profil usaha (tahap 6).
+23. Potongan member versi tahap 3B (tingkat dari `tier_id` bila diisi, semua baris kena potongan) diganti aturan akhir di butir 24 saat integrasi.
+
+Integrasi tahap 3A dan 3B (migrasi `20261120140000_tahap3c_paket_kasir`):
+
+24. Aturan akhir potongan member, satu sumber di `src/lib/member.ts`. Tingkat yang berlaku = `tingkatUntuk(visits)`: tingkat aktif dengan `min_visits` tertinggi yang sudah dicapai, atau tidak ada tingkat bila belum ada yang tercapai. Persennya = `potonganMember`: `discount_pct` tingkat itu bila member aktif, `discount_on` nyala, dan tingkatnya aktif; selain itu 0. Kasir menghitung tingkat dari kunjungan saat transaksi (bukan dari `tier_id` yang tersimpan), dan persen yang dipakai disimpan di `sale.member_pct`. Potongan hanya untuk baris menu biasa; baris paket set tidak kena potongan (admin lama: hanya baris reguler). Hitungannya `hitungKeranjang` di `src/lib/hitung-kasir.ts`, dipakai layar kasir dan server. Penjualan menambah satu kunjungan dan void menguranginya (tidak di bawah 0) lewat `catatKunjungan`, yang sekaligus menghitung ulang `tier_id` dalam satu pernyataan.
+25. Pencarian member di kasir memakai `normalisasiWa` (`src/lib/wa.ts`, dipakai bersama modul member), jadi "0812...", "+62 812..." dan "812..." menemukan member yang sama dari kolom `member.wa` berformat 62. Member nonaktif tidak ditemukan, dan penjualan dengan member nonaktif ditolak di server.
+26. Layar kasir hanya menampilkan kategori dan menu yang aktif, diurutkan menurut `menu_category.sort` lalu `menu_item.sort`, dengan nama kategori dari `menu_category`. Server juga menolak menu yang kategorinya nonaktif.
+27. Paket set dijual di layar kasir sebagai kelompok "Paket set" (paket aktif yang menu utama dan minumannya aktif). Satu paket satu baris `sale_line`: `menu_set_id` terisi sebagai penanda paket, `menu_item_id` berisi menu utama, `set_drink_item_id` berisi minuman saat dijual (CHECK: keduanya terisi atau keduanya kosong), `price` harga paket, `name` "Paket <nama paket>", dan `category` `paket`. Potong stok tahap 4 untuk baris paket memakai resep menu utama dan minuman dari baris itu, bukan isi `menu_set` saat ini yang bisa sudah diubah.
+28. Tertunda: promo (`promo`, jenis persen, nominal, hadiah) belum diterapkan otomatis di kasir. Alasannya: aturan gabungnya belum diputuskan (admin lama menulis potongan member tidak digabung dengan Early set atau promo lain, tetapi urutan promo terhadap potongan member, service, dan pajak belum ada), kolom `condition` berupa teks bebas yang tidak bisa dievaluasi mesin, promo hadiah butuh baris Rp 0 yang ikut memotong stok di tahap 4, dan `sale` belum punya kolom untuk mencatat promo yang dipakai. Sampai diputuskan, promo hanya data master untuk ditampilkan dan diterapkan manual oleh kasir; penerapan otomatis menunggu keputusan aturan tersebut.
+29. Data uji kasir (`scripts/seed-kasir-uji.ts`) memakai kategori dan tingkat yang sudah ada atau membuatnya dulu dengan kode dan nama yang sama dengan `impor:menu`, menyimpan WA member dalam format 62, dan menambah paket uji "Sarapan Uji". Menu uji bernama lain dari menu hasil impor supaya harga menu impor tidak ditimpa.
+
+Tahap 4A (persediaan, migrasi `20261120150000_tahap4a_stok`):
+
+30. Tahap 4A, skema (migrasi `tahap4a_stok`): `stock_balance` menambah `value` (rupiah) dan `avg_cost` (harga rata-rata per lokasi); `stock_ledger` menambah `balance_value` dan `doc_no`, indeks `(product_id, location_id, id)`, CHECK `qty <> 0`, dan trigger yang menolak `UPDATE`, `DELETE`, dan `TRUNCATE` (ledger hanya bertambah seperti `audit_log`); `location` menambah `code` unik (bawaan `HO` dan `OUTLET`); `stock_reason` menambah `code` unik untuk alasan sistem (`saldo_awal`); `unit` menambah `active`.
+31. Penilaian rata-rata tertimbang per lokasi (`stock_balance.avg_cost`), bukan per produk. RANCANGAN tidak menentukan, dan per lokasi membuat Pindah Stok netral nilai. `product.avg_cost` diisi rata-rata gabungan semua lokasi (dipakai HPP menu nanti), `product.last_cost` diisi harga gerak masuk yang ditandai harga beli.
+32. Gerak keluar yang membuat qty tepat 0 mengeluarkan seluruh sisa nilai, supaya saldo nol selalu bernilai nol. Akibatnya gerak balik bisa bernilai sedikit berbeda dari gerak asalnya bila di antaranya ada gerak lain dan qty kembali tepat 0; selisih ini tercatat di ledger dan harus dijurnal sebagai selisih penilaian saat modul jurnal ada. Di luar kasus itu gerak balik memakai nilai persis dokumen asal (RANCANGAN 2.3 butir 3).
+33. Aturan persetujuan bawaan tahap 4A di `approval_rule`: `stock_opname` (semua opname) dan `stock_adjustment` (hanya penyesuaian yang punya baris tambah; dokumen yang semua barisnya kurang boleh langsung Diposting). Persetujuan dokumen stok satu langkah: pemegang S dan P menekan "Setujui dan posting" dari Diajukan. Aturan dokumen pembelian menyusul di tahap 4 berikutnya.
+34. Master Lokasi sederhana (kode, nama, jenis, izin stok minus, aktif) memakai kode menu `atur.lokasi` dari tahap 6. Profil usaha dan cabang belum punya halaman; satu cabang `GB` dibuat oleh seed.
+35. Tanggal dokumen persediaan tidak boleh lewat dari hari ini (WIB) dan hanya boleh mundur sejauh saklar `dok.tanggal_mundur` (mati berarti hanya hari ini, nyala tanpa batas berarti bebas mundur sampai tutup periode ada di tahap 5). Diperiksa saat draf dibuat, saat kepala diubah, dan saat diposting.
+36. Jurnal akuntansi belum dibentuk di tahap 4A. Saat modul jurnal ada (tahap 5), jurnal dokumen persediaan dibentuk dari `stock_ledger` per dokumen (`doc_type`, `doc_id`): penyesuaian dan opname berlawanan dengan akun alasan (`stock_reason.account_id`), pindah stok tidak berjurnal (satu akun persediaan), dan gerak balik membentuk jurnal balik bertanggal hari pembatalan (`reversal_journal_id`). Kolom `account_id` alasan dibiarkan kosong sampai saat itu.
+37. Impor `npm run impor:stok` (`scripts/impor-stok.ts`, logika `src/lib/stok/impor.ts`) memindahkan 28 bahan dari data contoh admin lama (`ING` di `src/admin/contoh.ts`, disalin) menjadi produk berkode `BHN-<id>` dengan kategori Bahan minuman, Bahan makanan, dan Kemasan, lalu stok akhirnya menjadi saldo awal di lokasi Outlet lewat satu Penyesuaian Stok berasalan "Saldo awal" yang langsung Diposting dengan harga rata-rata lama. Idempoten: produk yang kodenya sudah ada dilewati dan bahan yang sudah punya gerak di Outlet tidak diberi saldo awal lagi.
+
+Tahap 5A (laporan penjualan dan setoran POS, migrasi `20261120160000_tahap5a_setoran`):
+
+38. Skema: `pos_settlement.to_account_id` dan `bank_account.account_id` boleh kosong karena COA baru ada di modul akuntansi; rekening tujuan setoran disimpan di kolom baru `pos_settlement.bank_account_id`. `pos_settlement_line` menambah `payment_method_id` (salinan metode kepala, tanpa kunci asing) dan `cancelled`, untuk indeks unik sebagian `(shift_id, payment_method_id) WHERE NOT cancelled`. `pos_settlement` punya indeks unik sebagian `(date, payment_method_id) WHERE status <> 'Batal'`. `bank_account` menambah kolom audit `created_by/at`, `updated_by/at`. Tidak ada kolom penanda setoran di `shift`; status setoran per shift dan metode dibaca dari baris setoran.
+39. Tanggal shift untuk setoran dan Tutup Harian adalah tanggal WIB saat shift dibuka (`shift.opened_at`). Satu setoran per tanggal per metode bayar. Uang laci satu wadah, jadi setoran tunai hanya dibuat untuk satu metode tunai: metode berjenis `tunai` dengan id terkecil (yang aktif lebih dulu).
+40. Nilai menurut sistem per shift: tunai = `counted_cash - open_cash` (modal ditinggal di laci, RANCANGAN 11.2 butir 4; bisa negatif bila kas dihitung kurang dari modal), non tunai = jumlah `sale_payment.amount` metode itu dari penjualan yang tidak void. Shift berstatus `Tutup` atau `PerluPersetujuan` dianggap sudah ditutup. Baris tunai memuat semua shift ditutup tanggal itu; baris non tunai hanya shift yang punya penjualan metode itu. MDR bawaan baris = `round(nilai sistem x mdr_pct / 100)`, nilai disetor bawaan = nilai sistem dikurangi MDR, dan MDR kepala = jumlah MDR baris (boleh diubah). Selisih kepala = disetor + MDR - sistem; selisih baris = disetor - sistem.
+41. Tombol "Buat setoran hari ini" (Tambah) membuat Draft per metode yang punya shift ditutup dan belum disetor pada tanggal yang dipilih (bawaan hari ini, tidak boleh di masa depan), atau menambah shift baru ke Draft yang sudah ada. Setoran yang sudah diajukan atau diposting tidak disentuh; shift yang ditutup sesudahnya ditampilkan sebagai belum disetor dan masuk lewat pembatalan lalu setoran baru. Pembuatan dikunci per tanggal (`pg_advisory_xact_lock`), dan indeks unik butir 30 menjadi pengaman terakhir.
+42. Alur status mengikuti dokumen pelaksana (bagian 3.2). Posting (Posting) menolak bila: tidak ada baris; setoran tunai dan masih ada shift tanggal itu yang buka; non tunai tanpa rekening; rekening nonaktif; ada shift ditutup yang belum masuk baris; atau nilai sistem baris berubah karena void sesudah setoran dibuat (keduanya diselesaikan dengan Muat ulang baris di Draft). Setoran butuh Owner bila selisih kepala melewati saklar `pos.batas_selisih_kas` milik peran pelaku (aturan sama dengan tutup shift, butir 16) atau ada shift yang masih `PerluPersetujuan`. Tanpa Setujui, pelaku mengajukan; pemegang Setujui menekan "Setujui dan posting" dari Draft atau Diajukan, yang mengisi jejak ajukan bila perlu dan `approved_by`. Kembalikan ke Draft oleh pemegang Setujui atau pengajunya sendiri. Batal dari Draft atau Diajukan butuh Ubah; batal dari Diposting butuh Ubah, Posting, dan saklar `dok.batal_posting`; alasan selalu wajib dan baris ikut ditandai batal sehingga shift-nya bisa disetor ulang. Hapus hanya untuk Draft. Nomor `ST-YYMM-NNNN` dari `doc_sequence` (`doc_type` `pos_settlement`) dengan periode tanggal setoran.
+43. Jurnal setoran belum dibuat. Saat modul akuntansi ada, jurnal setoran dibentuk dari dokumen Diposting (RANCANGAN 6.2: tunai debit Kas Besar atau Bank, kredit Kas Laci; non tunai debit Bank dan Beban MDR, kredit Piutang Kliring, sisa selisih ke Selisih Kas), sama seperti jurnal penjualan di butir 14, dan setoran Batal yang pernah Diposting mendapat jurnal balik di `reversal_journal_id`.
+44. Rekening tujuan dipilih dari `bank_account`. Bawaan: rekening aktif dari setoran terakhir metode itu, lalu rekening aktif pertama untuk non tunai. Setoran tunai boleh tanpa rekening (disimpan di Kas Besar). `payment_method.deposit_account_id` belum dipakai karena menunjuk COA. Rekening tidak dihapus, hanya dinonaktifkan; nomor rekening disimpan sebagai angka saja dan unik per bank tanpa peduli huruf besar.
+45. Bukti setor (opsional) berupa WebP, PNG, JPG, atau PDF paling besar 2 MB, diperiksa dari isi berkas, disimpan di `UNGGAHAN_DIR/bukti/` (bawaan `data/unggahan/bukti`, di-gitignore), dan dilayani `/setoran/[id]/bukti` dengan izin Lihat `kasir.setoran`. PDF dikirim sebagai unduhan.
+46. Laporan memakai izin Lihat `laporan.penjualan` untuk kelima laporan, termasuk CSV (`/laporan/unduh?jenis=...` dengan saringan yang sama). Rentang bawaan tujuh hari terakhir (admin lama), paling panjang 366 hari, tanggal penjualan dari `sale.at` di WIB. Penjualan void tidak dijumlah; jumlah dan nilainya tampil terpisah hanya untuk pemegang saklar `pos.lihat_void_nonsales`. Potongan di Rekap Penjualan Menu dialokasikan ke baris menu biasa sebanding nilainya dengan sisa pembulatan ke pecahan terbesar, jadi jumlahnya sama persis dengan `sale.disc`. "Sudah disetor" di Ringkasan Pembayaran berarti shift dan metodenya ada di setoran Diposting (pembayaran tunai dicocokkan ke setoran tunai mana pun). Estimasi MDR memakai persen MDR metode saat ini. CSV berpemisah koma dengan BOM UTF-8 seperti admin lama, angka tanpa format, dan sel teks yang diawali `= + - @` diberi tanda kutip tunggal.
+47. Penyimpangan dari RANCANGAN 9: kolom HPP, laba kotor, persen laba, HPP per porsi, dan margin belum ditampilkan karena `sale.hpp` masih 0 sampai modul stok (butir 14); saringan lokasi belum ada karena baru ada satu lokasi outlet; saringan mode "makan di tempat, bawa pulang" ada di Rekap Penjualan dan Rekap Penjualan Menu. Saklar `dok.tanggal_mundur` tidak diterapkan ke tanggal setoran, karena tanggal itu adalah tanggal shift yang disetor, bukan tanggal pembuatan dokumen.
+48. Belum ditangani: void sesudah setoran diposting tidak mengubah setoran itu. Void sesudah shift ditutup hanya bisa oleh Owner (butir 20). Laporan selalu membaca penjualan terbaru, jadi nilai setoran yang sudah diposting bisa lebih besar dari penjualan shift itu; koreksinya lewat pembatalan setoran lalu setoran baru.
+
+Tahap 4B (resep, potong stok penjualan, produksi; migrasi `20261120160000_tahap4b_produksi`):
+
+49. Skema: `bom_line` unik per (`bom_id`, `product_id`) dan `qty > 0`; CHECK `bom.kind` (`menu` atau `assembly`) dan `bom.output_qty > 0`; `production_order` menambah `closed_by` dan `wip_writeoff` (sisa nilai barang dalam proses yang dibuang saat ditutup manual) dengan CHECK `planned_qty > 0`; `production_order_line` menambah `tol_pct` (salinan toleransi BOM); CHECK `material_issue.kind` (`keluar` atau `kembali`); `quick_production` menambah `value` (nilai hasil yang masuk persediaan).
+50. Penjualan saat stok bahan kurang. RANCANGAN 11.2 butir 5 menulis bawaan sementara "diblokir"; brief tahap 4B (yang merujuk butir 7) menetapkan bawaan sementara lain dan itu yang dipakai: penjualan tetap boleh, stok bahan boleh minus khusus untuk gerak penjualan. Saklar baru `pos.jual_stok_minus` (saklar ke-25, Owner, Admin, Kasir Ya) dibaca dari peran pengguna yang menyimpan penjualan. Saklar mati: penjualan ditolak dengan pesan mesin stok ("Stok X di Outlet tidak cukup ..."), kecuali lokasinya mengizinkan stok minus. Bahan yang saldonya minus sesudah penjualan dicatat di audit `penjualan.simpan` (`stokMinus`). Dokumen lain (pengeluaran bahan, produksi cepat, gerak balik) tetap mengikuti `location.allow_negative_stock`.
+51. Satu menu punya paling banyak satu resep aktif, lewat `menu_item.bom_id` (ERD). Resep menu selalu ber-`output_qty` 1 dan tanpa biaya tambahan. Resep yang dinonaktifkan tetap ditunjuk menunya sampai menu itu diberi resep baru. "Menu tanpa resep" = menu aktif tanpa `bom_id`, dengan resep nonaktif, atau resep tanpa bahan; daftar dan qty terjual 30 hari terakhir tampil di atas halaman Resep dan BOM, dan barisnya ditandai di rincian transaksi. Kode resep dari `doc_sequence` (`doc_type` `bom`): `RM-YYMM-NNNN` untuk resep menu, `BA-YYMM-NNNN` untuk BOM assembly. `bom.version` naik setiap bahan, qty hasil, atau biaya tambahan berubah. `bom_line.waste_pct` tidak dipakai (selalu 0); `tol_pct` hanya berarti untuk BOM assembly.
+52. HPP di halaman Resep dan BOM dihitung dari harga rata-rata lokasi yang dipilih (bawaan Outlet), lalu `product.last_cost` bila lokasi belum punya rata-rata, sama dengan aturan mesin stok saat barang keluar. Nilai per bahan dibulatkan rupiah per baris. HPP yang tercatat di penjualan adalah nilai keluar mesin saat itu, jadi bisa berbeda dari tampilan resep bila harga rata-rata berubah. HPP dan nilai produksi hanya tampil untuk pemegang saklar `stok.lihat_nilai`.
+53. Hasil kumulatif yang melebihi rencana lebih dari 10 persen (RANCANGAN 5.3 "butuh Owner") diterapkan sebagai izin Setujui `produksi.hasil` (bawaan hanya Owner). Menyetujui dan menutup Perintah Produksi memakai izin Setujui `produksi.perintah` (Owner dan Admin, RANCANGAN 8.2). `approval_rule` untuk dokumen produksi belum diisi, jadi perintah bisa langsung disetujui dari Draft dan dokumen pelaksana produksi bisa langsung diposting oleh pemegang P.
+54. Perintah Produksi yang Selesai (otomatis atau ditutup manual) bersifat final: tidak bisa dibuka lagi karena transisi Selesai ke Disetujui tidak ada (bagian 3.2), jadi pengeluaran bahan dan hasil produksinya juga tidak bisa dibatalkan lagi. Pengeluaran bahan jenis keluar tidak bisa dibatalkan selama perintahnya punya hasil produksi Diposting, dan tidak bisa dibatalkan bila bahannya sudah dikembalikan dari proses. Perintah hanya bisa dibatalkan bila semua dokumen turunannya sudah Batal.
+55. Stok tersedia yang dikurangi Pengeluaran Bahan berstatus Diajukan (RANCANGAN 4, Booked Qty) belum diterapkan; `stock_balance.reserved_qty` tetap 0.
+56. Produksi Cepat: `qty` adalah jumlah batch (pengali BOM). Qty sistem bahan = qty BOM x batch, `output_qty` bawaan = qty hasil BOM x batch, `extra_cost` = biaya tambahan BOM x batch saat draf disusun. Qty aktual yang menyimpang dari qty sistem lebih dari `tol_pct` BOM wajib diberi catatan minimal 5 huruf sebelum diposting (RANCANGAN menulis "peringatan dan wajib catatan").
+57. Jurnal belum dibentuk di tahap 4B. Di tahap 5 jurnal dibentuk dari `stock_ledger` per dokumen: penjualan debit HPP kredit Persediaan (void membalik); pengeluaran bahan keluar debit Barang Dalam Proses kredit Persediaan, jenis kembali sebaliknya; hasil produksi debit Persediaan kredit Barang Dalam Proses; tutup manual membuang `wip_writeoff` ke Selisih Produksi; produksi cepat debit Persediaan (hasil) kredit Persediaan (bahan) dan kredit Biaya Produksi Dibebankan sebesar `extra_cost`.
+58. Impor `npm run impor:resep` (`scripts/impor-resep.ts`, logika `src/lib/produksi/impor.ts`) memindahkan 40 resep dari `RESEP` di `src/admin/contoh.ts` (disalin). Menu dicocokkan menurut nama (slug nama `menu_item` sama dengan kunci resep lama), bahan menurut nama produk tanpa peduli huruf besar. Resep yang menunya tidak ditemukan, menunya bernama ganda, atau salah satu bahannya tidak ditemukan dilewati dan dilaporkan, tidak ditebak. Idempoten: menu yang sudah menunjuk resep dilewati. Impor ini tidak dijalankan oleh `jalankan.sh`, supaya uji klik kasir dan stok tidak berubah karena potong stok.
+59. Sidebar berkelompok (bagian 8): Metode Bayar pindah ke grup Kasir dan Lokasi ke grup Pengaturan, sehingga urutan item berbeda dari tahap 4A. Uji kasir yang menuntut semua item sidebar terlihat di 1440 x 900 sudah gagal sejak 4A digabung (20 item), dan diganti uji bahwa item terakhir tercapai dengan menggulir sidebar.
+
+Tahap 4C (pembelian, migrasi `20261120180000_tahap4c_pembelian`):
+
+60. Skema: `supplier.note`; `approval_rule.min_pct` (batas persen); `purchase_order.legacy_no` (unik, untuk impor); `purchase_order_line.factor`, `goods_receipt_line.factor`, `direct_purchase_line.factor` (faktor satuan beli ke satuan dasar saat baris dibuat, supaya perubahan konversi produk tidak mengubah dokumen lama); `goods_receipt_line.extra_alloc`, `value` (nilai persediaan baris = qty x harga + bagian biaya tambahan) dan `qty_ret_uninv` (bagian `qty_returned` yang diretur sebelum difakturkan); `purchase_invoice_line.kind` (`barang`, `biaya_terima`, `jasa`), `description`, `line_total`; `purchase_return.debit_note_used`; `purchase_return_line.value`, `debit_note`; `direct_purchase_line.description`, `line_total`, `extra_alloc`, `value`; `direct_purchase.bank_account_id` dan `purchase_payment.bank_account_id` (rekening `bank_account` tanpa kunci asing karena model `BankAccount` di luar lingkup tahap ini; kosong berarti kas), dan `purchase_payment.from_account_id` menjadi boleh kosong sampai COA ada. `cash_account_id`, `expense_account_id`, `payable_account_id` tetap kosong. Indeks unik sebagian nomor faktur pemasok per pemasok `(supplier_id, lower(supplier_invoice_no)) WHERE status <> 'Batal'`, CHECK tepat satu dokumen per `purchase_payment_alloc`, dan CHECK qty serta uang tidak minus di baris penerimaan, baris pesanan, faktur, pembelian langsung, dan nota debit.
+61. Aturan persetujuan bawaan (diisi migrasi, RANCANGAN 2.2 dan 11.2 butir 2): `purchase_order` di atas `min_amount` Rp 5.000.000, `purchase_invoice` bila selisih harga mutlak di atas `min_pct` 5 persen dari nilai penerimaan yang difakturkan, dan `purchase_payment` selalu (golongan `pelaksana_setuju`). Permintaan, penerimaan, retur, dan pembelian langsung tanpa aturan. Belum ada layar untuk mengubah `approval_rule`.
+62. Satu pintu status dokumen pembelian: `ubahStatusBeli` di `src/lib/beli/dokumen.ts` (kunci kepala, transisi `status.ts`, izin, saklar, tanggal, aturan persetujuan, kait per dokumen, audit, satu transaksi). Izin: buat T; ubah draf T atau U; hapus draf H; ajukan T atau U; kembalikan S atau pengaju sendiri; Setujui (rencana yang terkena aturan dan pembayaran) S; posting P, ditambah S bila dokumen pelaksana terkena aturan ("Setujui dan posting" dari Diajukan); Tutup sisa (rencana Disetujui ke Selesai) U dan alasan minimal 5 huruf, untuk pesanan ditambah saklar `beli.tutup_po`; batal dari Draft, Diajukan, atau Disetujui U; batal dari Diposting P, saklar `dok.batal_posting`, dan alasan minimal 5 huruf. Tanggal dokumen diperiksa dengan aturan butir 35 saat dibuat, saat kepala diubah, dan saat diposting. Pembatalan ditolak bila ada turunan yang masih Diposting: pesanan yang punya penerimaan Diposting, penerimaan yang sudah difakturkan (termasuk biaya tambahannya) atau diretur, faktur yang sudah dibayar atau punya retur dari bagian yang sudah difakturkan, retur yang nota debitnya terpakai, dan pembelian langsung kredit yang sudah dibayar atau diretur.
+63. Penyimpangan RANCANGAN 2.2: pesanan pembelian di bawah batas `approval_rule` dikonfirmasi (Draft ke Disetujui, tombol "Setujui sekarang") oleh pemegang Tambah atau Ubah, bukan hanya pemegang Setujui. Alasannya matriks 8.2 tidak memberi Admin izin Setujui pada `beli.pesanan`, sehingga tanpa aturan ini semua pesanan, berapa pun nilainya, harus menunggu Owner dan batas Rp 5.000.000 tidak ada artinya. Pesanan di atas batas tetap wajib diajukan dan disetujui pemegang Setujui. Aturan yang sama berlaku untuk permintaan bila suatu saat diberi aturan persetujuan nol.
+64. Harga dan satuan: harga baris pembelian rupiah bulat per satuan beli yang dipilih (satuan dasar atau konversi `product_unit`), qty paling banyak 3 desimal dalam satuan itu, dan stok bergerak sebesar qty x faktor. Diskon per baris tidak dipakai (harga diisi bersih) dan PPN tidak dihitung karena Greenbox bukan PKP (RANCANGAN 11.2 butir 6); kolom `disc`, `tax_pct`, `tax` diisi 0. Harga terakhir = `product.last_cost` x faktor. Harga pesanan dan penerimaan yang berbeda dari harga terakhir (pesanan) atau harga pesanan (penerimaan) butuh saklar `beli.ubah_harga_po`; produk yang belum pernah dibeli bebas harga. Pesanan tanpa rujukan permintaan butuh `beli.po_tanpa_pr`, dan qty pesanan di atas sisa permintaan butuh `beli.ubah_qty_pr`; qty dipesan di permintaan bertambah saat pesanannya Disetujui dan berkurang saat pesanan itu dibatalkan, dan permintaan Selesai otomatis bila semua baris dipesan penuh. Baris pesanan dari permintaan memakai satuan baris permintaan.
+65. Penerimaan Barang: draf dibuat dari satu pesanan Disetujui dengan baris sisa qty dan harga pesanan; qty 0 menghapus baris. Qty terima tidak boleh melebihi sisa pesanan ditambah `product.receipt_tol_pct` (bawaan 0), diperiksa saat simpan dan saat posting dengan baris pesanan terkunci. Saat Diposting: biaya tambahan dibagi ke baris menurut nilai (sisa pembulatan ke pecahan terbesar), stok masuk lewat `catatGerak` dengan `nilai` baris dan `hargaBeli: true` (barang bonus berharga 0 digerakkan tanpa `hargaBeli` supaya tidak menimpa harga beli terakhir), `unit_cost` dan `value` baris disimpan, qty diterima pesanan bertambah, dan progres terima dihitung ulang. Pesanan Selesai otomatis bila diterima penuh dan saklar `beli.po_selesai_otomatis` milik pemosting menyala; pesanan yang Selesai otomatis kembali Disetujui bila qty diterima berkurang (pembatalan penerimaan atau retur minta ganti). Progres faktur penerimaan = (qty difakturkan + qty diretur sebelum faktur) dibanding qty terima.
+66. Keputusan selisih harga faktur (RANCANGAN 3.4): selisih harga faktur lawan penerimaan tidak mengoreksi nilai persediaan dan tidak menghitung ulang harga rata-rata. Selisih disimpan sebagai angka per baris (`purchase_invoice_line.price_diff` = jumlah faktur - nilai penerimaan, nilai penerimaan = qty faktur x harga terima) dan di kepala (`purchase_invoice.price_diff`), dan nanti dijurnal ke Selisih Harga Pembelian di kelompok HPP. Faktur menarik baris dari satu atau beberapa penerimaan Diposting milik pemasok yang sama (qty bawaan sisa, harga bawaan harga terima); biaya tambahan penerimaan ikut tertarik sebagai baris `biaya_terima` dan hanya boleh tertagih di satu faktur Diposting; baris `jasa` tidak menyentuh stok dan tidak punya selisih. Qty atau harga yang berbeda dari penerimaan butuh saklar `beli.ubah_harga_faktur`, dan qty hanya boleh lebih kecil dari sisa. Status bayar Belum bayar, Sebagian, Lunas dari `paid_amount`.
+67. Retur Pembelian: satu dokumen asal (penerimaan atau pembelian langsung Diposting), qty dalam satuan baris asal, tidak melebihi qty asal dikurangi qty yang sudah diretur. Stok keluar dengan nilai penerimaannya, proporsional dari `value` baris asal, lewat perluasan mesin stok di bagian 12.2. Dari penerimaan, qty diambil dulu dari bagian yang belum difakturkan (menambah `qty_ret_uninv`, tanpa nota debit), sisanya dari bagian yang sudah difakturkan dan menjadi nota debit = qty x harga faktur rata-rata baris itu (jumlah baris faktur Diposting dibagi qty-nya). Dari pembelian langsung, seluruh qty menjadi nota debit = qty x harga baris. "Minta ganti barang" (hanya dari penerimaan) mengurangi qty diterima pesanan sehingga sisanya terbuka lagi. Retur berizin Admin L T U H (RANCANGAN 8.2), jadi Admin mengajukan dan Owner memposting.
+68. Pembelian Langsung: cara bayar tunai atau kredit dijaga saklar `beli.langsung_tunai` dan `beli.langsung_kredit` saat dibuat, diubah, dan diposting; tunai dibayar dari kas atau rekening `bank_account` aktif dan langsung Lunas, kredit mendapat jatuh tempo bawaan tanggal + termin pemasok dan menjadi hutang. Baris hanya biaya butuh `beli.langsung_biaya`. Harga yang berbeda dari harga terakhir lebih dari batas saklar `beli.ubah_harga_langsung` (bawaan 20 persen) ditolak bila saklar itu mati. Biaya tambahan dibagi ke baris barang dan masuk ke nilai persediaan seperti penerimaan.
+69. Pembayaran Pembelian: satu pemasok, sumber kas atau rekening `bank_account`. Alokasi ke faktur Diposting dan pembelian langsung kredit Diposting yang belum lunas, ditambah nota debit retur yang belum terpakai sebagai pengurang; jumlah pembayaran = alokasi tagihan - nota debit dan harus lebih dari 0. Sisa tiap dokumen diperiksa saat alokasi disimpan, saat diajukan, saat disetujui, dan saat diposting dengan dokumen tujuan terkunci, jadi dua pembayaran yang disetujui bersamaan tidak bisa melunasi tagihan yang sama dua kali. `paid_amount`, status bayar, dan `debit_note_used` hanya berubah saat Diposting dan dikembalikan saat pembayaran Diposting dibatalkan. Draf tanpa alokasi menawarkan bawaan dibayar penuh. Penyimpangan RANCANGAN 3.7: uang muka (sisa tak teralokasi), biaya bank, potongan, dan unggah bukti transfer belum dibuat (`unallocated`, `bank_fee`, `discount` 0, `proof_file` kosong).
+70. Hutang Pemasok (`kas.hutang`, dimajukan dari tahap 5): saldo per pemasok = sisa faktur Diposting + sisa pembelian langsung kredit Diposting - nota debit belum terpakai; umur dari jatuh tempo ke hari ini (WIB) dalam kelompok belum jatuh tempo, 1-30, 31-60, 61-90, di atas 90 hari; kolom terpisah barang diterima belum difakturkan (qty sisa x harga terima ditambah biaya tambahan yang belum tertagih). CSV `/hutang/unduh` memakai aturan CSV butir 46. Ini versi saldo; Mutasi Hutang per periode (RANCANGAN 9) menunggu jurnal.
+71. Jurnal pembelian dibuat sejak tahap 5C (`src/lib/akuntansi/beli.ts`, rinciannya di butir 100). Tiap dokumen Diposting dijurnal dari angka yang sudah tersimpan, di transaksi yang sama dengan postingnya, dan pembatalan dari Diposting mendapat jurnal balik bertanggal hari pembatalan di `reversal_journal_id`:
+    - Penerimaan Barang: debit Persediaan sebesar `value` baris (termasuk biaya tambahan), kredit Barang Diterima Belum Difakturkan (BDBF) sebesar `subtotal + extra_cost`.
+    - Faktur Pembelian: debit BDBF sebesar `receipt_value` baris barang dan biaya tambahan, debit Beban (kelompok biaya) untuk baris jasa, debit atau kredit Selisih Harga Pembelian sebesar `price_diff` (debit bila positif), kredit Hutang Usaha sebesar `total`. PPN Masukan tidak dipakai selama tidak PKP.
+    - Retur dari penerimaan: bagian belum difakturkan debit BDBF, kredit Persediaan; bagian sudah difakturkan debit Hutang Usaha sebesar `debit_note`, kredit Persediaan sebesar nilai keluar bagian itu, selisihnya ke Selisih Harga Pembelian. Retur dari pembelian langsung: debit Hutang Usaha sebesar nota debit, kredit Persediaan sebesar nilai keluar, selisih (bagian biaya tambahan) ke Selisih Harga Pembelian.
+    - Pembelian Langsung: debit Persediaan sebesar `value` baris barang, debit Beban untuk baris biaya; kredit Kas atau Bank (tunai, akun pemetaan `bank.<id rekening>` atau Kas Besar) atau Hutang Usaha (kredit) sebesar `total`.
+    - Pembayaran Pembelian: debit Hutang Usaha sebesar alokasi tagihan, kredit Hutang Usaha (pemakaian nota debit, saling hapus dengan debit retur) dan kredit Kas atau Bank sebesar `amount`.
+    - Gerak balik retur yang membuat qty tepat 0 mengikuti butir 32.
+72. Impor admin lama (`npm run impor:beli`, `src/lib/beli/impor.ts`): 2 pemasok menjadi `SUP-SP1` dan `SUP-SP2` dengan catatan dan telepon lama, dan 3 PO menjadi pesanan bernomor baru dengan `legacy_no` PO lama, baris di satuan dasar dengan harga per satuan dasar lama, lokasi Outlet, dan tanggal = hari impor dikurangi selisih hari di data contoh. Keputusan: PO lama berstatus "diterima" (PO-001) tidak dipindah sebagai Penerimaan Barang dan tidak menggerakkan stok, karena barangnya sudah termasuk stok akhir admin lama yang diimpor sebagai saldo awal di tahap 4A; memindahkannya sebagai gerak akan membuat stok dobel. PO itu masuk sebagai riwayat: status Selesai, qty diterima = qty pesan, progres Penuh, dan alasan selesai menjelaskannya. PO "dipesan" menjadi Disetujui (masih bisa diterima) dan PO "draf" menjadi Draft. Idempoten lewat kode pemasok dan `legacy_no`; pesanan yang produknya belum ada (impor:stok belum dijalankan) dilewati dengan pesan.
+73. Belum ditangani di tahap 4C: periode tertutup (RANCANGAN 2.3 butir 5) menunggu modul akuntansi (sudah ditangani di tahap 5C, butir 89); layar `approval_rule`; isi otomatis alokasi ke tagihan tertua dengan jumlah tertentu; cetak dan kirim PDF pesanan; laporan Rekap Pembelian dan Mutasi Hutang per periode; saldo debit pemasok yang dikembalikan lewat Kas Masuk.
+
+Tahap 5B (akuntansi, migrasi `20261120190000_tahap5b_akuntansi`):
+
+74. Skema: `journal` menambah `doc_no` (nomor dokumen sumber untuk tampilan), `status` (bawaan `Diposting`; alur status hanya dipakai jurnal memorial), kolom audit `created_by/at`, `updated_by/at`, dan jejak `submitted_by/at`, `approved_by/at`, `cancelled_by/at`, `cancel_reason`. `posted_at` kini boleh kosong dan tanpa bawaan: kosong berarti jurnal belum berlaku (memorial Draft atau Diajukan), dan semua laporan hanya membaca jurnal yang `posted_at`-nya terisi. Dokumen sumber tetap di kolom ERD `source_type` dan `source_id` (padanan `doc_type` dan `doc_id` di API). Indeks unik sebagian: satu jurnal maju per (`source_type`, `source_id`) dan satu jurnal balik per `reversal_of_id`. CHECK baris jurnal: debit dan kredit tidak minus dan tidak terisi bersamaan. Trigger menolak menghapus jurnal yang sudah berlaku dan mengubah kolom pokoknya (tanggal, sumber, nomor, `posted_at`, `reversal_of_id`), serta mengubah atau menghapus barisnya kecuali `cleared_at` (untuk rekonsiliasi bank). `account` menambah `note` dan kolom audit; `fiscal_period` menambah `reopened_by`, `reopened_at`, `reopen_reason`. Indeks `journal_line(account_id)` diganti `(account_id, journal_id)`.
+75. Migrasi mengisi bagan akun bawaan kedai kopi (50 akun, enam kelompok dengan akun induk) dan 28 kunci pemetaan umum, serta `approval_rule` `journal` (memorial wajib disetujui). Pemetaan per entitas memakai kunci turunan di `account_mapping`: `kliring.<id metode bayar>`, `bank.<id rekening>`, `persediaan.<id lokasi>`, `alasan.<id alasan>`. Kunci turunan yang kosong jatuh ke kunci umumnya (`kliring`, `bank`, `persediaan`; alasan jatuh ke `saldo_awal` untuk alasan berkode `saldo_awal`, lalu `selisih_persediaan`). Akibatnya kolom ERD `payment_method.clearing_account_id`, `payment_method.deposit_account_id`, `bank_account.account_id`, `stock_reason.account_id`, dan `pos_settlement.to_account_id` tidak dipakai dan dibiarkan kosong; satu sumber akun adalah `account_mapping`. Ini menggantikan "akun alasan (`stock_reason.account_id`)" di butir 36. `pasangBawaanAkuntansi` (seed dan bentuk ulang) memetakan metode berjenis `qris` dan `debit` ke Piutang Kliring QRIS dan Debit.
+76. Akun persediaan dipetakan per lokasi, bukan per kategori produk. Mengganti pemetaan persediaan saat lokasi masih punya stok membuat saldo lama tertinggal di akun sebelumnya; halaman Pemetaan memberi peringatan, tetapi tidak menolaknya. Pencocokan persediaan (bagian 14.5) menjumlah semua akun yang sekarang dipetakan ke `persediaan` dan `persediaan.*`.
+77. Kas Laci tidak memuat modal awal laci (modal tetap di laci, RANCANGAN 11.2 butir 4, dan tidak pernah dijurnal), jadi saldo Kas Laci adalah uang di luar modal dan kembali 0 sesudah semua shift disetor. Supaya itu benar, kas masuk dan keluar laci di luar penjualan (`shift_cash_move`) ikut dijurnal: masuk debit Kas Laci kredit kunci `laci_masuk` (bawaan Kas Besar), keluar debit kunci `laci_keluar` (bawaan Beban Lain-lain) kredit Kas Laci. Jurnal ini tambahan atas RANCANGAN 6.1.
+78. Selisih kas tutup shift dijurnal saat shift ditutup, termasuk yang masih "Perlu persetujuan"; persetujuan Owner tidak mengubah jurnal. Jurnal penjualan bertanggal WIB `sale.at`, void bertanggal hari void. Penjualan bernilai 0 tanpa HPP tidak dijurnal.
+79. Setoran POS dijurnal bertanggal `pos_settlement.date` (tanggal shift yang disetor), dan jurnal baliknya bertanggal hari pembatalan dengan `reversal_journal_id` terisi. Tujuan: rekening terpilih (`bank.<id>` lalu `bank`), atau Kas Besar untuk setoran tunai tanpa rekening. Sisa nilai sistem dikurangi disetor dan MDR masuk Selisih Kas (debit bila kurang).
+80. Produksi Cepat dijurnal bruto: debit persediaan lokasi hasil, kredit persediaan lokasi bahan, dan kredit Biaya Produksi Dibebankan sebesar biaya tambahan; tanpa biaya tambahan nilai bersih ke persediaan 0. Pindah Stok tanpa jurnal bila semua akun bernilai bersih 0 (akun persediaan asal dan tujuan sama).
+81. Jurnal balik dokumen stok dan HPP void dibentuk dari gerak balik `stock_ledger`, bukan dari kebalikan jurnal maju. Bila gerak balik bernilai sedikit berbeda (butir 32), selisih itu masuk ke akun lawan dokumen tersebut (alasan, Barang Dalam Proses, atau HPP), sehingga saldo akun persediaan tetap sama dengan `stock_balance`. Tidak ada akun selisih penilaian terpisah.
+82. Laba Ditahan dan Laba Tahun Berjalan di Neraca dihitung dari jurnal laba rugi (tahun-tahun sebelumnya dan tahun berjalan sampai tanggal neraca) dan ditampilkan di akun pemetaan `laba_ditahan` dan `laba_berjalan`, karena tutup buku tahunan belum ada. Laporan pembanding (periode lalu, bulan yang sama tahun lalu) dan saringan lokasi di laporan keuangan belum dibuat (RANCANGAN 9).
+83. Tutup periode hanya untuk bulan yang sudah lewat (WIB) dan ditolak bila masih ada jurnal memorial Draft atau Diajukan bertanggal bulan itu. `stock_closed_at` diisi sama dengan `closed_at`; tutup stok terpisah (Close Period Stock ESB) tidak dibuat. Membuka lagi butuh izin Hapus `akun.tutup_periode` dan peran Owner, dengan alasan minimal 5 huruf. Periode tertutup menolak semua yang membentuk jurnal bertanggal di bulan itu (posting dokumen stok dan produksi, penjualan, void, tutup shift, kas laci, setoran, memorial) dan pembatalan dokumen yang jurnal majunya atau dokumennya bertanggal di bulan itu.
+84. Nomor jurnal otomatis `JU-YYMM-NNNN` (`doc_type` `journal`) dan jurnal memorial `JM-YYMM-NNNN` (`doc_type` `journal_memorial`, diambil saat draf dibuat). Akun tidak pernah dihapus, jadi aksi Hapus `akun.coa` di matriks tidak dipakai. Akun tidak bisa dinonaktifkan selama dipetakan, masih punya anak aktif, atau saldonya bukan 0.
+85. Menggantikan butir 47: Rekap Penjualan kini memuat HPP (`sale.hpp`), laba kotor (penjualan bersih dikurangi HPP), dan persen laba; Rekap Penjualan Menu memuat HPP per porsi, HPP total (`sale_line.hpp`), margin, dan margin persen. Kolom itu dan isinya di CSV hanya untuk pemegang saklar `stok.lihat_nilai`. Saringan lokasi di laporan penjualan tetap belum ada.
+86. Belum dijurnal di tahap 5B: dokumen pembelian, kas masuk dan keluar, B2B, aset. Dokumen pembelian dan kas sudah dijurnal sejak tahap 5C (butir 88 dan 92). Skrip bentuk ulang melaporkan jenis dokumen lain yang punya gerak stok tetapi belum disambungkan.
+
+Tahap 6A (penjualan B2B dan profil usaha, migrasi `20261120210000_tahap6a_b2b_profil`):
+
+87. Skema: tabel baru `customer_price` (harga khusus pelanggan per produk dan satuan jual, unik per pelanggan, produk, dan satuan, CHECK harga lebih dari 0) dengan relasi balik di `product` dan `unit` tanpa kolom baru; `customer.npwp`, `customer.note`, CHECK termin 0 sampai 365; `sales_order.customer_ref` (nomor PO pelanggan) dan `sales_order_line.factor`; `sales_invoice.customer_ref` dan `hpp`; `sales_invoice_line.unit_id` (kunci asing ke `unit`), `factor`, `line_total`, `value` (HPP baris, rupiah positif); `sales_return.customer_id` (salinan pelanggan faktur asal), `value` (HPP yang kembali), `credit_used` (nota kredit yang sudah dipakai penerimaan; `total` adalah nota kreditnya); `sales_return_line.price`, `line_total`, `value`; `customer_payment.to_account_id` menjadi boleh kosong sampai COA dipakai, dan rekening tujuan di kolom baru `bank_account_id` tanpa kunci asing (kosong berarti kas), sama dengan pembayaran pembelian (butir 60); `customer_payment_alloc.sales_invoice_id` boleh kosong dan kolom baru `sales_return_id`, dengan CHECK tepat satu dokumen dan jumlah lebih dari 0; CHECK qty dan uang di baris pesanan, baris faktur (`qty_returned` tidak melebihi `qty`), faktur, baris retur, dan retur. `branch` menambah `npwp`, `phone`, `receipt_logo`, `updated_by`, `updated_at`, dan CHECK persen pajak dan service 0 sampai 100. Migrasi juga mengisi izin `kas.piutang` untuk peran sistem.
+88. Tidak ada dokumen surat jalan (pengiriman) terpisah. Faktur Penjualan sekaligus pengiriman: saat Diposting barang keluar dari lokasi kirim lewat mesin stok (`docType` `sales_invoice`) dengan harga rata-rata lokasi, dan faktur menjadi piutang. Alasannya data B2B di ESB kosong, Greenbox tidak punya armada atau gudang terpisah yang mengirim lebih dulu lalu menagih belakangan, dan satu dokumen berarti satu langkah posting untuk Admin dan Owner. Bila nanti barang dikirim sebelum ditagih, jalur itu bisa ditambah sebagai dokumen pelaksana baru yang menggerakkan stok, dengan faktur yang hanya menagih (pola Penerimaan Barang dan Faktur Pembelian).
+89. Harga jual: tidak ada harga jual standar per produk. Harga baris pesanan dan faktur tanpa pesanan bawaan dari harga khusus pelanggan untuk produk dan satuan itu; produk tanpa harga khusus wajib diisi harganya. Harga yang berbeda dari harga khusus, atau harga faktur yang berbeda dari harga pesanannya, butuh saklar `b2b.ubah_harga` (Owner Ya, Admin Tidak). Satuan jual adalah satuan dasar atau konversi `product_unit` (faktor disalin ke baris), qty paling banyak 3 desimal, dan stok bergerak qty x faktor. Diskon per baris tidak dipakai dan PPN keluaran tidak dihitung karena Greenbox bukan PKP (RANCANGAN 11.2 butir 6); kolom `disc`, `tax_pct`, `tax` diisi 0.
+90. Alur status memakai pintu yang sama dengan pembelian (`ubahStatusBeli`, butir 62) lewat jenis `JenisJual` di `beli/dokumen.ts`. Pesanan Penjualan dokumen rencana; `approval_rule` untuk dokumen B2B belum diisi, jadi pesanan dikonfirmasi pemegang Tambah atau Ubah dengan "Setujui sekarang" (aturan butir 63), dan Tutup sisa memakai izin Ubah dengan alasan. Faktur, Penerimaan Pelanggan, dan Retur Penjualan dokumen pelaksana tanpa langkah Setujui: Admin (L T U H) mengajukan, pemegang Posting (Owner) memosting. Nomor `SO`, `FJ`, `TP`, `RJ` dari `doc_sequence`. Tanggal diperiksa dengan aturan butir 35.
+91. Faktur dari pesanan: draf dibuat dari satu pesanan Disetujui berisi sisa qty dan harga pesanan; baris boleh dikurangi (faktur sebagian) atau dihapus, tidak boleh ditambah. Qty tidak boleh melebihi sisa pesanan (qty - qty difakturkan), diperiksa saat baris disimpan dan saat posting dengan baris pesanan terkunci, jadi dua draf dari pesanan yang sama tidak bisa melebihi sisanya. Faktur tanpa pesanan menambah baris langsung. Jatuh tempo bawaan = tanggal faktur + termin pelanggan. Pesanan Selesai otomatis saat difakturkan penuh (tanpa saklar, berbeda dari `beli.po_selesai_otomatis`) dan kembali Disetujui bila fakturnya dibatalkan.
+92. Retur Penjualan: satu faktur Diposting sebagai asal, qty dalam satuan baris faktur, tidak melebihi qty faktur dikurangi qty yang sudah diretur. Barang masuk lagi ke lokasi faktur dengan nilai pasti = HPP asal baris faktur sebanding qty retur (bukan harga rata-rata saat ini); retur yang menghabiskan sisa baris mengambil sisa HPP dan sisa jumlah baris persis, supaya jumlah semua retur sama dengan baris faktur. Nota kredit = qty x harga faktur dan menjadi pengurang di Penerimaan Pelanggan (pola nota debit, butir 67 dan 69). Pengembalian uang tunai ke pelanggan untuk nota kredit tanpa faktur lain belum ada.
+93. Penerimaan Pelanggan: satu pelanggan, ke kas atau rekening `bank_account`. Alokasi ke faktur Diposting yang belum lunas, ditambah nota kredit retur sebagai pengurang; uang masuk = alokasi faktur - nota kredit. Jumlah 0 hanya boleh bila faktur dilunasi seluruhnya dengan nota kredit. Sisa tiap dokumen diperiksa saat alokasi disimpan, saat diajukan, dan saat diposting dengan dokumen tujuan terkunci. `paid_amount`, status bayar, dan `credit_used` hanya berubah saat Diposting dan dikembalikan saat penerimaan Diposting dibatalkan. Draf tanpa alokasi menawarkan bawaan dilunasi penuh. Penyimpangan ERD: uang muka (`unallocated`) dan biaya bank (`bank_fee`) belum dipakai (0).
+94. Pembatalan ditolak bila ada turunan: pesanan Disetujui yang punya faktur selain Batal; faktur yang sudah dibayar, punya retur selain Batal, atau masih dialokasikan di draf penerimaan; retur yang nota kreditnya sudah dipakai atau masih dialokasikan di draf penerimaan. Pembatalan faktur dan retur dari Diposting memakai gerak balik mesin stok (butir 32 berlaku).
+95. Piutang Pelanggan (`kas.piutang`, kode menu baru di luar matriks RANCANGAN 8.2, Owner L dan Admin L, dipisah dari `b2b.penerimaan` seperti Hutang Pemasok): saldo per pelanggan = sisa faktur Diposting - nota kredit belum terpakai; umur dari jatuh tempo ke hari ini (WIB) dengan kelompok yang sama dengan Hutang Pemasok; CSV `/piutang/unduh` memakai aturan CSV butir 46. Ini versi saldo; mutasi piutang per periode menunggu jurnal.
+96. Jurnal penjualan B2B belum dibuat, sama seperti pembelian (butir 71). Saat modul jurnal ada, tiap dokumen Diposting dijurnal dari angka yang sudah tersimpan, dan pembatalan dari Diposting mendapat jurnal balik bertanggal hari pembatalan di `reversal_journal_id`:
+    - Faktur Penjualan: debit Piutang Usaha (akun `customer.receivable_account_id` atau pemetaan bawaan) sebesar `total`, kredit Penjualan B2B sebesar `subtotal`; debit HPP, kredit Persediaan sebesar `hpp` (jumlah `value` baris dari gerak `stock_ledger` ber-`doc_type` `sales_invoice`). PPN Keluaran tidak dipakai selama tidak PKP.
+    - Penerimaan Pelanggan: debit Kas atau Bank (akun dari `bank_account.account_id` atau Kas Besar) sebesar `amount`, debit Retur Penjualan atau Piutang Usaha untuk pemakaian nota kredit (saling hapus dengan kredit retur), kredit Piutang Usaha sebesar alokasi faktur.
+    - Retur Penjualan: debit Retur Penjualan (kontra pendapatan) sebesar `total`, kredit Piutang Usaha sebesar `total` (nota kredit); debit Persediaan, kredit HPP sebesar `value`.
+    - Pesanan Penjualan tidak berjurnal.
+97. Profil Usaha (`/profil-usaha`, menyelesaikan catatan butir 22 dan 34): Owner (Ubah `atur.lokasi`) mengubah nama, alamat, telepon, NPWP, persen pajak PB1 dan service (0 sampai 25), kepala dan kaki struk, serta logo struk per cabang; Admin hanya melihat. Cabang tidak ditambah dari layar (satu cabang `GB`). Persen pajak dan service dibaca kasir dari cabang lokasi shift saat transaksi dan disalin ke `sale`, jadi transaksi lama tidak berubah. Kepala, kaki, alamat, telepon, NPWP, dan logo dibaca saat struk ditampilkan, jadi struk lama yang dibuka ulang memakai profil terbaru. Logo hanya dari unggahan (WebP, PNG, JPG paling besar 2 MB, folder `UNGGAHAN_DIR`, dilayani `/foto/unggahan/...`); logo lama dihapus dari disk sesudah diganti. Laporan belum menampilkan nama atau NPWP usaha karena belum ada laporan cetak.
+98. Belum ditangani di tahap 6A: `approval_rule` untuk dokumen B2B; batas kredit pelanggan; kategori pelanggan dan sales representative sebagai master (kolom `category` teks bebas); cetak dan kirim PDF faktur penjualan; pengembalian uang untuk nota kredit tanpa faktur; harga khusus dengan masa berlaku; laporan rekap penjualan B2B.
+
+Tahap 5C (jurnal pembelian, kas dan bank, rekonsiliasi bank; migrasi `20261120220000_tahap5c_kas`):
+
+99. Skema: `journal_line.bank_account_id` (rekening `bank_account` yang digerakkan baris itu, tanpa kunci asing seperti butir 60, diisi lewat `BarisJurnal.bankAccountId`, ikut kunci penggabung baris, dan diisi migrasi untuk baris bank setoran POS lama); `cash_transaction.bank_account_id` dan `to_bank_account_id` (rekening sumber dan tujuan, kosong berarti Kas Besar), CHECK `kind` (`masuk`, `keluar`, `pindah`) dan jumlah; `bank_statement_line.dedup_key` (unik per rekening), `created_by`, `created_at`, dan CHECK satu sisi; `bank_reconcile.outstanding` (jurnal bank yang belum cair per akhir periode), CHECK periode, dan indeks unik sebagian satu Draft per rekening; CHECK `bank_reconcile_match.amount <> 0`. Kunci pemetaan baru `beban_beli` (bawaan 6-1900 Beban Lain-lain) dan aturan persetujuan `cash_transaction.keluar` dan `cash_transaction.pindah` (butir 104).
+100. Jurnal pembelian (butir 71). Penerimaan: debit persediaan per lokasi dari gerak masuk, kredit BDBF sebesar `subtotal + extra_cost`. Faktur: debit BDBF sebesar `receipt_value` baris barang dan biaya tambahan, debit `beban_beli` untuk baris jasa (baris faktur tidak punya akun beban sendiri, jadi satu kunci pemetaan dipakai), `price_diff` ke Selisih Harga Pembelian, kredit Hutang Usaha sebesar `total`. Retur: kredit persediaan sebesar gerak keluar, debit BDBF sebesar qty belum difakturkan x harga terima (dibulatkan per baris), debit Hutang Usaha sebesar nota debit, sisanya ke Selisih Harga Pembelian (termasuk bagian biaya tambahan yang ikut keluar). Pembelian Langsung: debit persediaan dari gerak, debit `beban_beli` sebesar `total` dikurangi nilai gerak (baris hanya biaya, ditambah biaya tambahan yang tidak terbagi karena tidak ada baris barang), kredit Kas Besar atau rekening (tunai) atau Hutang Usaha (kredit). Pembayaran: debit Hutang Usaha sebesar alokasi tagihan, kredit Hutang Usaha sebesar nota debit yang dipakai, kredit Kas Besar atau rekening sebesar `amount`. "Kas" di pembelian langsung dan pembayaran berarti Kas Besar. Baris Hutang Usaha dan BDBF membawa `supplier_id`, dan baris bank membawa `bank_account_id`. Jurnal balik faktur dan pembayaran adalah kebalikan persis; jurnal balik penerimaan, retur, dan pembelian langsung dibentuk dari gerak balik, dan bila nilainya berbeda dari gerak asal (butir 32) bedanya masuk Selisih Harga Pembelian, sehingga BDBF dan Hutang Usaha tetap persis. Nomor jurnal ditulis di `after_json` peristiwa `.posting` (`jurnal`) dan `.batal` (`jurnalBalik`). Panel status dokumen pembelian menautkan jurnalnya untuk pemegang Lihat `akun.jurnal`.
+101. Periode tertutup menolak posting dokumen pembelian pelaksana yang bertanggal di bulan itu, dan pembatalan dari Diposting bila dokumennya bertanggal di bulan tertutup atau hari ini ada di bulan tertutup, termasuk dokumen tanpa nilai jurnal (misalnya penerimaan barang bonus). Membuat dan mengubah draf tetap boleh.
+102. Kolom "Belum difakturkan" di Hutang Pemasok kini dihitung dengan rumus yang sama dengan jurnal BDBF (`belumDifakturkan` di `hutang.ts`): nilai penerimaan Diposting dikurangi `receipt_value` faktur Diposting dan bagian retur sebelum difakturkan. Pada qty pecahan yang difakturkan bertahap hasilnya bisa berbeda 1 rupiah dari qty sisa x harga terima, tetapi selalu sama dengan saldo BDBF di Buku Besar. Saldo Hutang Usaha di Buku Besar sama dengan total halaman Hutang Pemasok (sisa faktur dan pembelian kredit dikurangi nota debit belum terpakai); keduanya diuji di `tests/beli-jurnal.test.ts`.
+103. Bentuk ulang (bagian 14.5) kini juga membentuk jurnal dokumen pembelian yang pernah Diposting (urutan penerimaan, faktur, retur, pembelian langsung, pembayaran) dan jurnal balik yang dibatalkan sesudahnya, bertanggal `cancelled_at`.
+104. Kas Masuk, Kas Keluar, dan Pindah Dana (`src/lib/kas.ts`, satu tabel `cash_transaction` dengan `kind` `masuk`, `keluar`, `pindah`). Nomor `KM-`, `KK-`, `PN-YYMM-NNNN` dari `doc_sequence` dengan `doc_type` `cash_transaction.masuk`, `.keluar`, `.pindah`, sehingga awalan `KS` di `status.ts` tidak dipakai. Sumber dan tujuan: Kas Besar (kunci `kas_besar`) atau rekening aktif (`bank.<id>` lalu `bank`); kas laci tidak bisa dipilih karena hanya digerakkan kasir dan setoran. `account_id` dan `to_account_id` berisi akun hasil pemetaan dan dibaca ulang saat posting. Kas masuk dan keluar punya baris akun lawan (paling banyak 50) dan `amount` = jumlah baris; pindah dana tanpa baris, sumber dan tujuan harus berbeda. Izin: `kas.transaksi` (Owner L T U H S P, Admin L T U H) dan `kas.pindah` (Owner saja). Aturan persetujuan per jenis di `approval_rule` (`cash_transaction.keluar` dan `cash_transaction.pindah` wajib, kas masuk tanpa aturan; `min_amount` bila diisi membatasi aturan ke jumlah sebesar itu ke atas): dengan aturan alurnya Draft, Diajukan, Disetujui (S), Diposting (P) seperti pembayaran pembelian; tanpa aturan pemegang P memposting dari Draft atau Diajukan. Kembalikan oleh pemegang S atau pengaju; batal dari Draft, Diajukan, atau Disetujui butuh U; batal dari Diposting butuh P, saklar `dok.batal_posting`, dan alasan minimal 5 huruf, lalu membuat jurnal balik bertanggal hari ini di `reversal_journal_id`. Tanggal diperiksa dengan `dok.tanggal_mundur` saat dibuat, diubah, dan diposting, dan periode tertutup menolak posting dan pembatalan. Jurnal: kas masuk debit kas atau bank, kredit akun baris; kas keluar sebaliknya; pindah dana debit tujuan, kredit sumber; baris kas dan bank membawa `bank_account_id`.
+105. Akun lawan kas (`akunLawan`). Akun inti tidak pernah boleh dipakai: akun berbendera kas atau bank dan akun yang dipetakan ke `kas_laci`, `kas_besar`, `bank`, `bank.*`, `kliring`, `kliring.*`, `persediaan`, `persediaan.*`, `bdp`, `hutang_usaha`, `grni`, `ppn_masukan`, `uang_muka_beli`, `pajak_pb1`, `saldo_awal`, `laba_ditahan`, `laba_berjalan`, `penjualan`, `pendapatan_service`, `potongan_penjualan`, dan `hpp`, supaya saldo persediaan, hutang, BDBF, dan kliring hanya digerakkan dokumennya sendiri. Tanpa izin Setujui `kas.transaksi` (Admin) pilihannya hanya akun aktif berjenis Beban atau Pendapatan di luar akun inti; pemegang Setujui (Owner) boleh semua akun aktif yang bisa diposting di luar akun inti (misalnya Modal Pemilik, Hutang Lain-lain, Peralatan). Akun diperiksa saat baris ditambah (aturan pelakunya) dan diperiksa lagi terhadap akun inti saat diposting. RANCANGAN tidak menyebut akun lawan per peran; ini tafsiran "daftar akun yang diizinkan untuk Admin".
+106. Impor mutasi (`src/lib/mutasi-csv.ts` dan `imporMutasi` di `src/lib/rekonsiliasi.ts`). Bank dan formatnya belum diputuskan (RANCANGAN 11.2 butir 10), jadi pemetaan kolom bisa diatur di layar: pemisah (tebak otomatis, koma, titik koma, tab), baris awal yang dilewati, nomor kolom tanggal, keterangan, referensi, saldo, format tanggal (otomatis DD/MM/YYYY atau YYYY-MM-DD, DD/MM/YYYY, YYYY-MM-DD, MM/DD/YYYY, DD/MM tanpa tahun dengan isian tahun), cara membaca nominal (debit dan kredit terpisah, satu kolom jumlah dengan tanda DB/CR, atau jumlah bertanda), dan format angka (1,234.56 atau 1.234,56). Dua contoh siap pakai: KlikBCA Mutasi Rekening (tanggal DD/MM tanpa tahun, Keterangan, Cabang, Jumlah, DB/CR, Saldo; baris judul, PEND, dan kaki saldo dilewati karena tanggalnya tidak terbaca) dan Umum (judul di baris pertama, Tanggal, Keterangan, Referensi, Debit, Kredit, Saldo). Penyimpangan: pemetaan tidak disimpan per rekening karena itu butuh kolom di `bank_account` yang di luar lingkup tahap ini; contoh format menjadi pengganti. Sen dibulatkan ke rupiah. Berkas paling besar 1 MB dan 5.000 baris. Baris yang sudah pernah diimpor dilewati lewat `dedup_key` (sidik tanggal, keterangan, referensi, nominal, saldo, dan urutan kemunculan baris yang sama persis di berkas itu), dan baris bertanggal di periode yang sudah direkonsiliasi tidak diimpor. Ringkasan impor dibaca dari audit `mutasi.impor`, bukan dari query. Baris yang belum cocok dan belum masuk rekonsiliasi Diposting boleh dihapus (izin H) untuk salah impor.
+107. Dokumen rekonsiliasi (`bank_reconcile`, nomor `RK-YYMM-NNNN` dengan periode tanggal akhir). Satu Draft per rekening. Rekonsiliasi pertama sebuah rekening mengisi saldo awal rekening koran sendiri; sesudahnya periode wajib dimulai sehari sesudah rekonsiliasi Diposting terakhir dan saldo awalnya sama dengan saldo akhir rekonsiliasi itu. Tanggal akhir tidak boleh di masa depan. Saldo akhir rekening koran bawaan diambil dari saldo baris mutasi terakhir di periode itu. Mutasi rekening dengan tanggal di periode dimuat saat dibuat, saat kepala diubah, saat impor (bila ada Draft yang mencakupnya), dan lewat Muat ulang mutasi. Alur status: Draft, Diposting, Batal (tanpa Diajukan, karena izinnya hanya Owner).
+108. Baris jurnal kandidat rekonsiliasi: baris akun COA rekening itu (`bank.<id>` lalu `bank`) dari jurnal yang berlaku sampai tanggal akhir, yang `bank_account_id`-nya rekening itu atau kosong (rekening yang berbagi satu akun COA tidak saling tercampur), belum dicocokkan, dan bukan pasangan jurnal dengan jurnal baliknya. Saldo buku = jumlah baris itu. Jurnal belum cair = baris sejak tanggal awal rekonsiliasi pertama rekening itu yang belum dicocokkan dengan mutasi sampai tanggal akhir; baris sebelum tanggal itu dianggap sudah termasuk saldo awal rekening koran pertama (misalnya saldo awal yang dicatat lewat memorial), kecuali dicocokkan dengan mutasi sesudahnya. Selisih = saldo akhir rekening koran - (saldo buku - jurnal belum cair). Posting ditolak bila tidak ada mutasi, masih ada mutasi belum cocok, saldo awal + mutasi tidak sama dengan saldo akhir rekening koran, atau selisih bukan 0. `book_closing`, `outstanding`, dan `diff` disimpan.
+109. Pencocokan: satu mutasi dengan satu atau beberapa baris jurnal kandidat yang jumlah bersihnya (debit - kredit) sama persis dengan mutasi (kredit rekening koran - debit). Satu baris jurnal hanya cocok sekali (`bank_reconcile_match.journal_line_id` unik). Mencocokkan mengisi `journal_line.cleared_at` dengan tanggal mutasi; melepas mengosongkannya. Saran otomatis: nominal sama dan tanggal paling jauh 3 hari, atau nomor dokumen atau nomor jurnal (minimal 6 huruf dan angka) muncul di referensi atau keterangan mutasi; referensi didahulukan, lalu selisih tanggal terkecil, satu lawan satu. "Terapkan saran" mencocokkan semua saran sekaligus. Transaksi kas dari baris mutasi (`kasDariMutasi`, misalnya biaya admin atau bunga) membuat kas keluar atau masuk dari rekening itu bertanggal mutasi dengan satu baris akun pilihan, melewati Diajukan, Disetujui bila aturannya berlaku, dan Diposting dalam satu transaksi (butuh T, S, dan P `kas.transaksi`), lalu langsung mencocokkannya.
+110. Kunci: baris jurnal yang sudah dicocokkan (di rekonsiliasi Draft maupun Diposting) membuat pembatalan dokumen sumbernya ditolak di `buatJurnalBalik` (`pastikanBelumDicocokkan`), sehingga berlaku untuk semua dokumen yang berjurnal. Ini lebih ketat dari RANCANGAN 7 yang hanya menyebut rekonsiliasi Diposting; pencocokan di Draft dilepas dulu. Batal rekonsiliasi Draft butuh U; batal rekonsiliasi Diposting butuh P dan alasan minimal 5 huruf, hanya untuk rekonsiliasi terakhir rekening itu, dan melepas semua pencocokan sehingga kuncinya terbuka. Hapus Draft butuh H. Transaksi kas yang dibuat dari mutasi tidak ikut batal.
+111. Izin `kas.rekonsiliasi` (bawaan Owner L T U H S P, Admin dan Kasir tanpa akses): Lihat untuk halaman, T untuk impor dan membuat rekonsiliasi, U untuk mengubah kepala, mencocokkan, melepas, menerapkan saran, dan memuat ulang, H untuk hapus draf dan hapus baris mutasi, P untuk posting dan batal sesudah Diposting. Peristiwa audit: `mutasi.impor` dan `mutasi.hapus` (entitas `bank_statement_line`, id batch impor atau id baris), `rekonsiliasi.tambah`, `.ubah`, `.cocok` (berisi baris jurnal dan sumber pencocokan: manual, saran, atau transaksi kas), `.lepas`, `.posting`, `.batal`, `.hapus` (entitas `bank_reconcile`). Laporan setoran dan pembayaran yang belum cair per tanggal (RANCANGAN 7) tampil sebagai daftar "Jurnal bank belum cair" di rincian rekonsiliasi, belum sebagai laporan terpisah.
+
+## 12. Persediaan dan mesin stok (tahap 4A)
+
+### 12.1 Prinsip
+
+- `stock_ledger` adalah satu-satunya sumber gerak stok (RANCANGAN prinsip 1). Tidak ada kode yang menulis `stock_ledger` atau `stock_balance` selain `src/lib/stok/mesin.ts`. `stock_balance` hanya ringkasan dan bisa dihitung ulang dari ledger kapan saja.
+- Qty dalam satuan dasar produk, paling banyak 3 desimal, bertanda (plus masuk, minus keluar, tidak pernah 0). Harga satuan per satuan dasar, 4 desimal. Nilai baris dan saldo nilai rupiah bulat; pembulatan setengah menjauhi nol, sehingga gerak balik menghasilkan angka yang simetris. Hitungan memakai `Prisma.Decimal`, tidak pernah `number`.
+- Rata-rata tertimbang per produk per lokasi, dihitung ulang setiap barang masuk: `rata baru = (nilai saldo + nilai masuk) / (qty saldo + qty masuk)`. Barang keluar memakai harga rata-rata saat itu dan tidak mengubahnya. Gerak balik menghitung ulang rata-rata dari saldo sesudahnya.
+- Stok minus ditolak dengan `GalatAturan` ("Stok X di Y tidak cukup: tersedia a, perlu b") kecuali `location.allow_negative_stock` atau pemanggil memberi `izinkanMinus`. Seluruh transaksi pemanggil ikut batal.
+
+### 12.2 API (`src/lib/stok/mesin.ts`)
+
+```ts
+type DokumenAsal = { docType: string; docId: number; docNo: string; tanggal: Date; oleh: number | null }
+type Gerak = {
+  productId: number; locationId: number
+  qty: Decimal | string | number          // bertanda, satuan dasar
+  hargaSatuan?: Decimal | string | null   // hanya masuk; kosong = harga rata-rata lokasi (lalu last_cost)
+  nilai?: bigint | null                    // masuk: nilai total pasti, mengalahkan hargaSatuan
+                                             // keluar (tahap 4C): nilai keluar pasti bertanda minus, misalnya retur
+                                             // pembelian; harga rata-rata sisa dihitung ulang dan nilai sisa tidak boleh minus
+  lineId?: number | null
+}
+type OpsiGerak = { izinkanMinus?: boolean; hargaBeli?: boolean }   // hargaBeli: perbarui product.last_cost
+type HasilGerak = { ledgerId, productId, locationId, lineId, qty, hargaSatuan, nilai: bigint, saldoQty, saldoNilai: bigint, hargaRata }
+
+catatGerak(tx, dok, gerak[], opsi?): Promise<HasilGerak[]>
+pindahStok(tx, dok, { productId, dari, ke, qty, lineId }[], opsi?): Promise<HasilGerak[]>   // keluar lalu masuk, nilai sama persis
+balikDokumen(tx, dok, opsi?): Promise<HasilGerak[]>    // dok.tanggal = hari pembatalan; gagal bila sudah pernah dibalik
+// tahap 4B: produksi satu langkah. Bahan keluar dengan harga rata-rata, lalu hasil masuk dengan nilai = jumlah nilai bahan
+// + biayaTambahan, dalam satu panggilan (satu putaran kunci). Hasil: gerak bahan dulu, gerak hasil paling akhir.
+olahStok(tx, dok, bahan: Gerak[] /* qty minus */, hasil: { productId, locationId, qty, biayaTambahan?, lineId? }, opsi?): Promise<HasilGerak[]>
+periksaSaldo(db, { productId?, locationId? }?): Promise<SelisihSaldo[]>   // kosong berarti saldo cocok dengan ledger
+periksaRantai(db): Promise<number>                      // baris ledger yang saldo berjalannya putus
+hitungUlangSaldo(tx, { productId?, locationId? }?)      // tulis ulang stock_balance dari ledger, kembalikan yang diperbaiki
+saldoDi(db, productId, locationId)                      // baca saldo tanpa kunci
+```
+
+Aturan pemakaian:
+
+1. Selalu di dalam `db.$transaction(async (tx) => ...)` milik pemanggil, bersama perubahan status dokumen dan `catatAudit`. Kalau satu gerak gagal, semuanya batal.
+2. Satu panggilan per dokumen dengan semua barisnya. Mesin mengunci baris `stock_balance` (`INSERT ... ON CONFLICT DO NOTHING` lalu `SELECT ... FOR UPDATE`) berurutan menurut produk lalu lokasi, lalu baris `product` berurutan menurut id, sehingga dua transaksi yang menyentuh pasangan yang sama tidak saling mengunci silang. Bila satu transaksi memanggil mesin lebih dari sekali, PostgreSQL bisa menggagalkan salah satu transaksi yang bersamaan dengan kode `40P01`; pemanggil boleh mengulang.
+3. `docType` memakai nama tabel dokumen (`stock_adjustment`, `goods_receipt`, `sale`, ...). Tambahkan barisnya di `TAUTAN_DOK` (`src/lib/stok/posisi.ts`) bila dokumen itu punya halaman, supaya kartu stok bisa menautkannya.
+4. Pembatalan dokumen Diposting: panggil `balikDokumen` dengan `docType` dan `docId` yang sama dan `tanggal` hari pembatalan. Jangan menulis gerak kebalikan sendiri.
+5. Mesin tidak memeriksa izin, saklar, status dokumen, atau produk nonaktif; itu tugas modul dokumen. Mesin hanya memeriksa angka, keberadaan produk dan lokasi, dan stok minus.
+
+Contoh untuk modul berikutnya:
+
+```ts
+// Penerimaan barang (pembelian): qty beli dikonversi ke satuan dasar lewat product_unit.factor_to_base.
+await catatGerak(tx, { docType: 'goods_receipt', docId: gr.id, docNo: gr.no, tanggal: gr.date, oleh: p.id },
+  baris.map((b) => ({ productId: b.productId, locationId: gr.locationId, qty: des(b.qty).times(b.faktor), nilai: b.nilaiRupiah, lineId: b.id })),
+  { hargaBeli: true })
+
+// Produksi cepat (tahap 4B memakai olahStok, satu panggilan): bahan keluar, hasil masuk dengan nilai bahan + biaya tambahan.
+const g = await olahStok(tx, dok, resep.map((r) => ({ productId: r.productId, locationId: dari, qty: des(r.qty).neg(), lineId: r.id })),
+  { productId: hasil.id, locationId: ke, qty: qtyHasil, biayaTambahan })
+
+// Kasir: potong bahan resep per penjualan di lokasi kasir, HPP = jumlah nilai keluar.
+const g = await catatGerak(tx, { docType: 'sale', docId: sale.id, docNo: sale.no, tanggal: hariIni(), oleh: kasir.id },
+  pemakaian.map((u) => ({ productId: u.productId, locationId: shift.locationId, qty: des(u.qty).neg() })))
+const hpp = g.reduce((n, h) => n - h.nilai, 0n)
+// Void: balikDokumen(tx, { docType: 'sale', docId: sale.id, docNo: sale.no, tanggal: hariIni(), oleh: p.id })
+```
+
+### 12.3 Dokumen persediaan
+
+- Penyesuaian Stok (`PS`), Stock Opname (`OP`), Pindah Stok (`PD`) adalah dokumen pelaksana (bagian 3.2). Satu pintu perubahan status: `ubahStatusDok` di `src/lib/stok/dokumen.ts`, yang mengunci kepala dokumen, memeriksa transisi, izin, saklar, tanggal, menggerakkan stok saat Diposting, dan menulis audit.
+- Izin: buat draf T; ubah kepala dan baris, ajukan T atau U; hapus draf H; kembalikan ke draf S atau pengaju sendiri; posting P, ditambah S bila dokumen wajib disetujui; batal dari Draft atau Diajukan U; batal dari Diposting P, saklar `dok.batal_posting`, dan alasan minimal 5 huruf.
+- Penyesuaian: baris kurang butuh saklar `stok.sesuai_kurang` dan selalu memakai harga rata-rata; baris tambah butuh `stok.sesuai_tambah`, harga satuan boleh diisi atau kosong (rata-rata lokasi, lalu harga beli terakhir; bila keduanya 0, posting ditolak). Saklar diperiksa saat baris ditambah dan saat diposting. Alasan wajib (kolom NOT NULL); alasan sistem tidak ditawarkan di layar.
+- Opname: draf membekukan qty sistem semua produk aktif di lokasi (bisa disaring kategori, paling banyak 500). Saat Diposting, gerak = qty fisik - qty sistem beku untuk baris yang sudah dihitung dan berselisih; gerak lain sesudah pembekuan tetap terhitung. Saklar `stok.wajib_alasan` mewajibkan alasan untuk baris berselisih saat diajukan dan diposting.
+- Pindah Stok: satu produk satu baris; keluar dari asal dengan harga rata-rata asal dan masuk ke tujuan dengan nilai sama persis.
+- Baris dokumen menyimpan harga satuan yang benar-benar dipakai mesin saat diposting (`unit_cost`).
+- Nilai rupiah persediaan hanya tampil untuk pemegang saklar `stok.lihat_nilai`.
+- tahap 4B: `DOK_STOK` dan `ubahStatusDok` juga melayani Pengeluaran Bahan (`KB`, `material_issue`), Hasil Produksi (`HP`, `production_result`), dan Produksi Cepat (`PC`, `quick_production`). `KaitDok` mendapat dua kait opsional untuk batal dari Diposting: `periksaBatalPosting` (sebelum gerak balik, misalnya dokumen turunan) dan `sesudahBatalPosting` (sesudahnya, misalnya nilai barang dalam proses), keduanya di transaksi yang sama.
+- Tahap 4C memakai mesin untuk Penerimaan Barang (`goods_receipt`), Retur Pembelian (`purchase_return`, keluar dengan nilai pasti), dan Pembelian Langsung (`direct_purchase`), ketiganya ada di `TAUTAN_DOK`. Gerak keluar dengan nilai pasti yang membuat qty tepat 0 tetap mengeluarkan seluruh sisa nilai (butir 32).
+- Tahap 6A memakai mesin untuk Faktur Penjualan (`sales_invoice`, keluar dengan harga rata-rata lokasi) dan Retur Penjualan (`sales_return`, masuk dengan nilai pasti HPP asal), keduanya ada di `TAUTAN_DOK` (bagian 11 butir 88 dan 92).
+
+## 13. Resep, potong stok penjualan, dan produksi (tahap 4B)
+
+### 13.1 Resep dan BOM
+
+- Menu `stok.resep` (Owner L T U H, Admin L T U). Halaman `/resep`: daftar dengan saringan jenis, status, dan lokasi harga; peringatan "Menu tanpa resep"; tambah (`/resep/baru?jenis=menu|assembly`); rincian `/resep/[id]` untuk ubah nama, qty hasil, biaya tambahan, bahan (tambah atau ubah qty dan toleransi, hapus), aktif dan nonaktif, serta HPP per porsi atau per batch dan per satuan hasil.
+- Resep menu: `bom.kind = menu`, ditunjuk `menu_item.bom_id`, qty bahan per porsi dalam satuan dasar bahan. BOM assembly: `bom.kind = assembly`, `bom.product_id` produk hasil (biasanya setengah jadi), `output_qty` hasil per batch, `extra_cost` biaya tambahan per batch. Produk hasil menunjuk BOM assembly aktifnya lewat `product.bom_id`.
+- Resep tidak dihapus, hanya dinonaktifkan. Produk hasil tidak boleh menjadi bahannya sendiri. Satu resep paling banyak 60 bahan.
+
+### 13.2 Potong stok penjualan
+
+1. `simpanPenjualan` memanggil mesin stok sekali per penjualan, di transaksi yang sama dengan `sale`, dengan `docType` `sale`, `docNo` nomor penjualan, tanggal hari ini (WIB), dan lokasi shift. Satu gerak per bahan per baris (`line_id` = `sale_line.id`); bahan yang sama dalam satu baris digabung.
+2. Qty bahan = qty resep aktif x qty baris. Baris paket memakai resep menu utama (`menu_item_id`) dan minuman (`set_drink_item_id`) dari baris itu (bagian 11 butir 27).
+3. `sale_line.hpp` = jumlah nilai keluar baris itu, `sale.hpp` = jumlahnya. Menu tanpa resep tidak memotong stok dan ber-HPP 0; penjualannya tetap jalan.
+4. Stok kurang: bagian 11 butir 50 (saklar `pos.jual_stok_minus`).
+5. Void memanggil `balikDokumen` dengan `docType` `sale` dan tanggal hari void: semua bahan kembali dengan qty dan nilai sama persis. `sale.hpp` tidak diubah (tetap catatan saat jual). Penjualan tanpa gerak stok di-void tanpa gerak balik.
+6. Kartu stok menautkan gerak penjualan ke `/transaksi/[id]`. Rincian transaksi menampilkan HPP per baris untuk pemegang `stok.lihat_nilai`.
+
+### 13.3 Produksi dan barang dalam proses
+
+- Barang dalam proses tidak punya lokasi stok. Pengeluaran Bahan jenis keluar mengeluarkan bahan dari lokasinya lewat mesin stok (`docType` `material_issue`), dan nilai keluarnya ditambahkan ke `production_order.wip_value`. Jenis kembali memasukkan bahan ke lokasi dengan harga keluar terakhir perintah itu (RANCANGAN 5.2) dan mengurangi `wip_value`; qty kembali tidak boleh melebihi qty bersih yang sudah keluar, dan nilainya tidak boleh melebihi `wip_value`. `issued_qty` dan `returned_qty` di baris perintah ikut diperbarui. Nilai `wip_value` selalu sama dengan jumlah nilai gerak pengeluaran perintah itu dikurangi nilai hasilnya.
+- Qty keluar kumulatif bersih per bahan paling banyak kebutuhan x (1 + `tol_pct`/100), dibulatkan 3 desimal. Draf pengeluaran keluar diisi sisa kebutuhan; draf kembali diisi 0.
+- Hasil Produksi (`docType` `production_result`) memasukkan produk hasil BOM ke lokasi hasil dengan nilai `wip_value` x qty hasil / sisa qty rencana (dibulatkan rupiah), atau seluruh `wip_value` bila hasil ini mencapai qty rencana. Saat itu perintah Selesai otomatis (`perintah.selesai`). Hasil butuh minimal satu pengeluaran keluar yang Diposting.
+- Tutup manual (`perintah.tutup`, izin S, alasan wajib) memindah sisa `wip_value` ke `wip_writeoff` dan mengosongkan `wip_value`.
+- Batal dari Diposting lewat gerak balik (`dok.batal_posting`, alasan wajib, bagian 3.2): pengeluaran mengembalikan bahan dan nilai keluar dari `wip_value`; hasil mengeluarkan produk hasil lagi dan nilainya kembali ke `wip_value`; produksi cepat membalik bahan dan hasil sekaligus. Batasannya di bagian 11 butir 54.
+- Produksi Cepat (`docType` `quick_production`) memakai `olahStok`: bahan keluar dari lokasi bahan, hasil masuk ke lokasi hasil dengan nilai bahan + `extra_cost`, tanpa barang dalam proses (bagian 11 butir 56).
+- Nomor: Perintah Produksi `PP`, Pengeluaran Bahan `KB`, Hasil Produksi `HP`, Produksi Cepat `PC` (`src/lib/status.ts`). Perintah Produksi adalah dokumen rencana dengan alur `Draft -> (Diajukan ->) Disetujui -> Selesai` dan Batal; tiga dokumen lainnya dokumen pelaksana (bagian 12.3).
+
+## 14. Akuntansi (tahap 5B)
+
+### 14.1 Prinsip
+
+- Setiap dokumen yang berlaku membentuk tepat satu jurnal maju yang seimbang, di transaksi yang sama dengan posting dokumennya (RANCANGAN prinsip 2). Pembatalan dokumen yang sudah berlaku membentuk satu jurnal balik bertanggal hari pembatalan. Kalau jurnal ditolak (tidak seimbang, akun belum dipetakan, periode tertutup), seluruh posting ikut batal, termasuk gerak stoknya.
+- Dokumen tidak pernah memilih akun sendiri. Baris jurnal menyebut kunci pemetaan, dan `account_mapping` menerjemahkannya ke akun (RANCANGAN prinsip 4, bagian 11 butir 75). Pengecualiannya hanya akun yang memang dipilih pengguna di dokumennya (misalnya akun beban baris jasa atau akun kas pembelian langsung), yang dikirim sebagai id akun.
+- Tidak ada kode yang menulis `journal` atau `journal_line` yang berlaku selain `src/lib/akuntansi/jurnal.ts`. Jurnal memorial Draft disimpan di tabel yang sama dan baru berlaku lewat posting di `memorial.ts`.
+- Nilai persediaan di jurnal selalu dibaca dari `stock_ledger` dokumen itu, jadi saldo akun persediaan sama dengan jumlah `stock_balance.value` (diperiksa `cocokkanPersediaan`).
+- Uang `bigint` rupiah bulat. Baris nol dibuang, baris dengan akun dan sisi yang sama digabung.
+
+### 14.2 API (`src/lib/akuntansi/jurnal.ts` dan `dokumen.ts`)
+
+```ts
+type KunciAkun = number | string | string[]          // id akun, kunci pemetaan, atau beberapa kunci dicoba berurutan
+type BarisJurnal = { akun: KunciAkun; debit?: bigint; kredit?: bigint; memo?: string; supplierId?: number | null; customerId?: number | null }
+type KepalaJurnal = { docType: string; docId: number; docNo: string; tanggal: Date; memo: string; oleh: number | null }
+type HasilJurnal = { id: number; no: string; total: bigint }
+
+dk(akun, nilai: bigint, memo?): BarisJurnal            // nilai plus jadi debit, minus jadi kredit
+tanggalJurnal(waktu: Date): Date                        // tanggal WIB sebagai Date UTC tengah malam (bentuk kolom date)
+buatJurnal(tx, kepala, baris[]): Promise<HasilJurnal | null>
+  // null bila semua baris 0. Galat: tidak seimbang, akun belum dipetakan atau nonaktif, periode tertutup,
+  // dokumen sudah punya jurnal maju.
+buatJurnalBalik(tx, kepala /* tanggal = hari batal */, baris?): Promise<HasilJurnal | null>
+  // tanpa baris: kebalikan persis jurnal maju. null bila dokumen tidak punya jurnal maju.
+  // Galat: jurnal maju di periode tertutup, sudah pernah dibalik, tidak seimbang.
+jurnalMaju(db, docType, docId)                          // jurnal maju yang berlaku beserta baris dan jurnal baliknya
+pastikanPeriodeTerbuka(tx, tanggal, untuk?)             // kunci FOR SHARE baris fiscal_period; galat bila Ditutup
+barisDariGerak(tx, docType, docId, { lawan, balik?, memo? }): Promise<BarisJurnal[]>
+  // dokumen.ts: debit/kredit persediaan per lokasi dari stock_ledger dokumen itu, lawan satu kunci atau per line_id
+```
+
+Aturan pemakaian:
+
+1. Selalu di dalam `db.$transaction(async (tx) => ...)` pemanggil, sesudah gerak stok ditulis dan sebelum `catatAudit`. Simpan nomor jurnal di `after_json` audit (`jurnal`, `jurnalBalik`).
+2. `docType` memakai nama tabel dokumen, sama dengan `stock_ledger.doc_type`. Satu dokumen satu jurnal maju; perubahan nilai dokumen yang sudah berlaku hanya lewat pembatalan lalu dokumen baru.
+3. Pembatalan: panggil `balikDokumen` (stok) dulu, lalu `buatJurnalBalik` dengan baris dari gerak balik (`barisDariGerak(..., { balik: true })`) supaya nilai persediaan tetap sama dengan stok. Isi `reversal_journal_id` dokumen dengan id jurnal balik.
+4. Tambahkan `docType` baru ke `JALUR_SUMBER` dan `namaSumber` di `dokumen.ts` supaya Jurnal Umum dan Buku Besar menautkan dokumennya, dan ke `bentuk-ulang.ts` bila ada dokumen lama yang perlu dibentuk ulang.
+5. Baris hutang pemasok mengisi `supplierId` supaya buku pembantu hutang bisa dibaca dari `journal_line`.
+
+Contoh untuk dokumen pembelian (RANCANGAN 3.3 sampai 3.7, PPN mengikuti 11.2 butir 6: tidak PKP):
+
+```ts
+// Penerimaan Barang: debit Persediaan (nilai gerak masuk, termasuk biaya tambahan), kredit Barang Diterima Belum Difakturkan.
+const memo = `Penerimaan ${gr.no}`
+const kepala = { docType: 'goods_receipt', docId: gr.id, docNo: gr.no, tanggal: gr.date, memo, oleh: p.id }
+await catatGerak(tx, { docType: 'goods_receipt', docId: gr.id, docNo: gr.no, tanggal: gr.date, oleh: p.id }, gerak, { hargaBeli: true })
+const j = await buatJurnal(tx, kepala, await barisDariGerak(tx, 'goods_receipt', gr.id, { lawan: 'grni', memo }))
+// Batal Penerimaan Barang:
+await balikDokumen(tx, { docType: 'goods_receipt', docId: gr.id, docNo: gr.no, tanggal: hariIni(), oleh: p.id })
+const b = await buatJurnalBalik(tx, { ...kepala, tanggal: hariIni(), memo: `Batal ${gr.no}` },
+  await barisDariGerak(tx, 'goods_receipt', gr.id, { lawan: 'grni', balik: true, memo: `Batal ${gr.no}` }))
+await tx.goodsReceipt.update({ where: { id: gr.id }, data: { reversalJournalId: b?.id ?? null } })
+
+// Faktur Pembelian: debit GRNI sebesar nilai terima yang difakturkan, debit beban baris jasa (akun dipilih di baris),
+// selisih harga (plus = faktur lebih mahal) ke Selisih Harga Pembelian, PPN tidak PKP ikut ke selisih, kredit Hutang Usaha.
+await buatJurnal(tx, { docType: 'purchase_invoice', docId: f.id, docNo: f.no, tanggal: f.date, memo: `Faktur ${f.no}`, oleh: p.id }, [
+  dk('grni', nilaiTerimaDifakturkan),
+  ...jasa.map((b) => dk(b.expenseAccountId, b.nilai)),
+  dk('selisih_harga_beli', totalFaktur - nilaiTerimaDifakturkan - totalJasa),
+  { akun: 'hutang_usaha', kredit: totalFaktur, supplierId: f.supplierId },
+])
+
+// Pembelian Langsung: persediaan dari gerak stok, baris hanya biaya ke akun bebannya, lawan Kas/Bank (tunai) atau
+// Hutang Usaha (kredit).
+// Baris lawan yang sama digabung mesin jurnal, jadi kredit kas atau hutang menjadi satu baris.
+const lawan = dl.paymentKind === 'tunai' ? dl.cashAccountId! : 'hutang_usaha'
+await buatJurnal(tx, kepalaDl, [
+  ...(await barisDariGerak(tx, 'direct_purchase', dl.id, { lawan, memo })),
+  ...biaya.flatMap((b) => [dk(b.expenseAccountId, b.nilai, memo), dk(lawan, -b.nilai, memo)]),
+])
+// Supaya buku pembantu hutang terisi, pakai baris { akun: 'hutang_usaha', kredit: total, supplierId } untuk jalur kredit.
+
+// Retur Pembelian dari penerimaan, bagian belum difakturkan: debit GRNI, kredit Persediaan (gerak keluar).
+await buatJurnal(tx, kepalaRetur, await barisDariGerak(tx, 'purchase_return', r.id, { lawan: 'grni', memo }))
+// bagian sudah difakturkan (nota debit): lawan Hutang Usaha sebesar qty x harga faktur, beda harga ke selisih_harga_beli.
+
+// Pembayaran Pembelian: debit Hutang Usaha (alokasi) dan Uang Muka Pembelian (sisa), debit Beban Administrasi Bank,
+// kredit Kas/Bank sumber (akun dipilih di dokumen) dan Potongan Pembelian.
+await buatJurnal(tx, { docType: 'purchase_payment', docId: b.id, docNo: b.no, tanggal: b.date, memo: `Bayar ${b.no}`, oleh: p.id }, [
+  { akun: 'hutang_usaha', debit: totalAlokasi, supplierId: b.supplierId },
+  dk('uang_muka_beli', sisaTakTeralokasi),
+  dk('beban_bank', b.otherCost),
+  dk(b.fromAccountId, -(totalAlokasi + sisaTakTeralokasi + b.otherCost - b.deduction)),
+  dk('potongan_beli', -b.deduction),
+])
+```
+
+### 14.3 Jurnal per dokumen
+
+| Dokumen (`docType`) | Saat | Debit | Kredit |
+|---|---|---|---|
+| Penjualan (`sale`) | simpan | Kas Laci (tunai) atau Piutang Kliring per metode, Potongan Penjualan, HPP | Penjualan, Pendapatan Service, Pajak PB1, Persediaan per lokasi |
+| Void (`sale`) | void | kebalikan pendapatan; Persediaan dari gerak balik | kebalikan pendapatan; HPP |
+| Selisih kas (`shift`) | tutup shift | kurang: Selisih Kas; lebih: Kas Laci | kurang: Kas Laci; lebih: Selisih Kas |
+| Kas laci (`shift_cash_move`) | catat kas | masuk: Kas Laci; keluar: `laci_keluar` | masuk: `laci_masuk`; keluar: Kas Laci |
+| Setoran POS (`pos_settlement`) | posting; batal dari Diposting dibalik | Kas Besar atau Bank (disetor), Beban MDR, Selisih Kas (kurang) | Kas Laci (tunai) atau Piutang Kliring metode itu (nilai sistem), Selisih Kas (lebih) |
+| Penyesuaian, Opname (`stock_adjustment`, `stock_opname`) | posting; batal dibalik dari gerak balik | tambah: Persediaan; kurang: akun alasan | tambah: akun alasan; kurang: Persediaan |
+| Pindah Stok (`stock_transfer`) | posting | Persediaan lokasi tujuan | Persediaan lokasi asal; tanpa jurnal bila akunnya sama |
+| Pengeluaran Bahan (`material_issue`) | posting | keluar: Barang Dalam Proses; kembali: Persediaan | keluar: Persediaan; kembali: Barang Dalam Proses |
+| Hasil Produksi (`production_result`) | posting | Persediaan (hasil) | Barang Dalam Proses |
+| Produksi Cepat (`quick_production`) | posting | Persediaan (hasil) | Persediaan (bahan), Biaya Produksi Dibebankan (biaya tambahan) |
+| Tutup perintah produksi (`production_order`) | tutup manual dengan sisa | Selisih Produksi | Barang Dalam Proses |
+| Jurnal memorial (`memorial`) | Setujui dan posting; batal dibalik | baris debit | baris kredit |
+| Kas masuk, kas keluar (`cash_transaction`) | posting; batal dibalik persis | masuk: Kas Besar atau Bank; keluar: akun baris | masuk: akun baris; keluar: Kas Besar atau Bank |
+| Pindah dana (`cash_transaction`, nomor `PN-`) | posting; batal dibalik persis | tujuan | sumber |
+| Penerimaan Barang (`goods_receipt`) | posting; batal dari gerak balik | Persediaan | BDBF (subtotal + biaya tambahan) |
+| Faktur Pembelian (`purchase_invoice`) | posting; batal dibalik persis | BDBF (nilai terima), `beban_beli` (jasa), Selisih Harga Pembelian (lebih mahal) | Hutang Usaha, Selisih Harga Pembelian (lebih murah) |
+| Retur Pembelian (`purchase_return`) | posting; batal dari gerak balik | BDBF (belum difakturkan), Hutang Usaha (nota debit) | Persediaan; sisa ke Selisih Harga Pembelian |
+| Pembelian Langsung (`direct_purchase`) | posting; batal dari gerak balik | Persediaan, `beban_beli` (baris biaya) | Kas Besar atau Bank (tunai), Hutang Usaha (kredit) |
+| Pembayaran Pembelian (`purchase_payment`) | posting; batal dibalik persis | Hutang Usaha (alokasi tagihan) | Hutang Usaha (nota debit dipakai), Kas Besar atau Bank |
+
+### 14.4 Halaman dan izin
+
+- Akun dan Pemetaan (`akun.coa`, Owner L T U H, Admin L): bagan berpohon dengan saringan kode, nama, jenis, dan status; tambah dan ubah akun (kode unik tanpa peduli huruf besar, jenis sama dengan induk, induk harus akun induk); aktif dan nonaktif. Tab Pemetaan berisi kunci umum (wajib) dan kunci per metode bayar non tunai, rekening, lokasi, dan alasan (kosong berarti ikut bawaan); pilihan akun dibatasi jenis yang wajar untuk kuncinya. Admin hanya membaca.
+- Jurnal Umum (`akun.jurnal`, Owner saja): daftar semua jurnal dengan saringan tanggal, sumber, status (termasuk jurnal balik), akun, dan nomor; rincian dengan tautan ke dokumen sumber, jurnal balik, dan buku besar. Memorial: buat draf (T), ubah kepala dan baris (T atau U), hapus draf (H), ajukan (T atau U), kembalikan (S atau pengaju), Setujui dan posting (S dan P), batal dari Draft atau Diajukan (U), batal dari Diposting (P, saklar `dok.batal_posting`, alasan minimal 5 huruf).
+- Buku Besar (`akun.buku_besar`, Owner): satu akun (akun induk mencakup turunannya), rentang tanggal paling panjang 366 hari (bawaan awal bulan sampai hari ini), saringan sumber, saldo awal, mutasi dengan saldo berjalan menurut saldo normal akun, saldo akhir, 100 baris per halaman, CSV seluruh rentang (paling banyak 20.000 baris).
+- Laporan Keuangan (`laporan.keuangan`, Owner): Neraca Saldo, Laba Rugi, dan Neraca per bulan (rentang paling panjang 24 bulan, Neraca per akhir bulan atau hari ini), dengan tanda seimbang dan CSV (`/laporan-keuangan/unduh?jenis=neraca-saldo|laba-rugi|neraca|buku-besar`, izin sama dengan halamannya). Neraca menampilkan pencocokan persediaan buku lawan kartu stok per tanggal neraca.
+- Tutup Periode (`akun.tutup_periode`, Owner L T H): 13 bulan terakhir ditambah bulan lain yang punya jurnal atau baris periode, dengan status, jumlah jurnal, dan riwayat; tutup (T) untuk bulan yang sudah lewat; buka lagi (H dan peran Owner) dengan alasan.
+
+### 14.5 Bentuk ulang dan pencocokan
+
+- `npm run jurnal:bentuk-ulang` (`scripts/jurnal-bentuk-ulang.ts`, logika `bentukUlangJurnal` di `bentuk-ulang.ts`) membentuk jurnal untuk dokumen yang sudah berlaku tetapi belum punya jurnal: dokumen pembelian (tahap 5C, bagian 11 butir 103), semua penjualan, jurnal balik penjualan void (bertanggal `void_at`), selisih kas shift, kas laci, setoran yang pernah Diposting dan jurnal balik setoran yang dibatalkan sesudahnya, dokumen stok dan produksi yang punya gerak di `stock_ledger` beserta gerak baliknya (bertanggal gerak balik), dan perintah produksi yang ditutup dengan sisa. Setiap dokumen di transaksinya sendiri; dokumen yang gagal dilaporkan dan tidak menghentikan yang lain. Idempoten: jalan kedua tidak membentuk apa pun.
+- Akhir skrip mencetak pencocokan: saldo akun persediaan (semua akun yang dipetakan ke `persediaan` dan `persediaan.*`) lawan jumlah `stock_balance.value`, dan Barang Dalam Proses lawan jumlah `production_order.wip_value`. Skrip keluar dengan kode 1 bila tidak cocok atau ada yang gagal.
+- Pada basis data uji klik lama (sebelum tahap 5B) skrip membentuk 33 jurnal dan persediaan buku sama dengan stok; jalan kedua 0 jurnal.

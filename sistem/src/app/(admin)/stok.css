@@ -1,0 +1,44 @@
+/* Gaya modul persediaan tahap 4A: produk, stok, penyesuaian, opname, pindah stok, alasan, lokasi. Melengkapi globals.css dan master.css. */
+.blok { display: block }
+.tombol-aksi { display: inline-flex; flex-direction: column; gap: 8px; margin: 0 }
+.tombol-aksi .pesan { margin: 0 }
+.deret-tombol { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 10px; margin-top: 4px }
+.form-batal { margin-top: 14px; padding-top: 14px; border-top: 1px solid #E1E4DD }
+.form-batal textarea { width: 100%; padding: 10px 12px; border: 0; border-radius: 10px; font: inherit; font-size: 16px; color: var(--ink); background: #fff; resize: vertical; box-shadow: inset 0 2px 5px rgba(0, 0, 0, .08), inset 0 0 0 1px #D9DCD4 }
+.form-batal .kolom.salah textarea { box-shadow: inset 0 2px 5px rgba(0, 0, 0, .08), inset 0 0 0 2px var(--red) }
+
+/* Ringkasan angka di atas daftar */
+.ringkas-stok { display: flex; flex-wrap: wrap; gap: 10px 26px; margin: 0 0 14px; padding: 14px 18px; background: var(--paper2); border-radius: 14px; box-shadow: inset 0 2px 0 #fff }
+.ringkas-stok div { display: flex; flex-direction: column; gap: 2px; min-width: 0 }
+.ringkas-stok dt { color: var(--muted); font-size: 12.5px; font-weight: 600 }
+.ringkas-stok dd { margin: 0; font-family: var(--f-judul); font-weight: 800; font-size: 18px; overflow-wrap: anywhere }
+
+/* Baris tabel */
+.tabel tr.kurang-min td { background: var(--red-tint) }
+/* Bukan .masuk atau .keluar: .masuk sudah dipakai layar login di globals.css. */
+.gerak-masuk { color: #0B6B09; font-weight: 700 }
+.gerak-keluar { color: var(--red); font-weight: 700 }
+.tabel tr.baris-balik td { color: var(--muted) }
+.tabel tr.baris-awal td { background: #ECEEE9; font-weight: 700 }
+.tabel-hitung .kolom input, .tabel-hitung .kolom select { min-height: 40px }
+.tabel-hitung td { vertical-align: middle }
+.tabel-hitung .kolom { min-width: 120px }
+
+/* Penanda tambah dan kurang */
+.lencana.tambah { background: var(--green-tint); color: #0B6B09 }
+.lencana.kurang { background: var(--red-tint); color: var(--red) }
+
+.kartu > h3 { margin: 22px 0 10px }
+.lipat-batal { margin-top: 14px; padding-top: 12px; border-top: 1px solid #E1E4DD }
+.lipat-batal summary { display: inline-flex; align-items: center; min-height: 40px; font-weight: 700; color: var(--red); cursor: pointer }
+.lipat-batal .form-batal { margin-top: 8px; padding-top: 0; border-top: 0 }
+
+@media (max-width: 640px) {
+  .tabel td > .blok { grid-column: 2; margin-top: -8px }
+  .ringkas-stok { padding: 12px 14px }
+  .ringkas-stok dd { font-size: 16px }
+  .tabel-hitung .kolom { min-width: 0 }
+  .tabel td .kolom { width: 100% }
+  .deret-tombol { flex-direction: column; align-items: stretch }
+  .deret-tombol .tombol-aksi, .deret-tombol .tombol-aksi .btn { width: 100% }
+}
