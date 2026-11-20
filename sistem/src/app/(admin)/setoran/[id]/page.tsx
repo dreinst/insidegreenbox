@@ -192,7 +192,9 @@ export default async function RincianSetoran({ params, searchParams }: { params:
                 {st.posSettlementLines.map((l) => (
                   <tr key={l.id}>
                     <td data-label="Shift" className="tebal">
-                      <Link href={`/shift/${l.shiftId}`}>#{l.shiftId}</Link> <small className="redup">{STATUS_SHIFT[l.shift.status]}</small>
+                      <span>
+                        <Link href={`/shift/${l.shiftId}`}>#{l.shiftId}</Link> <small className="redup">{STATUS_SHIFT[l.shift.status]}</small>
+                      </span>
                     </td>
                     <td data-label="Kasir">{l.shift.user.name}</td>
                     <td data-label="Nilai sistem" className="angka">

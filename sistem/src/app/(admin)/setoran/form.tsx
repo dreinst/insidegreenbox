@@ -114,10 +114,14 @@ function IsiUbah({ hasil, kirim, kepala, baris, rekening, tunai }: { hasil: Hasi
               return (
                 <tr key={b.id}>
                   <td data-label="Shift" className="tebal">
-                    #{b.shift} <small className="redup">{b.status}</small>
+                    <span>
+                      #{b.shift} <small className="redup">{b.status}</small>
+                    </span>
                   </td>
                   <td data-label="Kasir">
-                    {b.kasir} <small className="redup">{b.waktu}</small>
+                    <span>
+                      {b.kasir} <small className="redup">{b.waktu}</small>
+                    </span>
                   </td>
                   <td data-label="Nilai sistem" className="angka">
                     {rupiah(b.expected).replace('Rp -', '-Rp ')}
@@ -134,14 +138,14 @@ function IsiUbah({ hasil, kirim, kepala, baris, rekening, tunai }: { hasil: Hasi
                       onChange={(e) => setNilai((n) => ({ ...n, [b.id]: angka(e.target.value) }))}
                       aria-invalid={ga ? true : undefined}
                     />
-                    {ga ? <small className="galat-kolom">{ga}</small> : null}
+                    {ga ? <small className="galat-kolom st-galat">{ga}</small> : null}
                   </td>
                   <td data-label="Selisih" className={`angka${beda ? ' lap-merah' : ''}`}>
                     {beda === 0 ? 'Rp 0' : `${beda < 0 ? '-' : '+'}${rupiah(Math.abs(beda))}`}
                   </td>
                   <td data-label="Catatan">
                     <input className="st-baris-input teks" name={`catatan_${b.id}`} type="text" maxLength={120} aria-label={`Catatan shift #${b.shift}`} defaultValue={nilaiAwal(hasil, `catatan_${b.id}`, b.note)} aria-invalid={gc ? true : undefined} />
-                    {gc ? <small className="galat-kolom">{gc}</small> : null}
+                    {gc ? <small className="galat-kolom st-galat">{gc}</small> : null}
                   </td>
                 </tr>
               )

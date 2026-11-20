@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { RingkasLaporan, SaringanLaporan, TabelLaporan } from '@/components/laporan'
+import { nilaiTampil, RingkasLaporan, SaringanLaporan, TabelLaporan } from '@/components/laporan'
 import { KepalaHalaman } from '@/components/umum'
 import { db } from '@/lib/db'
 import { rupiah } from '@/lib/hitung-kasir'
@@ -47,7 +47,7 @@ export default async function TutupHarian({ searchParams }: { searchParams: Prom
                   <span>
                     {bolehSetoran ? <Link href={`/setoran/${x.id}`}>{x.no}</Link> : x.no} {x.metode} <small className="redup">({x.status})</small>
                   </span>
-                  <b>{rupiah(x.disetor)}</b>
+                  <b>{nilaiTampil(x.disetor, 'uang')}</b>
                 </li>
               ))}
             </ul>
@@ -64,7 +64,7 @@ export default async function TutupHarian({ searchParams }: { searchParams: Prom
                   <span>
                     {x.metode} <small className="redup">({x.shift} shift)</small>
                   </span>
-                  <b>{rupiah(x.nilai)}</b>
+                  <b>{nilaiTampil(x.nilai, 'uang')}</b>
                 </li>
               ))}
             </ul>

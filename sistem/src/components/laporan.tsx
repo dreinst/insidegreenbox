@@ -22,6 +22,8 @@ const kanan = (j?: JenisNilai) => j && j !== 'teks'
 export function TabelLaporan<T>({ tabel, judul, kunci, kosong }: { tabel: Tabel<T>; judul: string; kunci: (b: T, i: number) => string; kosong: string }) {
   if (!tabel.baris.length) return <p className="kosong">{kosong}</p>
   return (
+    <>
+    {tabel.kolom.length > 9 ? <p className="lap-petunjuk">Tabel ini lebar. Geser ke samping di dalam tabel untuk melihat semua kolom.</p> : null}
     <div className="kartu tanpa-isi lap-gulir" role="region" aria-label={judul} tabIndex={0}>
       <table className="tabel lap-tabel">
         <caption className="sr">{judul}</caption>
@@ -56,7 +58,7 @@ export function TabelLaporan<T>({ tabel, judul, kunci, kosong }: { tabel: Tabel<
             <tr>
               {tabel.kolom.map((k) => (
                 <td key={k.h} data-label={k.h} className={kanan(k.jenis) ? 'angka' : undefined}>
-                  {nilaiTampil(k.v(tabel.jumlah!), k.jenis)}
+                  {k.v(tabel.jumlah!) === '' ? '' : nilaiTampil(k.v(tabel.jumlah!), k.jenis)}
                 </td>
               ))}
             </tr>
@@ -64,6 +66,7 @@ export function TabelLaporan<T>({ tabel, judul, kunci, kosong }: { tabel: Tabel<
         ) : null}
       </table>
     </div>
+    </>
   )
 }
 
@@ -124,7 +127,7 @@ function PilihSaring({ id, nama, label, semua, pilihan, nilai }: { id: string; n
 export function SaringanLaporan({ dasar, jenis, s, opsi, berlaku }: { dasar: string; jenis: string; s: SaringLaporan; opsi: OpsiSaring; berlaku: { dari?: string; sampai?: string; tanggal?: string } }) {
   const disaring = KUNCI.some((k) => s[k])
   return (
-    <form className="saring" method="get" role="search" aria-label="Saring laporan">
+    <form className="saring lap-saring" method="get" role="search" aria-label="Saring laporan">
       {opsi.rentang ? (
         <>
           <div className="kolom">

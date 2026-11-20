@@ -65,9 +65,12 @@ export function tabelBayar(d: Awaited<ReturnType<typeof ringkasanPembayaran>>): 
 type BarisHarian = Awaited<ReturnType<typeof tutupHarian>>['baris'][number]
 
 export function tabelHarian(d: Awaited<ReturnType<typeof tutupHarian>>): Tabel<BarisHarian> {
-  const setoran = (b: BarisHarian, id: number) => {
+  // Shift tanpa penjualan non tunai metode itu tidak perlu disetor untuk metode tersebut.
+  const setoran = (b: BarisHarian, id: number, tunai: boolean) => {
     const s = b.setoran[id]
-    return s ? `${s.no} (${s.status})` : b.status === 'Buka' ? '-' : 'Belum'
+    if (s) return `${s.no} (${s.status})`
+    if (b.status === 'Buka' || (!tunai && !b.perMetode[id])) return '-'
+    return 'Belum'
   }
   const kolom: Kolom<BarisHarian>[] = [
     { h: 'Shift', v: (b) => `#${b.id}`, href: (b) => `/shift/${b.id}` },
@@ -84,8 +87,8 @@ export function tabelHarian(d: Awaited<ReturnType<typeof tutupHarian>>): Tabel<B
     { h: 'Status', v: (b) => b.namaStatus },
     { h: 'Persetujuan', v: (b) => b.persetujuan },
     ...d.nonTunai.map((m): Kolom<BarisHarian> => ({ h: m.nama, v: (b) => b.perMetode[m.id] ?? 0, jenis: 'uang' })),
-    ...(d.tunaiUtama ? [{ h: `Setoran ${d.tunaiUtama.nama}`, v: (b: BarisHarian) => setoran(b, d.tunaiUtama!.id) }] : []),
-    ...d.nonTunai.map((m): Kolom<BarisHarian> => ({ h: `Setoran ${m.nama}`, v: (b) => setoran(b, m.id) })),
+    ...(d.tunaiUtama ? [{ h: `Setoran ${d.tunaiUtama.nama}`, v: (b: BarisHarian) => setoran(b, d.tunaiUtama!.id, true) }] : []),
+    ...d.nonTunai.map((m): Kolom<BarisHarian> => ({ h: `Setoran ${m.nama}`, v: (b) => setoran(b, m.id, false) })),
   ]
   return { kolom, baris: d.baris }
 }

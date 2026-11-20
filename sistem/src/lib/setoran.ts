@@ -338,7 +338,7 @@ type SetoranTerkunci = Awaited<ReturnType<typeof kunciSetoran>>
 export function alasanButuhOwner(st: Pick<SetoranTerkunci, 'diff'> & { posSettlementLines: { shift: { id: number; status: string } }[] }, aktor: Pick<Pengguna, 'saklar'>) {
   const alasan: string[] = []
   const diff = Number(st.diff)
-  if (perluPersetujuan(diff, aktor.saklar['pos.batas_selisih_kas'])) alasan.push(`selisih ${rupiah(diff)} melewati batas`)
+  if (perluPersetujuan(diff, aktor.saklar['pos.batas_selisih_kas'])) alasan.push(`selisih ${diff < 0 ? '-' : '+'}${rupiah(Math.abs(diff))} melewati batas`)
   const tunggu = st.posSettlementLines.filter((l) => l.shift.status === 'PerluPersetujuan').map((l) => `#${l.shift.id}`)
   if (tunggu.length) alasan.push(`shift ${tunggu.join(', ')} masih perlu persetujuan`)
   return alasan

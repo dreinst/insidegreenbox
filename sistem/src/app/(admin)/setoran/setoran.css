@@ -14,6 +14,8 @@
 .st-buat .kolom { min-width: 170px }
 
 .st-jarak { margin-top: 14px }
+.kolom input[type='file'] { min-height: 0; padding: 9px 10px; font-size: 14px }
+.st-galat { grid-column: 2 }
 .st-centang { display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 14px; font-weight: 600; letter-spacing: 0; text-transform: none; cursor: pointer }
 .st-centang input { width: 18px; height: 18px; min-height: 0; accent-color: var(--green-lo); box-shadow: none }
 .st-alasan { margin: 6px 0 0; padding-left: 18px }

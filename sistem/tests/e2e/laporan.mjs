@@ -162,6 +162,9 @@ const setoran = {}
   cek('setoran: nilai sistem QRIS sama dengan penjualan QRIS hari ini', setoran.QRIS.expected_total === harapQris.t, `${setoran.QRIS.expected_total} lawan ${harapQris.t}`)
   cek('setoran: rekening QRIS terisi rekening aktif', !!setoran.QRIS.bank_account_id)
   await potret(page, '1440-admin-setoran-daftar')
+  await page.setViewportSize({ width: 390, height: 844 })
+  await potret(page, '390-admin-setoran-daftar')
+  await page.setViewportSize({ width: 1440, height: 900 })
 
   // Tombol kedua tidak membuat dokumen ganda.
   await page.goto(`${BASE}/setoran`)
@@ -172,9 +175,22 @@ const setoran = {}
   // Tunai: isi catatan baris dan bukti, simpan, lalu posting.
   await page.goto(`${BASE}/setoran/${setoran.Tunai.id}`)
   await potret(page, '1440-admin-setoran-tunai-draft')
+  // Formulir draf juga dipotret di HP.
+  await page.setViewportSize({ width: 390, height: 844 })
+  await potret(page, '390-admin-setoran-tunai-draft')
+  await page.setViewportSize({ width: 1440, height: 900 })
   const idBaris = (await satu('select id from pos_settlement_line where pos_settlement_id=$1 and shift_id=$2', [setoran.Tunai.id, idShift])).id
   await page.fill(`input[name="catatan_${idBaris}"]`, 'Disetor ke brankas')
   await page.fill('#k-note', 'Setoran tunai harian')
+  const isiAsli = await page.inputValue(`input[name="actual_${idBaris}"]`)
+  await page.fill(`input[name="actual_${idBaris}"]`, '')
+  await page.click('button:text-is("Simpan setoran")')
+  await page.waitForSelector('.st-galat')
+  cek('setoran: nilai disetor kosong ditolak per baris dan catatan terjaga', (await page.textContent('.st-galat')).includes('Isi nilai disetor') && (await page.inputValue('#k-note')) === 'Setoran tunai harian', await page.textContent('.st-galat'))
+  await page.setViewportSize({ width: 390, height: 844 })
+  await potret(page, '390-admin-setoran-galat-baris')
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.fill(`input[name="actual_${idBaris}"]`, isiAsli)
   // PNG 1 x 1 sebagai bukti setor.
   await page.setInputFiles('#k-bukti', { name: 'bukti.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64') })
   await Promise.all([page.waitForURL(/\?pesan=setoran-tersimpan/), page.click('button:text-is("Simpan setoran")')])
@@ -201,6 +217,9 @@ const setoran = {}
   cek('setoran: alasan butuh Owner tampil', (await page.textContent('.lap-peringatan')).includes('butuh persetujuan Owner'))
   cek('setoran: Admin tidak melihat tombol posting untuk selisih di atas batas', (await page.$$('button:text-is("Posting setoran"), button:text-is("Setujui dan posting")')).length === 0)
   await potret(page, '1440-admin-setoran-debit-selisih')
+  await page.setViewportSize({ width: 390, height: 844 })
+  await potret(page, '390-admin-setoran-debit-selisih')
+  await page.setViewportSize({ width: 1440, height: 900 })
   await Promise.all([page.waitForURL(/\?pesan=setoran-ajukan/), page.click('button:text-is("Ajukan ke Owner")')])
   cek('setoran: Debit diajukan', (await satu('select status from pos_settlement where id=$1', [setoran.Debit.id])).status === 'Diajukan')
   cek('setoran: Admin tanpa galat konsol', galat.length === 0, galat.slice(0, 3).join(' | '))

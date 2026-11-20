@@ -155,7 +155,7 @@ export async function rekapMenu(db: Db, s: SaringLaporan) {
     const kategori = namaKategori(String(b.kategori))
     return { kunci: String(b.kunci), nama: kelompok === 'menu' ? String(b.nama) : kategori, kategori, qty: N(b.qty), kotor: N(b.kotor), potongan: N(b.potongan), bersih, kontribusi: totalBersih ? Math.round((bersih / totalBersih) * 1000) / 10 : 0 }
   })
-  const jumlah = hasil.reduce((a, b) => ({ ...a, qty: a.qty + b.qty, kotor: a.kotor + b.kotor, potongan: a.potongan + b.potongan, bersih: a.bersih + b.bersih }), { kunci: '', nama: 'Jumlah', kategori: '', qty: 0, kotor: 0, potongan: 0, bersih: 0, kontribusi: hasil.length ? 100 : 0 } as BarisMenu)
+  const jumlah = hasil.reduce((a, b) => ({ ...a, qty: a.qty + b.qty, kotor: a.kotor + b.kotor, potongan: a.potongan + b.potongan, bersih: a.bersih + b.bersih }), { kunci: '', nama: kelompok === 'menu' ? '' : 'Jumlah', kategori: kelompok === 'menu' ? 'Jumlah' : '', qty: 0, kotor: 0, potongan: 0, bersih: 0, kontribusi: hasil.length ? 100 : 0 } as BarisMenu)
   const v = await db.$queryRaw<{ n: bigint; nilai: bigint }[]>`
     SELECT COUNT(*)::bigint AS n, COALESCE(SUM(s.sub), 0)::bigint AS nilai FROM sale s JOIN shift sh ON sh.id = s.shift_id WHERE s.status = 'Void' AND ${syaratJual(r, s)}`
   const kategoriPilihan = [...[...kat.entries()].map(([kode, nama]) => ({ kode, nama })), { kode: KATEGORI_PAKET, nama: 'Paket set' }]

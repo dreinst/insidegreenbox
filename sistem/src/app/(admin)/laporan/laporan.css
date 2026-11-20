@@ -15,7 +15,9 @@
 .lap-ringkas dd { margin: 4px 0 0; font-family: var(--f-judul); font-weight: 800; font-size: 19px; overflow-wrap: anywhere }
 .lap-ringkas small { display: block; margin-top: 2px; font-size: 12.5px }
 
-.lap-unduh { font-weight: 700 }
+.lap-unduh { font-weight: 700; white-space: nowrap }
+.lap-saring .saring-tombol { grid-column: 1 / -1; flex-wrap: wrap }
+.lap-petunjuk { margin: 0 0 8px; font-size: 13px; color: var(--muted) }
 .lap-catatan { margin: -4px 0 14px; font-size: 14px; color: var(--muted) }
 .lap-peringatan { padding: 11px 14px; border-radius: 10px; font-weight: 600; margin: 0 0 14px; background: var(--butter-tint); color: #5C4D00; box-shadow: inset 0 0 0 1px #E9DB8A }
 .lap-peringatan a { color: inherit; font-weight: 800 }
@@ -26,6 +28,7 @@
   .lap-tabel th, .lap-tabel td { white-space: normal }
   .lap-tabel .angka { text-align: left }
   .lap-tabel tfoot { display: block }
+  .lap-petunjuk { display: none }
   .lap-tabel tfoot td { background: none; border: 0 }
   .lap-tabel tfoot tr { background: #ECEEE9 }
   .lap-ringkas { grid-template-columns: repeat(2, minmax(0, 1fr)) }
