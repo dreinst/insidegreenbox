@@ -10,6 +10,11 @@ export const TAUTAN_DOK: Record<string, { nama: string; jalur?: string }> = {
   stock_adjustment: { nama: 'Penyesuaian', jalur: '/penyesuaian' },
   stock_opname: { nama: 'Opname', jalur: '/opname' },
   stock_transfer: { nama: 'Pindah stok', jalur: '/pindah-stok' },
+  // tahap 4B
+  sale: { nama: 'Penjualan', jalur: '/transaksi' },
+  material_issue: { nama: 'Pengeluaran bahan', jalur: '/pengeluaran-bahan' },
+  production_result: { nama: 'Hasil produksi', jalur: '/hasil-produksi' },
+  quick_production: { nama: 'Produksi cepat', jalur: '/produksi-cepat' },
 }
 
 export const tautanDok = (docType: string, docId: number) => {

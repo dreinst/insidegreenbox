@@ -367,6 +367,8 @@ model BomLine {
   tolPct    Decimal @default(0) @map("tol_pct") @db.Decimal(6, 3)
 
   @@index([bomId])
+  // tahap 4B: satu bahan sekali per resep.
+  @@unique([bomId, productId])
   @@map("bom_line")
 }
 
@@ -1194,6 +1196,9 @@ model ProductionOrder {
   cancelReason         String?               @map("cancel_reason")
   closeReason          String?               @map("close_reason")
   closedAt             DateTime?             @map("closed_at") @db.Timestamptz(6)
+  // tahap 4B: penutup perintah dan sisa nilai barang dalam proses yang dibuang ke Selisih Produksi saat Selesai.
+  closedBy             Int?                  @map("closed_by")
+  wipWriteOff          BigInt                @default(0) @map("wip_writeoff")
   createdBy            Int?                  @map("created_by")
   createdAt            DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedBy            Int?                  @map("updated_by")
@@ -1214,6 +1219,8 @@ model ProductionOrderLine {
   requiredQty        Decimal             @map("required_qty") @db.Decimal(18, 3)
   issuedQty          Decimal             @default(0) @map("issued_qty") @db.Decimal(18, 3)
   returnedQty        Decimal             @default(0) @map("returned_qty") @db.Decimal(18, 3)
+  // tahap 4B: salinan toleransi bahan dari BOM saat perintah dibuat.
+  tolPct             Decimal             @default(0) @map("tol_pct") @db.Decimal(6, 3)
   materialIssueLines MaterialIssueLine[]
 
   @@index([productionOrderId])
@@ -1312,6 +1319,8 @@ model QuickProduction {
   outputQty            Decimal               @map("output_qty") @db.Decimal(18, 3)
   unitCost             Decimal               @default(0) @map("unit_cost") @db.Decimal(18, 4)
   extraCost            BigInt                @default(0) @map("extra_cost")
+  // tahap 4B: nilai hasil yang masuk persediaan saat Diposting (nilai bahan + biaya tambahan).
+  value                BigInt                @default(0)
   status               DocStatus             @default(Draft)
   submittedBy          Int?                  @map("submitted_by")
   submittedAt          DateTime?             @map("submitted_at") @db.Timestamptz(6)

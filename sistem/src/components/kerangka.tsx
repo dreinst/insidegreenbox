@@ -1,18 +1,21 @@
 'use client'
 // Sidebar dan header. Di layar sempit sidebar menjadi laci yang dibuka tombol Menu.
+// tahap 4B: item sidebar dikelompokkan dengan judul grup, dan item aktif digulir ke dalam pandangan.
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 import { keluarAksi } from '@/app/(admin)/keluar-aksi'
-import type { ItemSidebar } from '@/lib/katalog'
+import type { GrupSidebar } from '@/lib/katalog'
 import { Ikon } from './ikon'
 import { Logo } from './logo'
 
-type Prop = { item: ItemSidebar[]; nama: string; username: string; peran: string; children: React.ReactNode }
+type Prop = { grup: GrupSidebar[]; nama: string; username: string; peran: string; children: React.ReactNode }
 
 const aktif = (jalur: string, href: string) => (href === '/' ? jalur === '/' : jalur === href || jalur.startsWith(href + '/'))
 
-export function Kerangka({ item, nama, username, peran, children }: Prop) {
+const idGrup = (judul: string) => `grup-${judul.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
+
+export function Kerangka({ grup, nama, username, peran, children }: Prop) {
   const jalur = usePathname()
   const [buka, setBuka] = useState(false)
   const [jalurBuka, setJalurBuka] = useState(jalur)
@@ -24,6 +27,11 @@ export function Kerangka({ item, nama, username, peran, children }: Prop) {
     setJalurBuka(jalur)
     setBuka(false)
   }
+
+  // Sidebar lebih tinggi dari layar, jadi item aktif digulir ke dalam pandangan sidebar saat halaman atau laci berganti.
+  useEffect(() => {
+    laci.current?.querySelector<HTMLElement>('nav a.aktif')?.scrollIntoView({ block: 'nearest' })
+  }, [jalur, buka])
 
   useEffect(() => {
     if (!buka) return
@@ -54,17 +62,26 @@ export function Kerangka({ item, nama, username, peran, children }: Prop) {
           </button>
         </div>
         <nav>
-          {item.map((i) => (
-            <Link
-              key={i.href}
-              href={i.href}
-              className={aktif(jalur, i.href) ? 'aktif' : undefined}
-              aria-current={aktif(jalur, i.href) ? 'page' : undefined}
-              onClick={() => setBuka(false)}
-            >
-              <Ikon nama={i.ikon} />
-              {i.label}
-            </Link>
+          {grup.map((g) => (
+            <div key={g.judul ?? 'utama'} className="samping-grup" role={g.judul ? 'group' : undefined} aria-labelledby={g.judul ? idGrup(g.judul) : undefined}>
+              {g.judul ? (
+                <p className="samping-judul" id={idGrup(g.judul)}>
+                  {g.judul}
+                </p>
+              ) : null}
+              {g.item.map((i) => (
+                <Link
+                  key={i.href}
+                  href={i.href}
+                  className={aktif(jalur, i.href) ? 'aktif' : undefined}
+                  aria-current={aktif(jalur, i.href) ? 'page' : undefined}
+                  onClick={() => setBuka(false)}
+                >
+                  <Ikon nama={i.ikon} />
+                  {i.label}
+                </Link>
+              ))}
+            </div>
           ))}
         </nav>
       </aside>

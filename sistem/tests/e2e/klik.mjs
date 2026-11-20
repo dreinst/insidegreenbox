@@ -20,13 +20,16 @@ const AKUN = {
   kasir: { u: process.env.SEED_KASIR_USERNAME, p: process.env.SEED_KASIR_PASSWORD },
 }
 // tahap 3A dan 3B menambah modul kasir (Layar Kasir, Shift, Transaksi, PIN Kasir) dan master (Menu dan Harga, Promo, Member, Metode Bayar) sesuai izin tiap peran.
-// tahap 4A: tujuh item persediaan dan lokasi sesudah Metode Bayar.
+// tahap 4A: tujuh item persediaan dan lokasi.
+// tahap 4B: sidebar berkelompok (Kasir, Menu, Persediaan, Produksi, Pengaturan). Metode Bayar pindah ke grup Kasir,
+// Resep dan BOM masuk Persediaan, empat menu produksi di grup Produksi, dan Lokasi di grup Pengaturan.
 const KASIR_3B = ['Layar Kasir', 'Shift', 'Transaksi']
-const STOK_4A = ['Produk dan Satuan', 'Stok', 'Penyesuaian', 'Opname', 'Pindah Stok', 'Alasan', 'Lokasi']
+const STOK_4A = ['Produk dan Satuan', 'Resep dan BOM', 'Stok', 'Penyesuaian', 'Opname', 'Pindah Stok', 'Alasan']
+const PRODUKSI_4B = ['Perintah Produksi', 'Pengeluaran Bahan', 'Hasil Produksi', 'Produksi Cepat']
 const SIDEBAR_HARAP = {
-  // tahap 5A menambah Setoran POS, Laporan, dan Rekening Bank (Owner dan Admin; Kasir tanpa akses).
-  owner: ['Beranda', ...KASIR_3B, 'PIN Kasir', 'Setoran POS', 'Laporan', 'Menu dan Harga', 'Promo', 'Member', 'Metode Bayar', 'Rekening Bank', ...STOK_4A, 'Pengguna', 'Peran dan Izin', 'Saklar Fitur', 'Jejak Audit'],
-  admin: ['Beranda', ...KASIR_3B, 'PIN Kasir', 'Setoran POS', 'Laporan', 'Menu dan Harga', 'Promo', 'Member', 'Metode Bayar', 'Rekening Bank', ...STOK_4A, 'Jejak Audit'],
+  // tahap 5A: Setoran POS di grup Kasir, Rekening Bank di grup Keuangan, Laporan di grup Laporan (Owner dan Admin).
+  owner: ['Beranda', ...KASIR_3B, 'PIN Kasir', 'Setoran POS', 'Metode Bayar', 'Menu dan Harga', 'Promo', 'Member', ...STOK_4A, ...PRODUKSI_4B, 'Rekening Bank', 'Laporan', 'Lokasi', 'Pengguna', 'Peran dan Izin', 'Saklar Fitur', 'Jejak Audit'],
+  admin: ['Beranda', ...KASIR_3B, 'PIN Kasir', 'Setoran POS', 'Metode Bayar', 'Menu dan Harga', 'Promo', 'Member', ...STOK_4A, ...PRODUKSI_4B, 'Rekening Bank', 'Laporan', 'Lokasi', 'Jejak Audit'],
   kasir: ['Beranda', ...KASIR_3B, 'Menu dan Harga', 'Member'],
 }
 const LEBAR = [

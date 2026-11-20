@@ -6,9 +6,10 @@ import { IsiStruk } from '@/components/struk'
 import { KepalaHalaman, PesanFlash } from '@/components/umum'
 import { db } from '@/lib/db'
 import { wajibIzin } from '@/lib/izin'
-import { isOwner, punyaIzin } from '@/lib/izin-inti'
+import { isOwner, punyaIzin, saklarNyala } from '@/lib/izin-inti'
 import { ambilPenjualan, bolehVoidLangsung } from '@/lib/penjualan'
 import { daftarPenyetujuVoid } from '@/lib/pin'
+import { formatNilai } from '@/lib/stok/angka'
 import { formatWaktu } from '@/lib/waktu'
 import { voidAksi } from '../aksi'
 import { FormVoid } from '../form'
@@ -27,6 +28,9 @@ export default async function RincianTransaksi({ params, searchParams }: { param
   // Sesudah shift ditutup, void hanya lewat Owner: Owner sendiri, atau penyetuju Owner lewat PIN.
   const penyetuju = langsung ? null : (await daftarPenyetujuVoid(db, p.id)).filter((u) => shiftBuka || u.kodePeran === 'owner')
   const bisaVoid = j.status === 'Selesai' && (langsung ? shiftBuka || isOwner(p) : (penyetuju?.length ?? 0) > 0)
+  // tahap 4B: HPP dari bahan resep yang dipotong mesin stok; baris tanpa gerak berarti menu tanpa resep.
+  const lihatHpp = saklarNyala(p, 'stok.lihat_nilai')
+  const bergerak = lihatHpp ? new Set((await db.stockLedger.findMany({ where: { docType: 'sale', docId: j.id, isReversal: false }, select: { lineId: true }, distinct: ['lineId'] })).map((g) => g.lineId)) : new Set()
 
   return (
     <>
@@ -60,7 +64,7 @@ export default async function RincianTransaksi({ params, searchParams }: { param
             </dl>
           ) : bisaVoid ? (
             <>
-              <p className="redup">Void mengubah status transaksi menjadi Void. Transaksi tidak dihapus dan kunjungan member dikurangi satu.</p>
+              <p className="redup">Void mengubah status transaksi menjadi Void. Transaksi tidak dihapus, kunjungan member dikurangi satu, dan bahan resep kembali ke stok lewat gerak balik.</p>
               <FormVoid aksi={voidAksi.bind(null, j.id)} penyetuju={penyetuju} no={j.no} />
             </>
           ) : (
@@ -77,6 +81,41 @@ export default async function RincianTransaksi({ params, searchParams }: { param
           ) : null}
         </section>
       </div>
+      {lihatHpp ? (
+        <section className="kartu" aria-labelledby="j-hpp">
+          <h2 id="j-hpp">HPP {formatNilai(j.hpp)}</h2>
+          <table className="tabel">
+            <thead>
+              <tr>
+                <th scope="col">Baris</th>
+                <th scope="col" className="angka">
+                  Qty
+                </th>
+                <th scope="col" className="angka">
+                  HPP
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {j.saleLines.map((l) => (
+                <tr key={l.id}>
+                  <td data-label="Baris">
+                    {l.name}
+                    {bergerak.has(l.id) ? null : <small className="redup"> · menu tanpa resep, stok tidak dipotong</small>}
+                  </td>
+                  <td data-label="Qty" className="angka">
+                    {l.qty}
+                  </td>
+                  <td data-label="HPP" className="angka">
+                    {formatNilai(l.hpp)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {punyaIzin(p.izin, 'stok.saldo', 'L') && bergerak.size ? <p className="redup kecil">Gerak bahan transaksi ini tercatat di kartu stok dengan nomor {j.no}.</p> : null}
+        </section>
+      ) : null}
     </>
   )
 }

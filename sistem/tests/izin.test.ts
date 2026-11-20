@@ -60,8 +60,8 @@ describe('matriks bawaan RANCANGAN 8.2', () => {
 })
 
 describe('saklar fitur RANCANGAN 8.3', () => {
-  test('24 saklar dengan nilai bawaan per peran', async () => {
-    assert.equal(await db.featureSwitch.count(), 24)
+  test('25 saklar dengan nilai bawaan per peran (tahap 4B menambah pos.jual_stok_minus)', async () => {
+    assert.equal(await db.featureSwitch.count(), 25)
     for (const p of [owner, admin, kasir]) {
       const s = await muatSaklar(db, p.peran.id)
       for (const def of SAKLAR) {

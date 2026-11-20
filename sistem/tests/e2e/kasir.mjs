@@ -307,8 +307,8 @@ for (const [w, h] of [
   cek(`${w}px audit: simpan dan void penjualan`, ['Simpan penjualan', 'Void penjualan'].every((a) => aksiJual.includes(a)), aksiJual.join(', '))
   await potret(owner.page, `${w}-owner-audit-penjualan`)
 
-  // Sidebar Owner berisi semua menu tahap 2 sampai 3: di 1440 x 900 semua item terlihat, di HP laci bisa digulir
-  // sampai item terakhir walau layarnya pendek.
+  // Sidebar Owner berisi semua menu sampai tahap 4. Sejak tahap 4A itemnya lebih dari 20, jadi di 1440 x 900 pun
+  // sidebar digulir: item terakhir harus bisa dicapai dengan menggulir sidebar, di desktop maupun di laci HP.
   {
     const p = owner.page
     const ukur = () =>
@@ -320,9 +320,13 @@ for (const [w, h] of [
       })
     if (w > 820) {
       await p.goto(`${BASE}/`)
-      const s = await ukur()
-      cek(`${w}px owner: semua item sidebar terlihat di ${w} x ${h}`, s.n >= 13 && s.bawah <= s.tinggi, JSON.stringify(s))
       await p.screenshot({ path: `${POTRET}${w}-owner-sidebar.png` })
+      await p.mouse.move(120, 400)
+      await p.mouse.wheel(0, 2000)
+      await p.waitForTimeout(300)
+      const s = await ukur()
+      cek(`${w}px owner: item terakhir sidebar tercapai dengan gulir di ${w} x ${h}`, s.n >= 20 && s.bawah <= s.tinggi && s.atas >= 0 && s.oy === 'auto', JSON.stringify(s))
+      await p.screenshot({ path: `${POTRET}${w}-owner-sidebar-bawah.png` })
       await p.setViewportSize({ width: w, height: 640 })
       await p.mouse.move(120, 400)
       await p.mouse.wheel(0, 1500)
