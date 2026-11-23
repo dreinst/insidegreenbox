@@ -30,6 +30,13 @@ const NAMA_DOK: Record<string, string> = {
   direct_purchase: 'Pembelian langsung',
   purchase_payment: 'Pembayaran pembelian',
   cash_transaction: 'Kas dan bank',
+  // tahap 6B
+  sales_invoice: 'Faktur penjualan',
+  customer_payment: 'Penerimaan pelanggan',
+  sales_return: 'Retur penjualan',
+  fixed_asset: 'Perolehan aset',
+  asset_depreciation_run: 'Penyusutan aset',
+  asset_disposal: 'Pelepasan aset',
 }
 export const namaSumber = (t: string) => NAMA_DOK[t] ?? t
 
@@ -252,6 +259,13 @@ const JALUR_SUMBER: Record<string, string> = {
   direct_purchase: '/beli-langsung',
   purchase_payment: '/pembayaran',
   cash_transaction: '/kas',
+  // tahap 6B
+  sales_invoice: '/faktur-jual',
+  customer_payment: '/terima-pelanggan',
+  sales_return: '/retur-jual',
+  fixed_asset: '/aset',
+  asset_depreciation_run: '/penyusutan',
+  asset_disposal: '/pelepasan-aset',
 }
 
 export function tautanSumber(sourceType: string, sourceId: number | null, docNo = '') {

@@ -292,6 +292,18 @@ export const SIDEBAR_GRUP: GrupSidebar[] = [
       { href: '/tutup-periode', label: 'Tutup Periode', menu: 'akun.tutup_periode', ikon: 'periode' },
     ],
   },
+  // tahap 6B: aset tetap dan anggaran (RANCANGAN 8.2). Admin melihat Aset Tetap, Anggaran, dan Realisasi (Lihat);
+  // Penyusutan dan Pelepasan Aset hanya Owner (aset.penyusutan).
+  {
+    judul: 'Aset dan Anggaran',
+    item: [
+      { href: '/aset', label: 'Aset Tetap', menu: 'aset.daftar', ikon: 'aset' },
+      { href: '/penyusutan', label: 'Penyusutan', menu: 'aset.penyusutan', ikon: 'penyusutan' },
+      { href: '/pelepasan-aset', label: 'Pelepasan Aset', menu: 'aset.penyusutan', ikon: 'pelepasan' },
+      { href: '/anggaran', label: 'Anggaran', menu: 'anggaran.anggaran', ikon: 'anggaran' },
+      { href: '/realisasi-anggaran', label: 'Realisasi Anggaran', menu: 'anggaran.anggaran', ikon: 'realisasi' },
+    ],
+  },
   { judul: 'Laporan', item: [SIDEBAR_SETORAN[1]] },
   // tahap 2, ditambah master lokasi sederhana tahap 4A (atur.lokasi).
   {

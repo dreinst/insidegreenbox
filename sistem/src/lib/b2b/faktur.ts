@@ -11,6 +11,7 @@ import { formatRupiah, skemaTanggal, skemaUang } from '../master'
 import { ambilNomor } from '../nomor'
 import { Desimal, des, formatQty, isianQty, skemaQty } from '../stok/angka'
 import { catatGerak } from '../stok/mesin'
+import { balikJurnalFakturJual, jurnalFakturJual } from '../akuntansi/dokumen-b2b'
 import {
   BATAS_BARIS_BELI,
   DOK_BELI,
@@ -286,7 +287,9 @@ export const KAIT_FAKTUR_JUAL: KaitBeli<KepalaFakturJual> = {
     }
     const total = await hitungUlangFakturJual(tx, d.id)
     await tx.salesInvoice.update({ where: { id: d.id }, data: { hpp, paidAmount: 0n, payStatus: 'BelumBayar' } })
-    return { ringkas: `total ${formatRupiah(total)}, HPP ${formatRupiah(hpp)}`, sesudah: { total, hpp, baris: baris.length } }
+    // tahap 6B: jurnal piutang, penjualan B2B, dan HPP di transaksi yang sama (KONTRAK 11 butir 96).
+    const j = await jurnalFakturJual(tx, d.id, asal.oleh)
+    return { ringkas: `total ${formatRupiah(total)}, HPP ${formatRupiah(hpp)}`, sesudah: { total, hpp, baris: baris.length, jurnal: j?.no ?? null } }
   },
   batal: async (tx, d, _a, dari) => {
     if (dari !== 'Diposting') return
@@ -304,6 +307,10 @@ export const KAIT_FAKTUR_JUAL: KaitBeli<KepalaFakturJual> = {
       }
       await perbaruiProgresPesananJual(tx, d.salesOrderId)
     }
+  },
+  sesudahBalik: async (tx, d, aktor, tanggal) => {
+    const b = await balikJurnalFakturJual(tx, d.id, tanggal, aktor.id)
+    return { sesudah: { jurnalBalik: b?.no ?? null } }
   },
 }
 

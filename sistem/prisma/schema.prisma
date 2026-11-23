@@ -2190,6 +2190,24 @@ model SalesReturnLine {
 
 // ===== Aset dan anggaran =====
 
+// tahap 6B: kategori aset tetap (master). Akun aset, akumulasi, dan beban dipetakan per kategori lewat account_mapping
+// (aset_tetap.<id>, akumulasi_penyusutan.<id>, beban_penyusutan.<id>), KONTRAK 11.
+model AssetCategory {
+  id           Int          @id @default(autoincrement())
+  code         String       @unique
+  name         String       @unique
+  usefulMonths Int          @map("useful_months")
+  note         String       @default("")
+  active       Boolean      @default(true)
+  createdBy    Int?         @map("created_by")
+  createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedBy    Int?         @map("updated_by")
+  updatedAt    DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  fixedAssets  FixedAsset[]
+
+  @@map("asset_category")
+}
+
 model FixedAsset {
   id                   Int                 @id @default(autoincrement())
   locationId           Int?                @map("location_id")
@@ -2202,16 +2220,30 @@ model FixedAsset {
   expenseAccount       Account?            @relation("AsetAkunBeban", fields: [expenseAccountId], references: [id])
   directPurchaseLineId Int?                @map("direct_purchase_line_id")
   directPurchaseLine   DirectPurchaseLine? @relation(fields: [directPurchaseLineId], references: [id])
+  // tahap 6B: kategori menjadi kunci asing ke asset_category (menggantikan kolom teks category).
+  categoryId           Int                 @map("category_id")
+  category             AssetCategory       @relation(fields: [categoryId], references: [id])
   code                 String              @unique
   name                 String
-  category             String              @default("")
+  // acquired_date juga tanggal mulai penyusutan: bulan pertama penyusutan adalah bulan tanggal ini.
   acquiredDate         DateTime            @map("acquired_date") @db.Date
   cost                 BigInt
   salvage              BigInt              @default(0)
   usefulMonths         Int                 @map("useful_months")
   method               String              @default("garis_lurus")
   bookValue            BigInt              @default(0) @map("book_value")
-  status               String              @default("aktif")
+  // tahap 6B: akumulasi penyusutan berjalan, sumber dana perolehan (bank_account tanpa kunci asing, kosong = kas besar),
+  // catatan, dan jejak aktivasi serta pembatalannya. status: draft, aktif, dilepas, batal.
+  accumDepreciation    BigInt              @default(0) @map("accum_depreciation")
+  bankAccountId        Int?                @map("bank_account_id")
+  note                 String              @default("")
+  status               String              @default("draft")
+  activatedBy          Int?                @map("activated_by")
+  activatedAt          DateTime?           @map("activated_at") @db.Timestamptz(6)
+  cancelledBy          Int?                @map("cancelled_by")
+  cancelledAt          DateTime?           @map("cancelled_at") @db.Timestamptz(6)
+  cancelReason         String?             @map("cancel_reason")
+  reversalJournalId    Int?                @map("reversal_journal_id")
   createdBy            Int?                @map("created_by")
   createdAt            DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedBy            Int?                @map("updated_by")
@@ -2219,20 +2251,50 @@ model FixedAsset {
   assetDepreciations   AssetDepreciation[]
   assetDisposals       AssetDisposal[]
 
+  @@index([categoryId])
   @@map("fixed_asset")
 }
 
-model AssetDepreciation {
-  id           Int          @id @default(autoincrement())
-  fixedAssetId Int          @map("fixed_asset_id")
-  fixedAsset   FixedAsset   @relation(fields: [fixedAssetId], references: [id])
-  periodId     Int          @map("period_id")
-  period       FiscalPeriod @relation(fields: [periodId], references: [id])
-  amount       BigInt
-  kind         String       @default("komersial")
-  postedBy     Int?         @map("posted_by")
-  postedAt     DateTime     @default(now()) @map("posted_at") @db.Timestamptz(6)
+// tahap 6B: satu dokumen penyusutan per bulan untuk semua aset aktif (KONTRAK 11). Indeks unik sebagian di migrasi:
+// satu dokumen Diposting per bulan.
+model AssetDepreciationRun {
+  id                 Int                 @id @default(autoincrement())
+  no                 String              @unique
+  yearMonth          String              @map("year_month") @db.VarChar(7)
+  date               DateTime            @db.Date
+  total              BigInt              @default(0)
+  assetCount         Int                 @default(0) @map("asset_count")
+  status             DocStatus           @default(Diposting)
+  postedBy           Int?                @map("posted_by")
+  postedAt           DateTime?           @map("posted_at") @db.Timestamptz(6)
+  cancelledBy        Int?                @map("cancelled_by")
+  cancelledAt        DateTime?           @map("cancelled_at") @db.Timestamptz(6)
+  cancelReason       String?             @map("cancel_reason")
+  reversalJournalId  Int?                @map("reversal_journal_id")
+  createdBy          Int?                @map("created_by")
+  createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  assetDepreciations AssetDepreciation[]
 
+  @@index([yearMonth])
+  @@map("asset_depreciation_run")
+}
+
+model AssetDepreciation {
+  id           Int                  @id @default(autoincrement())
+  fixedAssetId Int                  @map("fixed_asset_id")
+  fixedAsset   FixedAsset           @relation(fields: [fixedAssetId], references: [id])
+  periodId     Int                  @map("period_id")
+  period       FiscalPeriod         @relation(fields: [periodId], references: [id])
+  // tahap 6B: dokumen penyusutan bulanannya dan akumulasi aset sesudah baris ini.
+  runId        Int                  @map("run_id")
+  run          AssetDepreciationRun @relation(fields: [runId], references: [id])
+  accumAfter   BigInt               @default(0) @map("accum_after")
+  amount       BigInt
+  kind         String               @default("komersial")
+  postedBy     Int?                 @map("posted_by")
+  postedAt     DateTime             @default(now()) @map("posted_at") @db.Timestamptz(6)
+
+  @@unique([runId, fixedAssetId])
   @@index([fixedAssetId])
   @@map("asset_depreciation")
 }
@@ -2243,6 +2305,12 @@ model AssetDisposal {
   fixedAsset        FixedAsset @relation(fields: [fixedAssetId], references: [id])
   cashAccountId     Int?       @map("cash_account_id")
   cashAccount       Account?   @relation("LepasAsetAkunKas", fields: [cashAccountId], references: [id])
+  // tahap 6B: tujuan uang hasil penjualan (bank_account tanpa kunci asing, kosong = kas besar), dan salinan nilai aset
+  // saat diposting.
+  bankAccountId     Int?       @map("bank_account_id")
+  cost              BigInt     @default(0)
+  accumDepreciation BigInt     @default(0) @map("accum_depreciation")
+  bookValue         BigInt     @default(0) @map("book_value")
   no                String     @unique
   date              DateTime   @db.Date
   proceeds          BigInt     @default(0)
@@ -2264,29 +2332,40 @@ model AssetDisposal {
   updatedBy         Int?       @map("updated_by")
   updatedAt         DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
 
+  @@index([fixedAssetId])
   @@map("asset_disposal")
 }
 
 model Budget {
-  id           Int          @id @default(autoincrement())
-  name         String
-  year         Int
-  status       DocStatus    @default(Draft)
-  submittedBy  Int?         @map("submitted_by")
-  submittedAt  DateTime?    @map("submitted_at") @db.Timestamptz(6)
-  approvedBy   Int?         @map("approved_by")
-  approvedAt   DateTime?    @map("approved_at") @db.Timestamptz(6)
-  cancelledBy  Int?         @map("cancelled_by")
-  cancelledAt  DateTime?    @map("cancelled_at") @db.Timestamptz(6)
-  cancelReason String?      @map("cancel_reason")
-  closeReason  String?      @map("close_reason")
-  closedAt     DateTime?    @map("closed_at") @db.Timestamptz(6)
-  createdBy    Int?         @map("created_by")
-  createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedBy    Int?         @map("updated_by")
-  updatedAt    DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
-  budgetLines  BudgetLine[]
+  id            Int          @id @default(autoincrement())
+  // tahap 6B: nomor AG-YYMM-NNNN, versi revisi, anggaran asal revisi, dan tanda sudah digantikan revisi yang disetujui.
+  no            String       @unique
+  version       Int          @default(1)
+  revisedFromId Int?         @map("revised_from_id")
+  revisedFrom   Budget?      @relation("RevisiAnggaran", fields: [revisedFromId], references: [id])
+  revisions     Budget[]     @relation("RevisiAnggaran")
+  replacedBy    Int?         @map("replaced_by")
+  replacedAt    DateTime?    @map("replaced_at") @db.Timestamptz(6)
+  note          String       @default("")
+  name          String
+  year          Int
+  status        DocStatus    @default(Draft)
+  submittedBy   Int?         @map("submitted_by")
+  submittedAt   DateTime?    @map("submitted_at") @db.Timestamptz(6)
+  approvedBy    Int?         @map("approved_by")
+  approvedAt    DateTime?    @map("approved_at") @db.Timestamptz(6)
+  cancelledBy   Int?         @map("cancelled_by")
+  cancelledAt   DateTime?    @map("cancelled_at") @db.Timestamptz(6)
+  cancelReason  String?      @map("cancel_reason")
+  closeReason   String?      @map("close_reason")
+  closedAt      DateTime?    @map("closed_at") @db.Timestamptz(6)
+  createdBy     Int?         @map("created_by")
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedBy     Int?         @map("updated_by")
+  updatedAt     DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  budgetLines   BudgetLine[]
 
+  @@index([year])
   @@map("budget")
 }
 
@@ -2300,6 +2379,7 @@ model BudgetLine {
   amount    BigInt
   note      String  @default("")
 
+  @@unique([budgetId, accountId, month])
   @@index([budgetId])
   @@map("budget_line")
 }

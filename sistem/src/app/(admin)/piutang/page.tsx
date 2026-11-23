@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { Ringkas, TautanDok } from '@/components/beli'
 import { formatTanggal } from '@/components/stok'
 import { KepalaHalaman } from '@/components/umum'
+import { cocokkanPiutang } from '@/lib/akuntansi/bentuk-ulang-b2b'
 import { piutangPelanggan, type SaringPiutang } from '@/lib/b2b/piutang'
 import { pilihanPelanggan } from '@/lib/b2b/umum'
 import { DOK_BELI } from '@/lib/beli/dokumen'
@@ -20,6 +21,9 @@ export default async function PiutangPelanggan({ searchParams }: { searchParams:
   const s = await searchParams
   const [h, pelanggan] = await Promise.all([piutangPelanggan(db, s), pilihanPelanggan(db)])
   const q = s.pelanggan && /^\d+$/.test(s.pelanggan) ? `?pelanggan=${s.pelanggan}` : ''
+  // tahap 6B: pencocokan dengan Piutang Usaha di buku besar, hanya untuk pemegang Buku Besar dan tanpa saringan.
+  const buku = !q && punyaIzin(p.izin, 'akun.buku_besar', 'L') ? await cocokkanPiutang(db) : null
+  const akunPiutang = buku ? await db.accountMapping.findUnique({ where: { key: 'piutang_usaha' }, select: { accountId: true } }) : null
   return (
     <>
       <KepalaHalaman judul="Piutang Pelanggan" keterangan="Sisa faktur penjualan yang belum lunas, dikurangi nota kredit retur yang belum terpakai. Umur dihitung dari jatuh tempo sampai hari ini.">
@@ -54,6 +58,13 @@ export default async function PiutangPelanggan({ searchParams }: { searchParams:
           ['Nota kredit belum terpakai', formatRupiah(h.kredit)],
         ]}
       />
+      {buku ? (
+        <p className={`pesan ${buku.cocok ? 'sukses' : 'galat'}`} role="status" data-cocok-piutang={buku.cocok ? 'ya' : 'tidak'}>
+          Piutang Usaha di buku besar {formatRupiah(buku.buku)}
+          {buku.cocok ? ', sama dengan saldo halaman ini.' : `, berbeda ${formatRupiah(buku.buku - buku.halaman)} dari saldo halaman ini. Jalankan npm run jurnal:bentuk-ulang untuk dokumen lama.`}{' '}
+          {akunPiutang ? <Link href={`/buku-besar?akun=${akunPiutang.accountId}`}>Buka buku besar</Link> : null}
+        </p>
+      ) : null}
 
       <section className="kartu" aria-labelledby="j-pelanggan">
         <h2 id="j-pelanggan">Saldo per pelanggan</h2>

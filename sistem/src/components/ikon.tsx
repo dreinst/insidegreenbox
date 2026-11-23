@@ -287,6 +287,37 @@ const JALUR: Record<string, React.ReactNode> = {
       <path d="M6.5 9h2M6.5 13h2M15.5 9l1.2 1.2 2-2.4M15.5 14l1.2 1.2 2-2.4" />
     </>
   ),
+  // tahap 6B: aset tetap dan anggaran.
+  aset: (
+    <>
+      <rect x="3" y="8" width="18" height="12" rx="2" />
+      <path d="M8 8V5h8v3M3 13h18" />
+    </>
+  ),
+  penyusutan: (
+    <>
+      <path d="M4 4v16h16" />
+      <path d="M7 8l4 4 3-2 5 5" />
+    </>
+  ),
+  pelepasan: (
+    <>
+      <path d="M4 7h11l5 5-5 5H4z" />
+      <circle cx="9" cy="12" r="1.5" />
+    </>
+  ),
+  anggaran: (
+    <>
+      <rect x="3" y="5" width="18" height="15" rx="2" />
+      <path d="M3 10h18M8 5V3M16 5V3M7 14h4M7 17h7" />
+    </>
+  ),
+  realisasi: (
+    <>
+      <path d="M5 20V10M10 20V4M15 20v-7M20 20v-11" />
+      <path d="M3 20h18" />
+    </>
+  ),
   tutup: <path d="M6 6l12 12M18 6L6 18" />,
   keluar: <path d="M14 4h5v16h-5M10 8l-4 4 4 4M6 12h10" />,
 }

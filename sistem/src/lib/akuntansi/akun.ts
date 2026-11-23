@@ -182,11 +182,12 @@ export type BarisPeta = { kunci: string; nama: string; keterangan: string; jenis
 export async function daftarPemetaan(db: DbAtauTx) {
   const peta = new Map((await db.accountMapping.findMany()).map((m) => [m.key, m.accountId]))
   const umum: BarisPeta[] = KUNCI_UMUM.map((k) => ({ kunci: k.kunci, nama: k.nama, keterangan: k.keterangan, jenis: k.jenis, akunId: peta.get(k.kunci) ?? null, umum: true }))
-  const [metode, rekening, lokasi, alasan] = await Promise.all([
+  const [metode, rekening, lokasi, alasan, kategoriAset] = await Promise.all([
     db.paymentMethod.findMany({ where: { kind: { not: 'tunai' } }, orderBy: { id: 'asc' }, select: { id: true, name: true, active: true } }),
     db.bankAccount.findMany({ orderBy: { id: 'asc' }, select: { id: true, bankName: true, accountNo: true, active: true } }),
     db.location.findMany({ orderBy: { id: 'asc' }, select: { id: true, name: true, active: true } }),
     db.stockReason.findMany({ orderBy: { id: 'asc' }, select: { id: true, name: true, code: true, active: true } }),
+    db.assetCategory.findMany({ orderBy: { id: 'asc' }, select: { id: true, name: true, active: true } }),
   ])
   const turunan = (awalan: keyof typeof TURUNAN, id: number, nama: string, aktif: boolean, cadangan: string): BarisPeta => ({
     kunci: `${awalan}.${id}`,
@@ -204,6 +205,15 @@ export async function daftarPemetaan(db: DbAtauTx) {
       { judul: 'Akun per rekening bank', baris: rekening.map((r) => turunan('bank', r.id, `${r.bankName} ${r.accountNo}`, r.active, 'bank')) },
       { judul: 'Akun persediaan per lokasi stok', baris: lokasi.map((l) => turunan('persediaan', l.id, l.name, l.active, 'persediaan')) },
       { judul: 'Lawan penyesuaian dan opname per alasan', baris: alasan.map((a) => turunan('alasan', a.id, a.name, a.active, a.code === 'saldo_awal' ? 'saldo_awal' : 'selisih_persediaan')) },
+      // tahap 6B: tiga akun per kategori aset tetap.
+      {
+        judul: 'Akun aset tetap per kategori',
+        baris: kategoriAset.flatMap((c) => [
+          turunan('aset_tetap', c.id, `${c.name}: aset`, c.active, 'aset_tetap'),
+          turunan('akumulasi_penyusutan', c.id, `${c.name}: akumulasi penyusutan`, c.active, 'akumulasi_penyusutan'),
+          turunan('beban_penyusutan', c.id, `${c.name}: beban penyusutan`, c.active, 'beban_penyusutan'),
+        ]),
+      },
     ],
   }
 }
