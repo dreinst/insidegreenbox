@@ -71,5 +71,7 @@ jalan kas.mjs
 jalan b2b.mjs
 # tahap 6B: jurnal B2B, aset tetap, dan anggaran, sesudah b2b.mjs (piutang) dan sebelum klik.mjs.
 jalan aset.mjs
+# Perbaikan audit area A dan B (KONTRAK 11 butir 127 sampai 141), sebelum klik.mjs yang mengunci login Admin.
+jalan audit-ab.mjs
 jalan klik.mjs
 exit $HASIL
