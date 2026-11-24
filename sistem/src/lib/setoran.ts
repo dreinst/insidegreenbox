@@ -492,7 +492,7 @@ export async function ambilSetoran(db: Db, id: number) {
     include: {
       paymentMethod: true,
       bankAccount: true,
-      posSettlementLines: { orderBy: { shiftId: 'asc' }, include: { shift: { select: { id: true, status: true, openedAt: true, closedAt: true, openCash: true, countedCash: true, cashDiff: true, user: { select: { name: true } } } } } },
+      posSettlementLines: { orderBy: { shiftId: 'asc' }, include: { shift: { select: { id: true, status: true, reasonMissing: true, openedAt: true, closedAt: true, openCash: true, countedCash: true, cashDiff: true, user: { select: { name: true } } } } } },
     },
   })
   if (!st) return null

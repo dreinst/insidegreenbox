@@ -10,7 +10,7 @@ import { BATAS_GAGAL_NAMA } from '../src/lib/masuk'
 import { potonganMember, ubahStatusMember, ubahStatusTingkat } from '../src/lib/member'
 import { ambilPenjualan, cariMember, simpanPenjualan, voidPenjualan } from '../src/lib/penjualan'
 import { aturPin, bolehMasukPin, cobaMasukPin, daftarMasukPin, daftarPenyetujuVoid } from '../src/lib/pin'
-import { bukaShift, catatKasLaci, setujuiShift, tutupShift } from '../src/lib/shift'
+import { bukaShift, catatKasLaci, isiAlasanSelisih, setujuiShift, tutupShift } from '../src/lib/shift'
 import { buatAktor, k, siapkanDbUji } from './db-uji'
 
 let db: Db
@@ -200,13 +200,9 @@ describe('shift', () => {
 
     // Tutup buta: seharusnya = 200000 + tunai j1 + 20000 - 5000. Dihitung lewat pecahan 2 x 100.000.
     const harus = 200000 + harap.total + 20000 - 5000
-    // tahap 6C: selisih tanpa alasan ditolak dan shift tetap buka; dengan alasan langsung Ditutup tanpa persetujuan.
-    await assert.rejects(tutupShift(db, k(kasir), kasir, s.id, { kasDihitung: '', catatan: '', pecahan_100000: '2' }), (e) => e instanceof GalatAturan && e.kolom === 'catatan' && !e.message.includes('Rp'))
-    await assert.rejects(tutupShift(db, k(kasir), kasir, s.id, { kasDihitung: '', catatan: ' ab ', pecahan_100000: '2' }), tolakAturan(/alasan selisih/))
-    assert.equal((await db.shift.findUniqueOrThrow({ where: { id: s.id } })).status, 'Buka')
-    const tolak = await db.auditLog.findMany({ where: { action: 'shift.tutup_ditolak', docId: String(s.id) } })
-    assert.equal(tolak.length, 2, 'tiap penolakan tercatat')
-    assert.ok(!tolak[0].summary.includes(String(harus.toLocaleString('id-ID'))), 'kas seharusnya tidak bocor di audit penolakan')
+    // tahap 6C: tutup selalu berhasil dengan kas dihitung pertama, tanpa persetujuan. Alasan yang diisi saat tutup
+    // tidak boleh terlalu pendek, aturan yang sama untuk angka cocok maupun tidak.
+    await assert.rejects(tutupShift(db, k(kasir), kasir, s.id, { kasDihitung: '', catatan: ' ab ', pecahan_100000: '2' }))
     const tutup = await tutupShift(db, k(kasir), kasir, s.id, { kasDihitung: '', catatan: 'Uang kurang', pecahan_100000: '2' })
     assert.equal(tutup.expectedCash, BigInt(harus))
     assert.equal(tutup.countedCash, 200000n)
@@ -214,6 +210,7 @@ describe('shift', () => {
     assert.equal(tutup.status, 'Tutup')
     assert.equal(tutup.diffLimit, null)
     assert.equal(tutup.note, 'Uang kurang')
+    assert.equal(tutup.reasonMissing, false, 'alasan sudah diisi saat tutup')
     assert.equal(tutup.approvedBy, null)
 
     // Sesudah ditutup: jual dan kas laci ditolak, void oleh Admin ditolak, Admin tidak bisa menyetujui.
@@ -235,21 +232,47 @@ describe('shift', () => {
 
     // Semua langkah tercatat di audit.
     const aksi = (await db.auditLog.findMany({ where: { OR: [{ docType: 'shift', docId: String(s.id) }, { docType: 'sale' }] }, select: { action: true } })).map((a) => a.action)
-    for (const a of ['shift.buka', 'shift.kas', 'penjualan.simpan', 'penjualan.void', 'shift.tutup', 'shift.tutup_ditolak']) assert.ok(aksi.includes(a), a)
+    for (const a of ['shift.buka', 'shift.kas', 'penjualan.simpan', 'penjualan.void', 'shift.tutup']) assert.ok(aksi.includes(a), a)
   })
 
-  test('selisih kecil tetap wajib alasan, tanpa selisih boleh tanpa alasan, dan shift kasir lain tidak bisa ditutup oleh kasir', async () => {
-    const s = await bukaShift(db, k(kasir), kasir, { modal: '50000' })
+  test('hitung buta: angka cocok dan tidak cocok sama-sama langsung tertutup tanpa alasan', async () => {
     const lain = await db.shift.findFirstOrThrow({ where: { userId: kasir2.id, status: 'Buka' } })
     await assert.rejects(tutupShift(db, k(kasir), kasir, lain.id, { kasDihitung: '100000' }), tolakAturan(/tidak ditemukan/))
-    await assert.rejects(tutupShift(db, k(kasir), kasir, s.id, { kasDihitung: '49.900' }), tolakAturan(/alasan selisih/))
-    const t = await tutupShift(db, k(kasir), kasir, s.id, { kasDihitung: '45.000', catatan: 'Kembalian salah' })
-    assert.equal(t.status, 'Tutup')
-    assert.equal(t.cashDiff, -5000n)
-    const s2 = await bukaShift(db, k(kasir), kasir, { modal: '50000' })
-    const t2 = await tutupShift(db, k(kasir), kasir, s2.id, { kasDihitung: '50000' })
-    assert.equal(t2.status, 'Tutup')
-    assert.equal(t2.cashDiff, 0n)
+    const hasil = []
+    for (const kas of ['50000', '49.900']) {
+      const s = await bukaShift(db, k(kasir), kasir, { modal: '50000' })
+      // Tidak ada penolakan atau pesan yang bergantung pada selisih sebelum tertutup.
+      const t = await tutupShift(db, k(kasir), kasir, s.id, { kasDihitung: kas })
+      hasil.push({ status: t.status, ditutup: !!t.closedAt, kunci: Object.keys(t).sort().join(',') })
+      if (kas === '49.900') {
+        assert.equal(t.cashDiff, -100n)
+        assert.equal(t.reasonMissing, true, 'selisih tanpa alasan ditandai')
+        // Kasir tidak bisa membuka shift baru sampai alasan diisi; pesan menunjuk shift itu.
+        await assert.rejects(bukaShift(db, k(kasir), kasir, { modal: '0' }), tolakAturan(new RegExp(`#${s.id}.*alasan selisih`)))
+        await assert.rejects(isiAlasanSelisih(db, k(kasir), kasir, s.id, { alasan: 'ab' }))
+        await assert.rejects(isiAlasanSelisih(db, k(kasir2), kasir2, s.id, { alasan: 'Bukan shift saya' }), tolakAturan(/tidak ditemukan/))
+        const isi = await isiAlasanSelisih(db, k(kasir), kasir, s.id, { alasan: 'Kembalian salah' })
+        assert.deepEqual([isi.reasonMissing, isi.note, isi.cashDiff, isi.countedCash], [false, 'Kembalian salah', -100n, 49900n], 'angka tidak berubah')
+        await assert.rejects(isiAlasanSelisih(db, k(kasir), kasir, s.id, { alasan: 'Ganti lagi' }), tolakAturan(/tidak sedang menunggu/))
+        const a = await db.auditLog.findFirstOrThrow({ where: { action: 'shift.alasan_selisih', docId: String(s.id) } })
+        assert.deepEqual(a.afterJson, { note: 'Kembalian salah', reasonMissing: false })
+      } else {
+        assert.equal(t.reasonMissing, false, 'tanpa selisih tidak ditandai')
+      }
+    }
+    assert.deepEqual(hasil[0], hasil[1], 'jawaban tutup sama untuk angka cocok dan tidak cocok')
+    assert.equal(await db.auditLog.count({ where: { action: 'shift.tutup_ditolak' } }), 0)
+  })
+
+  test('Owner mengisi alasan selisih dari rincian shift kasir, lalu kasir bisa membuka shift lagi', async () => {
+    const s = await bukaShift(db, k(kasir), kasir, { modal: '0' })
+    await tutupShift(db, k(kasir), kasir, s.id, { kasDihitung: '7000' })
+    await assert.rejects(bukaShift(db, k(kasir), kasir, { modal: '0' }), tolakAturan(/alasan selisih/))
+    await isiAlasanSelisih(db, k(owner), owner, s.id, { alasan: 'Uang titipan, sudah dicek Owner' })
+    const a = await db.auditLog.findFirstOrThrow({ where: { action: 'shift.alasan_selisih', docId: String(s.id) } })
+    assert.equal(a.userId, owner.id)
+    const baru = await bukaShift(db, k(kasir), kasir, { modal: '0' })
+    await tutupShift(db, k(kasir), kasir, baru.id, { kasDihitung: '0' })
   })
 
   test('shift lama berstatus Perlu persetujuan masih bisa disetujui Owner', async () => {

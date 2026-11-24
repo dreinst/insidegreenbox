@@ -1,6 +1,6 @@
 // Uji klik modul kasir tahap 3B, dijalankan jalankan.sh sesudah klik.mjs dengan basis data e2e yang sama.
 // Di 1440 dan 390 px: Owner memasang PIN, Kasir masuk dengan PIN, buka shift, kas keluar, jual tunai dan QRIS,
-// jual paket set dengan member yang dicari lewat WA format 08 (integrasi 3A dan 3B), void dengan PIN Admin, tutup shift berselisih (tanpa alasan ditolak, dengan alasan langsung Ditutup, tahap 6C), Admin tidak bisa menyetujui, Owner menyetujui shift lama yang masih Perlu persetujuan.
+// jual paket set dengan member yang dicari lewat WA format 08 (integrasi 3A dan 3B), void dengan PIN Admin, tutup shift berselisih tanpa alasan lalu mengisi alasan sesudahnya (tahap 6C), Admin tidak bisa menyetujui, Owner menyetujui shift lama yang masih Perlu persetujuan.
 // Lalu akses tanpa izin, Jejak Audit, dan rate limit PIN. Potret ke tests/potret/, ringkasan ke tests/hasil/e2e-kasir.json.
 import 'dotenv/config'
 import { mkdirSync, writeFileSync } from 'node:fs'
@@ -242,22 +242,33 @@ for (const [w, h] of [
   await page.fill('input[name="pecahan_50000"]', '3')
   cek(`${w}px kasir: total pecahan dihitung di layar`, (await page.textContent('.pecahan-total'))?.includes('150.000'))
   await potret(page, `${w}-kasir-shift-tutup-isi`)
-  // tahap 6C: selisih tanpa alasan ditolak di kolom alasan, tanpa membocorkan kas seharusnya, dan isian terjaga.
-  await kirim(page, 'button:text-is("Tutup shift")')
-  const galatAlasan = await page.textContent('#k-catatan ~ .galat-kolom').catch(() => '')
-  const ringkasGalat = (await page.textContent('.pesan.galat').catch(() => '')) ?? ''
-  cek(`${w}px kasir: selisih tanpa alasan ditolak di kolom alasan`, !!galatAlasan && /alasan selisih/.test(ringkasGalat), `${galatAlasan} | ${ringkasGalat}`)
-  cek(`${w}px kasir: penolakan tidak menyebut kas seharusnya`, !ringkasGalat.includes('195') && !ringkasGalat.includes('45.000'), ringkasGalat)
-  cek(`${w}px kasir: shift tetap buka dan pecahan terjaga`, (await satu('select status from shift where id=$1', [idShift])).status === 'Buka' && (await page.inputValue('input[name="pecahan_50000"]')) === '3')
-  await potret(page, `${w}-kasir-shift-tutup-tanpa-alasan`)
-  await page.fill('#k-catatan', 'Uang kurang, belum tahu sebabnya')
+  // tahap 6C: tutup tanpa alasan langsung berhasil dengan kas dihitung pertama (hitung buta tetap utuh), lalu shift
+  // ditandai dan layar sesudah tutup meminta alasan selisih.
   await Promise.all([page.waitForURL(/\?pesan=shift-tutup/), page.click('button:text-is("Tutup shift")')])
-  const t = await satu('select status, expected_cash, counted_cash, cash_diff, note, approved_by, diff_limit from shift where id=$1', [idShift])
+  const t = await satu('select status, expected_cash, counted_cash, cash_diff, note, approved_by, diff_limit, reason_missing from shift where id=$1', [idShift])
   cek(
-    `${w}px kasir: selisih dengan alasan langsung Ditutup tanpa persetujuan`,
-    t.status === 'Tutup' && t.expected_cash === '195000' && t.counted_cash === '150000' && t.cash_diff === '-45000' && t.note === 'Uang kurang, belum tahu sebabnya' && t.approved_by === null && t.diff_limit === null,
+    `${w}px kasir: tutup berselisih tanpa alasan langsung Ditutup dan ditandai`,
+    t.status === 'Tutup' && t.expected_cash === '195000' && t.counted_cash === '150000' && t.cash_diff === '-45000' && t.note === '' && t.reason_missing === true && t.approved_by === null && t.diff_limit === null,
     JSON.stringify(t),
   )
+  cek(`${w}px kasir: layar sesudah tutup menampilkan selisih dan meminta alasan`, ((await page.textContent('#j-alasan + p')) ?? '').includes('45.000') && (await page.$$('#k-alasan')).length === 1)
+  await potret(page, `${w}-kasir-shift-tutup-minta-alasan`)
+  // Shift baru tertahan sampai alasan diisi; pesannya menunjuk shift ini.
+  await page.goto(`${BASE}/shift`)
+  cek(`${w}px kasir: halaman shift mengarahkan ke shift tanpa alasan`, !!(await page.$(`.pesan.peringatan a[href="/shift/${idShift}"]`)))
+  await page.fill('#k-modal', '0')
+  await kirim(page, 'button:text-is("Buka shift")')
+  const galatBuka = (await page.textContent('.pesan.galat').catch(() => '')) ?? ''
+  cek(`${w}px kasir: buka shift baru ditolak sampai alasan diisi`, galatBuka.includes(`#${idShift}`) && (await satu("select count(*)::int n from shift where user_id=$1 and status='Buka'", [idKasir])).n === 0, galatBuka)
+  await potret(page, `${w}-kasir-shift-buka-tertahan`)
+  await page.goto(`${BASE}/shift/${idShift}`)
+  await page.fill('#k-alasan', 'ab')
+  await kirim(page, 'button:text-is("Simpan alasan")')
+  cek(`${w}px kasir: alasan terlalu pendek ditolak`, (await page.locator('#k-alasan ~ .galat-kolom').count()) === 1)
+  await page.fill('#k-alasan', 'Uang kurang, belum tahu sebabnya')
+  await Promise.all([page.waitForURL(/\?pesan=shift-alasan/), page.click('button:text-is("Simpan alasan")')])
+  const t2 = await satu('select note, reason_missing, cash_diff from shift where id=$1', [idShift])
+  cek(`${w}px kasir: alasan tersimpan tanpa mengubah angka`, t2.note === 'Uang kurang, belum tahu sebabnya' && t2.reason_missing === false && t2.cash_diff === '-45000', JSON.stringify(t2))
   cek(`${w}px kasir: alasan selisih tampil di rincian`, (await page.textContent('#j-kas ~ p.pecah'))?.includes('Alasan selisih'))
   cek(`${w}px kasir: sesudah tutup kas seharusnya tampil`, (await page.textContent('#j-kas + dl'))?.includes('195.000'))
   await potret(page, `${w}-kasir-shift-tutup`)
@@ -320,7 +331,7 @@ for (const [w, h] of [
   // Semua langkah tercatat di Jejak Audit.
   await owner.page.goto(`${BASE}/audit?entitas=shift&dok=${idShift}`)
   const aksiShift = await owner.page.$$eval('.tabel tbody td[data-label="Aksi"]', (td) => td.map((x) => x.textContent.trim()))
-  cek(`${w}px audit: buka, kas, tutup ditolak, tutup shift`, ['Buka shift', 'Kas laci', 'Tutup shift ditolak', 'Tutup shift'].every((a) => aksiShift.includes(a)), aksiShift.join(', '))
+  cek(`${w}px audit: buka, kas, tutup shift, isi alasan selisih`, ['Buka shift', 'Kas laci', 'Tutup shift', 'Isi alasan selisih'].every((a) => aksiShift.includes(a)), aksiShift.join(', '))
   await owner.page.goto(`${BASE}/audit?entitas=shift&dok=${lama.id}`)
   const aksiLama = await owner.page.$$eval('.tabel tbody td[data-label="Aksi"]', (td) => td.map((x) => x.textContent.trim()))
   cek(`${w}px audit: setujui shift lama`, aksiLama.includes('Setujui selisih shift'), aksiLama.join(', '))

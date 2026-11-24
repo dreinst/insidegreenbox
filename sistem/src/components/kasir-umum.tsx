@@ -7,6 +7,11 @@ export function LencanaShift({ status }: { status: keyof typeof STATUS_SHIFT }) 
   return <span className={`lencana ${warna}`}>{STATUS_SHIFT[status]}</span>
 }
 
+// tahap 6C: shift tertutup dengan selisih yang alasannya belum diisi.
+export function LencanaAlasan() {
+  return <span className="lencana kuning">Alasan selisih belum diisi</span>
+}
+
 export function LencanaJual({ status }: { status: 'Selesai' | 'Void' }) {
   return <span className={`lencana ${status === 'Void' ? 'merah' : 'hijau'}`}>{status}</span>
 }

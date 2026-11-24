@@ -5,7 +5,7 @@ import type { HasilAksi } from '@/lib/aksi'
 import { db } from '@/lib/db'
 import { jalankanAksi } from '@/lib/izin'
 import { konteksPermintaan } from '@/lib/sesi'
-import { bukaShift, catatKasLaci, setujuiShift, tutupShift } from '@/lib/shift'
+import { bukaShift, catatKasLaci, isiAlasanSelisih, setujuiShift, tutupShift } from '@/lib/shift'
 
 const data = (fd: FormData) => Object.fromEntries([...fd.entries()].filter(([k]) => !k.startsWith('$')))
 
@@ -30,6 +30,15 @@ export async function tutupShiftAksi(id: number, sebelum: HasilAksi, fd: FormDat
     await tutupShift(db, await konteksPermintaan(p), p, id, data(fd))
     revalidatePath('/shift')
     redirect(`/shift/${id}?pesan=shift-tutup`)
+  })
+}
+
+// tahap 6C: alasan selisih diisi sesudah shift ditutup.
+export async function alasanShiftAksi(id: number, sebelum: HasilAksi, fd: FormData) {
+  return jalankanAksi(sebelum, fd, 'kasir.shift', 'U', async (p) => {
+    await isiAlasanSelisih(db, await konteksPermintaan(p), p, id, data(fd))
+    revalidatePath('/shift')
+    redirect(`/shift/${id}?pesan=shift-alasan`)
   })
 }
 

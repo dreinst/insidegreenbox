@@ -29,7 +29,8 @@ export function FormBuat({ aksi, awal, maks }: { aksi: Aksi; awal: string; maks:
   )
 }
 
-type Baris = { id: number; shift: number; kasir: string; waktu: string; status: string; expected: number; actual: number; note: string }
+// tahap 6C: tanpaAlasan menandai shift yang ditutup dengan selisih tanpa alasan (setoran tetap boleh dibuat).
+type Baris = { id: number; shift: number; kasir: string; waktu: string; status: string; tanpaAlasan: boolean; expected: number; actual: number; note: string }
 type Kepala = { bankAccountId: number | null; mdrFee: number; note: string; bukti: { url: string; pdf: boolean } | null }
 
 const angka = (t: string) => {
@@ -116,6 +117,12 @@ function IsiUbah({ hasil, kirim, kepala, baris, rekening, tunai }: { hasil: Hasi
                   <td data-label="Shift" className="tebal">
                     <span>
                       #{b.shift} <small className="redup">{b.status}</small>
+                      {b.tanpaAlasan ? (
+                        <>
+                          {' '}
+                          <span className="lencana kuning">Alasan selisih belum diisi</span>
+                        </>
+                      ) : null}
                     </span>
                   </td>
                   <td data-label="Kasir">

@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { LencanaShift, selisihTeks } from '@/components/kasir-umum'
+import { LencanaAlasan, LencanaShift, selisihTeks } from '@/components/kasir-umum'
 import { KepalaHalaman, PesanFlash } from '@/components/umum'
 import { db } from '@/lib/db'
 import { rupiah } from '@/lib/hitung-kasir'
@@ -9,8 +9,8 @@ import { wajibIzin } from '@/lib/izin'
 import { punyaIzin } from '@/lib/izin-inti'
 import { ambilShift, rekapMetode } from '@/lib/shift'
 import { formatWaktu } from '@/lib/waktu'
-import { kasLaciAksi, setujuiShiftAksi, tutupShiftAksi } from '../aksi'
-import { FormKas, FormSetujui, FormTutup } from '../form'
+import { alasanShiftAksi, kasLaciAksi, setujuiShiftAksi, tutupShiftAksi } from '../aksi'
+import { FormAlasan, FormKas, FormSetujui, FormTutup } from '../form'
 import '@/components/kasir.css'
 
 export const metadata: Metadata = { title: 'Shift' }
@@ -30,6 +30,9 @@ export default async function RincianShift({ params, searchParams }: { params: P
   ])
   const bolehUbah = buka && punyaIzin(p.izin, 'kasir.shift', 'U')
   const bolehSetuju = s.status === 'PerluPersetujuan' && punyaIzin(p.izin, 'kasir.shift', 'S')
+  // tahap 6C: alasan selisih diisi kasir pemilik shift atau Owner dan Admin (ambilShift sudah membatasi siapa yang melihat).
+  const bolehAlasan = s.reasonMissing && punyaIzin(p.izin, 'kasir.shift', 'U')
+  const selisih = Number(s.cashDiff ?? 0)
   const lembar = (s.denominationsJson ?? null) as Record<string, number> | null
   const masuk = s.shiftCashMoves.filter((m) => m.kind === 'masuk').reduce((a, m) => a + Number(m.amount), 0)
   const keluar = s.shiftCashMoves.filter((m) => m.kind === 'keluar').reduce((a, m) => a + Number(m.amount), 0)
@@ -38,12 +41,24 @@ export default async function RincianShift({ params, searchParams }: { params: P
     <>
       <KepalaHalaman judul={`Shift #${s.id}`} keterangan={`${s.user.name} · ${s.location.name}`} jejak={{ href: '/shift', label: 'Shift' }}>
         <LencanaShift status={s.status} />
+        {s.reasonMissing ? <LencanaAlasan /> : null}
       </KepalaHalaman>
       <PesanFlash kode={pesan} />
       {s.status === 'PerluPersetujuan' ? (
         <p className="pesan peringatan" role="status">
           Kas {Number(s.cashDiff ?? 0) < 0 ? 'kurang' : 'lebih'} {rupiah(Math.abs(Number(s.cashDiff ?? 0)))}, melewati batas {s.diffLimit === null ? 'yang berlaku' : rupiah(s.diffLimit)}. Shift ini ditutup sebelum aturan alasan selisih berlaku dan masih menunggu persetujuan Owner.
         </p>
+      ) : null}
+
+      {s.reasonMissing ? (
+        <section className="kartu sorot" aria-labelledby="j-alasan">
+          <h2 id="j-alasan">Alasan selisih belum diisi</h2>
+          <p>
+            Kas dihitung {selisih < 0 ? 'kurang' : 'lebih'} <b className="teks-merah">{rupiah(Math.abs(selisih))}</b> dari kas seharusnya {rupiah(s.expectedCash ?? 0)}.{' '}
+            {s.userId === p.id ? 'Kamu belum bisa membuka shift baru sampai alasannya diisi.' : `${s.user.name} belum bisa membuka shift baru sampai alasannya diisi.`}
+          </p>
+          {bolehAlasan ? <FormAlasan aksi={alasanShiftAksi.bind(null, s.id)} /> : null}
+        </section>
       ) : null}
 
       <div className="kisi rata-atas">

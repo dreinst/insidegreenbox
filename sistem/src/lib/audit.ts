@@ -132,7 +132,7 @@ export const NAMA_PERISTIWA: Record<string, string> = {
   'shift.kas': 'Kas laci',
   'shift.tutup': 'Tutup shift',
   'shift.setujui': 'Setujui selisih shift',
-  'shift.tutup_ditolak': 'Tutup shift ditolak',
+  'shift.alasan_selisih': 'Isi alasan selisih',
   'penjualan.simpan': 'Simpan penjualan',
   'penjualan.void': 'Void penjualan',
   // tahap 4A

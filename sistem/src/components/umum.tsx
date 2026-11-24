@@ -14,6 +14,7 @@ const PESAN: Record<string, string> = {
   'shift-buka': 'Shift dibuka. Selamat bekerja.',
   'shift-kas': 'Kas laci tercatat.',
   'shift-tutup': 'Shift ditutup.',
+  'shift-alasan': 'Alasan selisih tersimpan.',
   'shift-setuju': 'Selisih kas disetujui dan shift ditutup.',
   void: 'Transaksi sudah di-void.',
   // tahap 5A

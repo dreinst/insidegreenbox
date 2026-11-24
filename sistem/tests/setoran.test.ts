@@ -184,3 +184,19 @@ describe('shift perlu persetujuan dan draf', () => {
     await assert.rejects(postingSetoran(db, k(admin), admin, qris.id), tolak(/Pilih rekening tujuan/))
   })
 })
+
+describe('tahap 6C: alasan selisih kosong', () => {
+  test('setoran tetap bisa dibuat dan diposting dari shift yang alasan selisihnya belum diisi', async () => {
+    const D3 = hariKe(-3)
+    const s = await bukaShift(db, k(kasir2), kasir2, { modal: '100000' })
+    await pindahShift(db, s.id, D3, '09:00')
+    await tutupShift(db, k(kasir2), kasir2, s.id, { kasDihitung: '90000' })
+    assert.equal((await db.shift.findUniqueOrThrow({ where: { id: s.id } })).reasonMissing, true)
+    const h = await buatSetoranHarian(db, k(admin), admin, { tanggal: D3 })
+    const tunai = h.dibuat.find((x) => x.metode === 'Tunai')!
+    const p = await postingSetoran(db, k(admin), admin, tunai.id)
+    assert.equal(p.status, 'Diposting')
+    const baris = await db.posSettlementLine.findFirstOrThrow({ where: { posSettlementId: tunai.id }, include: { shift: true } })
+    assert.equal(baris.shift.reasonMissing, true, 'baris setoran bisa menandai shift tanpa alasan')
+  })
+})

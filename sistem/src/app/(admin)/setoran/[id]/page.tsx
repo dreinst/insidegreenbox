@@ -168,7 +168,7 @@ export default async function RincianSetoran({ params, searchParams }: { params:
             tunai={tunai}
             rekening={rekening.map((r) => ({ id: r.id, label: `${namaRekening(r)}${r.active ? '' : ' (nonaktif)'}` }))}
             kepala={{ bankAccountId: st.bankAccountId, mdrFee: Number(st.mdrFee), note: st.note, bukti: urlBukti ? { url: urlBukti, pdf: buktiPdf(st.proofFile) } : null }}
-            baris={st.posSettlementLines.map((l) => ({ id: l.id, shift: l.shiftId, kasir: l.shift.user.name, waktu: formatWaktu(l.shift.openedAt), status: STATUS_SHIFT[l.shift.status], expected: Number(l.expected), actual: Number(l.actual), note: l.note }))}
+            baris={st.posSettlementLines.map((l) => ({ id: l.id, shift: l.shiftId, kasir: l.shift.user.name, waktu: formatWaktu(l.shift.openedAt), status: STATUS_SHIFT[l.shift.status], tanpaAlasan: l.shift.reasonMissing, expected: Number(l.expected), actual: Number(l.actual), note: l.note }))}
           />
         </section>
       ) : (
@@ -200,6 +200,12 @@ export default async function RincianSetoran({ params, searchParams }: { params:
                     <td data-label="Shift" className="tebal">
                       <span>
                         <Link href={`/shift/${l.shiftId}`}>#{l.shiftId}</Link> <small className="redup">{STATUS_SHIFT[l.shift.status]}</small>
+                        {l.shift.reasonMissing ? (
+                          <>
+                            {' '}
+                            <span className="lencana kuning">Alasan selisih belum diisi</span>
+                          </>
+                        ) : null}
                       </span>
                     </td>
                     <td data-label="Kasir">{l.shift.user.name}</td>

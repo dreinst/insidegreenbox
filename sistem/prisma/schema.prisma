@@ -1456,6 +1456,8 @@ model Shift {
   closedBy           Int?                @map("closed_by")
   diffLimit          BigInt?             @map("diff_limit")
   approvalNote       String?             @map("approval_note")
+  // tahap 6C: true bila shift ditutup dengan selisih tanpa alasan; false lagi sesudah alasan diisi (KONTRAK 11 butir 121).
+  reasonMissing      Boolean             @default(false) @map("reason_missing")
   shiftCashMoves     ShiftCashMove[]
   sales              Sale[]
   posSettlementLines PosSettlementLine[]

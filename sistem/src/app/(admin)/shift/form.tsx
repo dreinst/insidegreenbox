@@ -96,14 +96,28 @@ function IsiTutup({ hasil, kirim }: { hasil: HasilAksi; kirim: (fd: FormData) =>
       <div className="kisi-form jarak-atas">
         <KolomTeks
           nama="catatan"
-          label="Alasan selisih"
+          label="Alasan bila uang kurang atau lebih (boleh kosong)"
           hasil={hasil}
           maxLength={200}
-          bantuan="Wajib bila uang di laci kurang atau lebih dari catatan sistem, minimal 3 huruf. Kalau ada selisih dan alasan kosong, shift belum ditutup."
+          bantuan="Tulis bila kamu sudah tahu sebabnya, minimal 3 huruf. Selisih baru tampil sesudah shift ditutup."
         />
       </div>
       <div className="tombol-baris">
         <TombolKirim konfirmasi="Tutup shift sekarang? Sesudah ditutup tidak ada penjualan lagi di shift ini.">Tutup shift</TombolKirim>
+      </div>
+    </form>
+  )
+}
+
+// tahap 6C: alasan selisih sesudah shift ditutup.
+export function FormAlasan({ aksi }: { aksi: Aksi }) {
+  const [hasil, kirim] = useActionState(aksi, HASIL_AWAL)
+  return (
+    <form action={kirim} key={hasil.n} className="form" noValidate>
+      <PesanHasil hasil={hasil} />
+      <KolomTeks nama="alasan" label="Alasan selisih" hasil={hasil} wajib maxLength={200} bantuan="Minimal 3 huruf. Contoh: kembalian pelanggan salah hitung." />
+      <div className="tombol-baris">
+        <TombolKirim>Simpan alasan</TombolKirim>
       </div>
     </form>
   )

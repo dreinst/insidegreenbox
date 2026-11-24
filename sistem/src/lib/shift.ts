@@ -1,6 +1,7 @@
 // Shift kasir (tahap 3B, RANCANGAN 6.1): buka dengan modal, kas masuk dan keluar laci, dan tutup dengan hitung buta.
-// Sejak tahap 6C selisih kas cukup diberi alasan oleh kasir dan shift langsung Ditutup tanpa persetujuan Owner
-// (KONTRAK 11 butir 121). Persetujuan Owner hanya tersisa untuk shift lama yang masih "Perlu persetujuan".
+// Sejak tahap 6C tutup shift selalu berhasil dengan kas dihitung yang dikirim, tanpa persetujuan Owner. Selisih tanpa
+// alasan menandai shift (reason_missing) dan menahan kasirnya membuka shift baru sampai alasan diisi (KONTRAK 11
+// butir 121). Persetujuan Owner hanya tersisa untuk shift lama yang masih "Perlu persetujuan".
 // Tanpa Next, dipanggil aksi server dan tes.
 import { z } from 'zod'
 import type { Prisma } from '@/generated/prisma/client'
@@ -45,9 +46,13 @@ const jumlahLembar = z.preprocess((v) => String(v ?? '').replace(/[^\d]/g, '') |
 export const skemaTutup = z
   .object({
     kasDihitung: z.preprocess((v) => String(v ?? '').replace(/[^\d]/g, ''), z.string()),
-    // Alasan selisih. Wajib bila kas dihitung berbeda dari kas seharusnya, diperiksa di tutupShift karena kas
-    // seharusnya tidak diperlihatkan ke kasir sebelum shift ditutup (hitung buta).
-    catatan: z.string().trim().max(200, 'Alasan paling panjang 200 huruf.').default(''),
+    // Alasan selisih, boleh kosong. Aturannya sama untuk angka cocok maupun tidak, supaya hitung buta tidak bocor.
+    catatan: z
+      .string()
+      .trim()
+      .max(200, 'Alasan paling panjang 200 huruf.')
+      .refine((t) => t === '' || t.length >= ALASAN_SELISIH_MIN, `Alasan minimal ${ALASAN_SELISIH_MIN} huruf, atau kosongkan.`)
+      .default(''),
     ...Object.fromEntries(PECAHAN.map((p) => [`pecahan_${p}`, jumlahLembar])),
   })
   .transform((d, ctx) => {
@@ -69,6 +74,10 @@ export const skemaTutup = z
     return { kas, lembar: dariPecahan ? lembar : null, catatan: d.catatan }
   })
 
+export const skemaAlasan = z.object({
+  alasan: z.string().trim().min(ALASAN_SELISIH_MIN, `Alasan minimal ${ALASAN_SELISIH_MIN} huruf.`).max(200, 'Alasan paling panjang 200 huruf.'),
+})
+
 export const skemaSetujui = z.object({ catatan: z.string().trim().min(3, 'Catatan persetujuan minimal 3 huruf.').max(200, 'Catatan paling panjang 200 huruf.') })
 
 // Lokasi shift: lokasi bawaan pengguna, lalu lokasi aktif berjenis outlet, lalu lokasi aktif mana saja.
@@ -82,6 +91,9 @@ export async function lokasiKasir(db: DbAtauTx, userId: number) {
 }
 
 export const shiftTerbuka = (db: DbAtauTx, userId: number) => db.shift.findFirst({ where: { userId, status: 'Buka' }, orderBy: { id: 'desc' } })
+
+// Shift tertutup milik pengguna yang selisihnya belum beralasan (tahap 6C). Menahan buka shift baru.
+export const shiftTanpaAlasan = (db: DbAtauTx, userId: number) => db.shift.findFirst({ where: { userId, reasonMissing: true }, orderBy: { id: 'asc' }, select: { id: true } })
 
 // Mengunci baris shift sampai transaksi selesai. Penjualan, void, kas laci, dan tutup shift semuanya mengunci
 // shift lebih dulu, jadi tidak ada penjualan yang lolos sesudah kas dihitung.
@@ -97,6 +109,8 @@ export async function bukaShift(db: Db, k: Konteks, aktor: Aktor, masukan: unkno
     // Kunci baris pengguna supaya dua permintaan bersamaan tidak membuka dua shift.
     await tx.$queryRaw`SELECT id FROM app_user WHERE id = ${aktor.id} FOR UPDATE`
     if (await shiftTerbuka(tx, aktor.id)) throw new GalatAturan('Kamu masih punya shift terbuka. Tutup dulu sebelum membuka shift baru.')
+    const tanpaAlasan = await shiftTanpaAlasan(tx, aktor.id)
+    if (tanpaAlasan) throw new GalatAturan(`Shift #${tanpaAlasan.id} ditutup dengan selisih kas tanpa alasan. Isi alasan selisihnya dulu di rincian shift #${tanpaAlasan.id}, lalu buka shift baru.`)
     const lokasi = await lokasiKasir(tx, aktor.id)
     if (!lokasi) throw new GalatAturan('Belum ada lokasi outlet aktif. Hubungi Owner.')
     const s = await tx.shift.create({ data: { userId: aktor.id, locationId: lokasi.id, openCash: BigInt(d.modal) } })
@@ -150,7 +164,7 @@ export async function angkaKasShift(db: DbAtauTx, shiftId: number) {
 export async function tutupShift(db: Db, k: Konteks, aktor: Aktor, shiftId: number, masukan: unknown) {
   pastikanIzin(aktor, 'kasir.shift', 'U')
   const d = skemaTutup.parse(masukan)
-  const hasil = await db.$transaction(async (tx) => {
+  return db.$transaction(async (tx) => {
     const s = await kunciShift(tx, shiftId)
     if (!s) throw new GalatAturan('Shift tidak ditemukan.')
     pastikanPemilik(aktor, s)
@@ -158,9 +172,9 @@ export async function tutupShift(db: Db, k: Konteks, aktor: Aktor, shiftId: numb
     const a = await angkaKasShift(tx, shiftId)
     const harus = kasSeharusnya(Number(s.openCash), a.tunai, a.masuk, a.keluar)
     const selisih = d.kas - harus
-    // Selisih yang bukan nol wajib beralasan (KONTRAK 11 butir 121). Shift tidak diubah; penolakan dicatat di audit
-    // sesudah transaksi ini, supaya Owner bisa melihat kasir yang mencoba beberapa angka kas dihitung.
-    if (selisih !== 0 && d.catatan.length < ALASAN_SELISIH_MIN) return { ditolak: true as const, nama: s.user.name }
+    // Hitung buta (butir 17): tutup selalu berhasil dengan kas dihitung yang dikirim. Selisih tanpa alasan hanya
+    // menandai shift, dan kasir mengisi alasannya sesudah melihat selisih di rincian shift (KONTRAK 11 butir 121).
+    const reasonMissing = selisih !== 0 && d.catatan === ''
     const baru = await tx.shift.update({
       where: { id: shiftId },
       data: {
@@ -172,6 +186,7 @@ export async function tutupShift(db: Db, k: Konteks, aktor: Aktor, shiftId: numb
         denominationsJson: (d.lembar ?? undefined) as Prisma.InputJsonValue | undefined,
         note: d.catatan,
         diffLimit: null,
+        reasonMissing,
         status: 'Tutup',
       },
     })
@@ -181,24 +196,35 @@ export async function tutupShift(db: Db, k: Konteks, aktor: Aktor, shiftId: numb
       action: 'shift.tutup',
       docType: 'shift',
       docId: shiftId,
-      summary: `Menutup shift #${shiftId} ${s.user.name}: seharusnya ${rupiah(harus)}, dihitung ${rupiah(d.kas)}, selisih ${selisih < 0 ? '-' : selisih > 0 ? '+' : ''}${rupiah(Math.abs(selisih))}${selisih !== 0 ? `, alasan: ${d.catatan}` : ''}`,
+      summary: `Menutup shift #${shiftId} ${s.user.name}: seharusnya ${rupiah(harus)}, dihitung ${rupiah(d.kas)}, selisih ${selisih < 0 ? '-' : selisih > 0 ? '+' : ''}${rupiah(Math.abs(selisih))}${selisih === 0 ? '' : d.catatan ? `, alasan: ${d.catatan}` : ', alasan belum diisi'}`,
       before: { status: s.status },
-      after: { status: 'Tutup', expectedCash: harus, countedCash: d.kas, cashDiff: selisih, denominations: d.lembar, note: d.catatan, ...a, jurnal: jurnal?.no ?? null },
+      after: { status: 'Tutup', expectedCash: harus, countedCash: d.kas, cashDiff: selisih, denominations: d.lembar, note: d.catatan, reasonMissing, ...a, jurnal: jurnal?.no ?? null },
     })
-    return { ditolak: false as const, shift: baru }
+    return baru
   })
-  if (!hasil.ditolak) return hasil.shift
-  // Angka kas seharusnya dan besar selisih tidak disebut, supaya hitung buta tetap berlaku.
-  await db.$transaction((tx) =>
-    catatAudit(tx, k, {
-      action: 'shift.tutup_ditolak',
+}
+
+// Alasan selisih diisi sesudah shift ditutup (tahap 6C): oleh kasir pemilik shift, atau oleh pemegang Lihat laporan
+// penjualan (Owner dan Admin). Hanya untuk shift yang ditandai belum beralasan; angka shift dan jurnal tidak berubah.
+export async function isiAlasanSelisih(db: Db, k: Konteks, aktor: Aktor, shiftId: number, masukan: unknown) {
+  pastikanIzin(aktor, 'kasir.shift', 'U')
+  const d = skemaAlasan.parse(masukan)
+  return db.$transaction(async (tx) => {
+    const s = await kunciShift(tx, shiftId)
+    if (!s) throw new GalatAturan('Shift tidak ditemukan.')
+    pastikanPemilik(aktor, s)
+    if (!s.reasonMissing) throw new GalatAturan('Shift ini tidak sedang menunggu alasan selisih.')
+    const baru = await tx.shift.update({ where: { id: shiftId }, data: { note: d.alasan, reasonMissing: false } })
+    await catatAudit(tx, k, {
+      action: 'shift.alasan_selisih',
       docType: 'shift',
       docId: shiftId,
-      summary: `Tutup shift #${shiftId} ${hasil.nama} ditolak: kas dihitung ${rupiah(d.kas)} berbeda dari catatan sistem dan alasan selisih kosong`,
-      after: { countedCash: d.kas, denominations: d.lembar, note: d.catatan },
-    }),
-  )
-  throw new GalatAturan(`Kas dihitung berbeda dari catatan sistem. Hitung ulang uang di laci, atau tulis alasan selisih (minimal ${ALASAN_SELISIH_MIN} huruf) lalu tutup lagi.`, 'catatan')
+      summary: `Mengisi alasan selisih ${rupiah(Number(s.cashDiff ?? 0))} shift #${shiftId} ${s.user.name}: ${d.alasan}`,
+      before: { note: s.note, reasonMissing: true },
+      after: { note: d.alasan, reasonMissing: false },
+    })
+    return baru
+  })
 }
 
 // Hanya untuk shift lama yang ditutup sebelum tahap 6C dan masih berstatus "Perlu persetujuan" (KONTRAK 11 butir 121).

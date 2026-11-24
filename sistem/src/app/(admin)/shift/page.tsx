@@ -1,12 +1,12 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { LencanaShift, selisihTeks } from '@/components/kasir-umum'
+import { LencanaAlasan, LencanaShift, selisihTeks } from '@/components/kasir-umum'
 import { Halaman, KepalaHalaman, PesanFlash } from '@/components/umum'
 import { db } from '@/lib/db'
 import { rupiah } from '@/lib/hitung-kasir'
 import { wajibIzin } from '@/lib/izin'
 import { punyaIzin } from '@/lib/izin-inti'
-import { daftarShift, lihatSemuaKasir, shiftTerbuka, STATUS_SHIFT, type SaringShift } from '@/lib/shift'
+import { daftarShift, lihatSemuaKasir, shiftTanpaAlasan, shiftTerbuka, STATUS_SHIFT, type SaringShift } from '@/lib/shift'
 import { formatWaktu } from '@/lib/waktu'
 import { bukaShiftAksi } from './aksi'
 import { FormBuka } from './form'
@@ -18,11 +18,12 @@ export default async function HalamanShift({ searchParams }: { searchParams: Pro
   const p = await wajibIzin('kasir.shift', 'L')
   const s = await searchParams
   const semua = lihatSemuaKasir(p)
-  const [buka, hasil, kasir, antre] = await Promise.all([
+  const [buka, hasil, kasir, antre, tanpaAlasan] = await Promise.all([
     shiftTerbuka(db, p.id),
     daftarShift(db, p, s),
     semua ? db.appUser.findMany({ where: { shifts: { some: {} } }, select: { id: true, name: true }, orderBy: { name: 'asc' } }) : [],
     punyaIzin(p.izin, 'kasir.shift', 'S') ? db.shift.count({ where: { status: 'PerluPersetujuan' } }) : 0,
+    shiftTanpaAlasan(db, p.id),
   ])
   const disaring = !!(s.dari || s.sampai || s.status || s.kasir)
   return (
@@ -63,6 +64,11 @@ export default async function HalamanShift({ searchParams }: { searchParams: Pro
         <section className="kartu sorot" aria-labelledby="j-buka">
           <h2 id="j-buka">Buka shift</h2>
           <p className="redup">Belum ada shift terbuka atas nama {p.name}. Penjualan hanya bisa dibuat sesudah shift dibuka.</p>
+          {tanpaAlasan ? (
+            <p className="pesan peringatan" role="status">
+              Shift #{tanpaAlasan.id} ditutup dengan selisih kas tanpa alasan. <Link href={`/shift/${tanpaAlasan.id}`}>Isi alasan selisihnya dulu</Link>, lalu buka shift baru.
+            </p>
+          ) : null}
           <FormBuka aksi={bukaShiftAksi} />
         </section>
       ) : null}
@@ -140,7 +146,15 @@ export default async function HalamanShift({ searchParams }: { searchParams: Pro
                   <td data-label="Transaksi">{r._count.sales}</td>
                   <td data-label="Selisih">{selisihTeks(r.cashDiff)}</td>
                   <td data-label="Status">
-                    <LencanaShift status={r.status} />
+                    <span>
+                      <LencanaShift status={r.status} />
+                      {r.reasonMissing ? (
+                        <>
+                          {' '}
+                          <LencanaAlasan />
+                        </>
+                      ) : null}
+                    </span>
                   </td>
                   <td className="sel-aksi">
                     <Link href={`/shift/${r.id}`}>Rincian</Link>
