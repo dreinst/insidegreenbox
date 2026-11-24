@@ -108,6 +108,17 @@ describe('pengurai CSV', () => {
     assert.ok(h.lewat.some((x) => x.nomorBaris === 8), 'baris PEND dilewati')
   })
 
+  test('C-8: angka yang pemisah ribuannya tidak tiga angka ditolak, bukan dibaca 100 kali; kutip tunggal pengapit dibuang', () => {
+    const teks = ['Tanggal,Keterangan,Referensi,Debit,Kredit,Saldo', `01/11/2026,'BIAYA ADM',,10000.60,,`, '01/11/2026,ADM,,"10.000,60",,', '01/11/2026,ADM,,1.5,,'].join('\n')
+    const h = uraiMutasi(teks, CONTOH_FORMAT.umum.pemetaan)
+    assert.deepEqual(h.baris.map((b) => b.debit), [10_001n])
+    assert.deepEqual(h.lewat.map((x) => x.nomorBaris), [2, 4])
+    assert.match(h.lewat[0].alasan, /tidak sesuai format angka 1\.234\.567,89/)
+    const titik = uraiMutasi(`01/11/2026,'BIAYA ADM',,"1,234.50",,\n01/11/2026,X,,"10000,60",,`, { ...CONTOH_FORMAT.umum.pemetaan, lewati: 0, angka: 'titik' })
+    assert.deepEqual(titik.baris.map((b) => [b.description, b.debit]), [['BIAYA ADM', 1_235n]])
+    assert.equal(titik.lewat.length, 1)
+  })
+
   test('baris kembar di satu berkas tetap dua baris, sidiknya stabil', () => {
     const teks = 'Tanggal,Keterangan,Referensi,Debit,Kredit,Saldo\n01/11/2026,ADM,,1.000,,\n01/11/2026,ADM,,1.000,,\n'
     const a = uraiMutasi(teks, CONTOH_FORMAT.umum.pemetaan)

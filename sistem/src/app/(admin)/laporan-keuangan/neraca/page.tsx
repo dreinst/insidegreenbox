@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { SaringBulan, StatusSeimbang, TabelKeuangan, rp } from '@/components/akuntansi'
 import { RingkasLaporan } from '@/components/laporan'
+import { formatTanggal } from '@/components/stok'
 import { KepalaHalaman } from '@/components/umum'
 import { cocokkanPersediaan, neraca } from '@/lib/akuntansi/laporan'
 import { db } from '@/lib/db'
@@ -18,7 +19,7 @@ export default async function Neraca({ searchParams }: { searchParams: Promise<{
     <>
       <KepalaHalaman
         judul="Neraca"
-        keterangan={`Posisi aset, kewajiban, dan ekuitas per ${d.per}. Laba tahun berjalan dan laba tahun-tahun sebelumnya dihitung dari jurnal dan tampil di akun Laba Tahun Berjalan dan Laba Ditahan.`}
+        keterangan={`Posisi aset, kewajiban, dan ekuitas per ${formatTanggal(new Date(`${d.per}T00:00:00Z`))}. Laba tahun berjalan dan laba tahun-tahun sebelumnya dihitung dari jurnal dan tampil di akun Laba Tahun Berjalan dan Laba Ditahan.`}
       />
       <SaringBulan dasar="/laporan-keuangan" jenis="neraca" dari={d.rentang.sampai} sampai={d.rentang.sampai} satu />
       <StatusSeimbang

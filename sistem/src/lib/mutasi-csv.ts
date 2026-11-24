@@ -140,7 +140,12 @@ function tebakPemisah(teks: string): ',' | ';' | '\t' {
   return n('\t') > n(';') && n('\t') > n(',') ? '\t' : n(';') > n(',') ? ';' : ','
 }
 
-const bersih = (v: string | undefined) => (v ?? '').replace(/^'+/, '').trim()
+// Kutip tunggal di depan sel adalah penanda teks Excel. Sel yang diapit kutip tunggal ('BIAYA ADM') dibuang kedua
+// kutipnya (audit C-12).
+const bersih = (v: string | undefined) => {
+  const t = (v ?? '').trim()
+  return (/^'.*'$/.test(t) && t.length > 1 ? t.slice(1, -1) : t.replace(/^'+/, '')).trim()
+}
 
 // Angka rupiah dari teks bank. titik: 1,234,567.89 (desimal titik). koma: 1.234.567,89 (desimal koma). Sen dibulatkan.
 export function bacaAngka(v: string | undefined, gaya: PemetaanCsv['angka']): bigint | null {
@@ -155,8 +160,11 @@ export function bacaAngka(v: string | undefined, gaya: PemetaanCsv['angka']): bi
     minus = !minus
     t = t.slice(1)
   }
+  // Pemisah ribuan harus mengelompokkan tiga angka. "10000.60" di gaya koma (atau "10000,60" di gaya titik) ditolak,
+  // bukan dibaca 100 kali lipat (audit C-8).
+  const pola = gaya === 'titik' ? /^(\d{1,3}(,\d{3})+|\d+)(\.\d+)?$/ : /^(\d{1,3}(\.\d{3})+|\d+)(,\d+)?$/
+  if (!pola.test(t)) return null
   t = gaya === 'titik' ? t.replace(/,/g, '') : t.replace(/\./g, '').replace(',', '.')
-  if (!/^\d+(\.\d+)?$/.test(t)) return null
   const [bulat, pecahan = ''] = t.split('.')
   let n = BigInt(bulat)
   if (pecahan && Number(`0.${pecahan}`) >= 0.5) n += 1n
@@ -199,6 +207,11 @@ export function uraiMutasi(teks: string, p: PemetaanCsv) {
     }
     let debit = 0n
     let credit = 0n
+    const salah = [p.mode === 'terpisah' ? p.kolDebit : null, p.mode === 'terpisah' ? p.kolKredit : p.kolJumlah, p.kolSaldo].find((kol) => kol && bersih(ambil(kol)).replace(/rp\.?/i, '').trim() && bacaAngka(ambil(kol), p.angka) === null)
+    if (salah) {
+      lewat.push({ nomorBaris, alasan: `angka "${bersih(ambil(salah)).slice(0, 20)}" tidak sesuai format angka ${p.angka === 'koma' ? '1.234.567,89' : '1,234,567.89'}` })
+      return
+    }
     if (p.mode === 'terpisah') {
       debit = bacaAngka(ambil(p.kolDebit), p.angka) ?? 0n
       credit = bacaAngka(ambil(p.kolKredit), p.angka) ?? 0n

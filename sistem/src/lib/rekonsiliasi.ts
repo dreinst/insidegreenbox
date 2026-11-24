@@ -79,12 +79,13 @@ export async function imporMutasi(db: Db, k: Konteks, aktor: Aktor, bankAccountI
           skipDuplicates: true,
         })
       }
-      const ringkas = { dibaca: urai.baris.length, baru: baru.length, sudahAda: ada.size, terkunci, bukanMutasi: urai.lewat.length }
+      const angka = urai.lewat.filter((x) => x.alasan.startsWith('angka'))
+      const ringkas = { dibaca: urai.baris.length, baru: baru.length, sudahAda: ada.size, terkunci, bukanMutasi: urai.lewat.length - angka.length, angkaSalah: angka.length, contohAngkaSalah: angka.slice(0, 3).map((x) => `baris ${x.nomorBaris}: ${x.alasan}`) }
       await catatAudit(tx, k, {
         action: 'mutasi.impor',
         docType: 'bank_statement_line',
         docId: batch,
-        summary: `Mengimpor mutasi ${namaRekening(r)}${namaBerkas ? ` dari ${namaBerkas.slice(0, 80)}` : ''}: ${baru.length} baris baru, ${ada.size} sudah pernah diimpor, ${terkunci} di periode yang sudah direkonsiliasi, ${urai.lewat.length} baris bukan mutasi`,
+        summary: `Mengimpor mutasi ${namaRekening(r)}${namaBerkas ? ` dari ${namaBerkas.slice(0, 80)}` : ''}: ${baru.length} baris baru, ${ada.size} sudah pernah diimpor, ${terkunci} di periode yang sudah direkonsiliasi, ${ringkas.bukanMutasi} baris bukan mutasi${angka.length ? `, ${angka.length} baris angkanya tidak sesuai format` : ''}`,
         after: { batch, ...ringkas, pemetaan: p },
       })
       return { batch, ...ringkas, lewat: urai.lewat.slice(0, 20) }
