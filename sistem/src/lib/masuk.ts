@@ -34,36 +34,56 @@ export async function hitungGagal(db: DbAtauTx, username: string, ip: string, se
   return { nama, alamat, terkunci: nama >= BATAS_GAGAL_NAMA || alamat >= BATAS_GAGAL_IP }
 }
 
+// Temuan audit A-5 (KONTRAK 7 dan 11 butir 135): percobaan dicatat lebih dulu sebagai gagal, sebelum sandi atau PIN
+// diperiksa, di bawah kunci advisory per kunci nama lalu per IP (urutan tetap, jadi tidak saling mengunci silang).
+// Permintaan bersamaan antre di kunci itu dan masing-masing melihat percobaan sebelumnya, jadi batas 5 per nama dan
+// 20 per IP tidak bisa dilewati. Percobaan yang ternyata benar diubah menjadi berhasil lewat tandaiBerhasil.
+export async function pesanPercobaan(db: Db, kunci: string, ip: string): Promise<{ id: number } | { terkunci: 'nama' | 'ip' }> {
+  return db.$transaction(
+    async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`masuk:${kunci}`}))`
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`masuk-ip:${ip}`}))`
+      const g = await hitungGagal(tx, kunci, ip)
+      if (g.terkunci) return { terkunci: g.nama >= BATAS_GAGAL_NAMA ? ('nama' as const) : ('ip' as const) }
+      const a = await tx.loginAttempt.create({ data: { username: kunci, ip, success: false }, select: { id: true } })
+      return { id: a.id }
+    },
+    { maxWait: 10_000, timeout: 10_000 },
+  )
+}
+
+export const tandaiBerhasil = (tx: DbAtauTx, id: number) => tx.loginAttempt.update({ where: { id }, data: { success: true, at: new Date() } })
+// Sandi atau PIN benar tetapi akun tidak bisa masuk (nonaktif): bukan tebakan salah, jadi catatannya dibuang.
+export const batalkanPercobaan = (tx: DbAtauTx, id: number) => tx.loginAttempt.deleteMany({ where: { id } })
+
 export async function cobaMasuk(db: Db, masukan: { username: string; password: string; ip: string; userAgent: string }): Promise<HasilMasuk> {
   const username = masukan.username.trim().toLowerCase().slice(0, 64)
   const k: Konteks = { userId: null, actorName: username || '(kosong)', ip: masukan.ip, userAgent: masukan.userAgent }
 
-  const gagal = await hitungGagal(db, username, masukan.ip)
+  const percobaan = await pesanPercobaan(db, username, masukan.ip)
   const user = await db.appUser.findUnique({ where: { username }, include: { role: true } })
-  if (gagal.terkunci) {
+  if ('terkunci' in percobaan) {
     await catatAudit(db, { ...k, userId: user?.id ?? null }, {
       action: 'masuk.terkunci',
       docType: 'app_user',
       docId: user?.id,
-      summary: gagal.nama >= BATAS_GAGAL_NAMA ? `Nama pengguna ${username} terkunci sementara` : 'Alamat IP terkunci sementara',
+      summary: percobaan.terkunci === 'nama' ? `Nama pengguna ${username} terkunci sementara` : 'Alamat IP terkunci sementara',
     })
     return { ok: false, alasan: 'terkunci' }
   }
 
   const cocok = await bcrypt.compare(masukan.password, user?.passwordHash ?? (await ambilHashTiruan()))
   if (!user || !cocok) {
-    await db.$transaction(async (tx) => {
-      await tx.loginAttempt.create({ data: { username, ip: masukan.ip, success: false } })
-      await catatAudit(tx, { ...k, userId: user?.id ?? null }, {
-        action: 'masuk.gagal',
-        docType: 'app_user',
-        docId: user?.id,
-        summary: user ? 'Sandi salah' : 'Nama pengguna tidak dikenal',
-      })
+    await catatAudit(db, { ...k, userId: user?.id ?? null }, {
+      action: 'masuk.gagal',
+      docType: 'app_user',
+      docId: user?.id,
+      summary: user ? 'Sandi salah' : 'Nama pengguna tidak dikenal',
     })
     return { ok: false, alasan: 'salah' }
   }
   if (!user.active || !user.role.active) {
+    await batalkanPercobaan(db, percobaan.id)
     await catatAudit(db, { ...k, userId: user.id }, { action: 'masuk.gagal', docType: 'app_user', docId: user.id, summary: user.active ? 'Peran nonaktif' : 'Akun nonaktif' })
     return { ok: false, alasan: 'nonaktif' }
   }
@@ -71,7 +91,7 @@ export async function cobaMasuk(db: Db, masukan: { username: string; password: s
   const sesiId = randomBytes(32).toString('hex')
   const kedaluwarsa = new Date(Date.now() + UMUR_SESI_JAM * 3600_000)
   await db.$transaction(async (tx) => {
-    await tx.loginAttempt.create({ data: { username, ip: masukan.ip, success: true } })
+    await tandaiBerhasil(tx, percobaan.id)
     await tx.userSession.create({ data: { id: sesiId, userId: user.id, expiresAt: kedaluwarsa, ip: masukan.ip, userAgent: masukan.userAgent.slice(0, 300) } })
     await tx.appUser.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } })
     await catatAudit(tx, { ...k, userId: user.id }, { action: 'masuk.berhasil', docType: 'app_user', docId: user.id, summary: `${user.name} masuk sebagai ${user.role.name}` })

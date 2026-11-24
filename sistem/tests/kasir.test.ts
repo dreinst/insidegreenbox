@@ -412,6 +412,14 @@ describe('PIN kasir', () => {
     const s = await cobaMasuk(db, { username: 'kasir1', password: 'sandi-uji-123', ip: '10.2.2.2', userAgent: 'tes' })
     assert.equal(s.ok, true)
   })
+  // Temuan audit A-5: PIN 4 angka penyetuju void tidak bisa ditebak lebih dari 5 kali lewat permintaan bersamaan.
+  test('rate limit PIN tidak bisa dilewati permintaan bersamaan', async () => {
+    const u = await buatAktor(db, 'kasir', 'kasir_banjir')
+    await aturPin(db, k(owner), owner, u.id, { pin: '2468', ulangiPin: '2468' })
+    const hasil = await Promise.all(Array.from({ length: 12 }, (_, i) => cobaMasukPin(db, { userId: u.id, pin: String(3000 + i), ip: `10.7.0.${i}`, userAgent: 'tes' })))
+    assert.equal(hasil.filter((h) => !h.ok && h.alasan === 'salah').length, BATAS_GAGAL_NAMA)
+    assert.equal(await db.loginAttempt.count({ where: { username: 'pin:kasir_banjir' } }), BATAS_GAGAL_NAMA)
+  })
   test('rate limit per IP berlaku untuk PIN', async () => {
     const ip = '10.3.3.3'
     for (let i = 0; i < 20; i++) await db.loginAttempt.create({ data: { username: `pin:lain${i}`, ip, success: false } })

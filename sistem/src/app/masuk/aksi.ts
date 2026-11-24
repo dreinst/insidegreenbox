@@ -14,6 +14,18 @@ const skema = z.object({
 })
 
 // Tujuan sesudah masuk hanya jalur di app ini, supaya tidak bisa dipakai mengalihkan ke situs lain.
+// Galat tak terduga (misalnya pool basis data penuh saat banjir permintaan, temuan audit A-5) dijawab dengan pesan
+// biasa, bukan halaman 500 (KONTRAK 6). Rinciannya tetap di log server.
+const PESAN_SERVER = 'Terjadi galat di server. Coba lagi.'
+async function aman<T>(f: () => Promise<T>): Promise<T | null> {
+  try {
+    return await f()
+  } catch (e) {
+    console.error('Galat masuk:', e)
+    return null
+  }
+}
+
 const tujuanAman = (ke?: string) => (ke && ke.startsWith('/') && !ke.startsWith('//') && !ke.startsWith('/\\') ? ke : '/')
 
 export async function masukAksi(sebelum: HasilAksi, fd: FormData): Promise<HasilAksi> {
@@ -26,7 +38,8 @@ export async function masukAksi(sebelum: HasilAksi, fd: FormData): Promise<Hasil
     return { ok: false, pesan: Object.values(galat)[0], galat, isian: { username }, n }
   }
   const k = await konteksPermintaan(null, data.data.username)
-  const hasil = await cobaMasuk(db, { username: data.data.username, password: data.data.password, ip: k.ip, userAgent: k.userAgent })
+  const hasil = await aman(() => cobaMasuk(db, { username: data.data.username, password: data.data.password, ip: k.ip, userAgent: k.userAgent }))
+  if (!hasil) return { ok: false, pesan: PESAN_SERVER, isian: { username }, n }
   if (!hasil.ok) return { ok: false, pesan: PESAN_MASUK[hasil.alasan], isian: { username }, n }
   await pasangCookieSesi(hasil.sesiId, hasil.kedaluwarsa)
   redirect(tujuanAman(data.data.ke))
@@ -48,7 +61,8 @@ export async function masukPinAksi(sebelum: HasilAksi, fd: FormData): Promise<Ha
     return { ok: false, pesan: Object.values(galat)[0], galat, isian: { userId }, n }
   }
   const k = await konteksPermintaan(null, `#${data.data.userId}`)
-  const hasil = await cobaMasukPin(db, { userId: data.data.userId, pin: data.data.pin, ip: k.ip, userAgent: k.userAgent })
+  const hasil = await aman(() => cobaMasukPin(db, { userId: data.data.userId, pin: data.data.pin, ip: k.ip, userAgent: k.userAgent }))
+  if (!hasil) return { ok: false, pesan: PESAN_SERVER, isian: { userId }, n }
   if (!hasil.ok) return { ok: false, pesan: PESAN_PIN[hasil.alasan], isian: { userId }, n }
   await pasangCookieSesi(hasil.sesiId, hasil.kedaluwarsa)
   redirect('/kasir')

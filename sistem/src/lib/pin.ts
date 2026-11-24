@@ -8,7 +8,7 @@ import { GalatAturan } from './aksi'
 import { catatAudit, type Konteks } from './audit'
 import type { Db, DbAtauTx } from './db'
 import { isOwner, muatIzin, muatSaklar, pastikanIzin, punyaIzin, type PetaIzin, type Pengguna } from './izin-inti'
-import { BATAS_GAGAL_NAMA, hitungGagal, PESAN_MASUK, type HasilMasuk } from './masuk'
+import { batalkanPercobaan, pesanPercobaan, PESAN_MASUK, tandaiBerhasil, type HasilMasuk } from './masuk'
 import { BIAYA_BCRYPT } from './seed-inti'
 import { UMUR_SESI_JAM } from './sesi-token'
 
@@ -116,26 +116,24 @@ async function periksaPin(db: Db, m: MasukanPin, tujuan: string) {
   const u = await db.appUser.findUnique({ where: { id: m.userId }, include: { role: true } })
   const kunci = kunciPin(u?.username ?? `#${m.userId}`)
   const k: Konteks = { userId: u?.id ?? null, actorName: u?.username ?? '(tidak dikenal)', ip: m.ip, userAgent: m.userAgent }
-  const gagal = await hitungGagal(db, kunci, m.ip)
-  if (gagal.terkunci) {
+  // Percobaan dicatat dulu sebagai gagal di bawah kunci, sama dengan masuk sandi (temuan audit A-5).
+  const percobaan = await pesanPercobaan(db, kunci, m.ip)
+  if ('terkunci' in percobaan) {
     await catatAudit(db, k, {
       action: 'masuk.terkunci',
       docType: 'app_user',
       docId: u?.id,
-      summary: gagal.nama >= BATAS_GAGAL_NAMA ? `PIN ${u?.username ?? 'pengguna'} terkunci sementara (${tujuan})` : `Alamat IP terkunci sementara (${tujuan})`,
+      summary: percobaan.terkunci === 'nama' ? `PIN ${u?.username ?? 'pengguna'} terkunci sementara (${tujuan})` : `Alamat IP terkunci sementara (${tujuan})`,
     })
     return { ok: false as const, alasan: 'terkunci' as const, u: null }
   }
   const pinSah = /^\d{4,6}$/.test(m.pin)
   const cocok = await bcrypt.compare(pinSah ? m.pin : 'x', u?.pinHash ?? (await ambilHashTiruan()))
   if (!u || !u.pinHash || !cocok) {
-    await db.$transaction(async (tx) => {
-      await tx.loginAttempt.create({ data: { username: kunci, ip: m.ip, success: false } })
-      await catatAudit(tx, k, { action: 'masuk.gagal', docType: 'app_user', docId: u?.id, summary: `PIN salah (${tujuan})` })
-    })
+    await catatAudit(db, k, { action: 'masuk.gagal', docType: 'app_user', docId: u?.id, summary: `PIN salah (${tujuan})` })
     return { ok: false as const, alasan: 'salah' as const, u: null }
   }
-  return { ok: true as const, u, kunci }
+  return { ok: true as const, u, kunci, percobaan: percobaan.id }
 }
 
 export const PESAN_PIN: Record<'salah' | 'terkunci' | 'nonaktif', string> = {
@@ -150,17 +148,19 @@ export async function cobaMasukPin(db: Db, m: MasukanPin): Promise<HasilMasuk> {
   const u = hasil.u
   const k: Konteks = { userId: u.id, actorName: u.username, ip: m.ip, userAgent: m.userAgent }
   if (!u.active || !u.role.active) {
+    await batalkanPercobaan(db, hasil.percobaan)
     await catatAudit(db, k, { action: 'masuk.gagal', docType: 'app_user', docId: u.id, summary: u.active ? 'Masuk PIN: peran nonaktif' : 'Masuk PIN: akun nonaktif' })
     return { ok: false, alasan: 'nonaktif' }
   }
   if (!bolehMasukPin(u.role.code, await muatIzin(db, u.roleId))) {
+    await batalkanPercobaan(db, hasil.percobaan)
     await catatAudit(db, k, { action: 'masuk.gagal', docType: 'app_user', docId: u.id, summary: `Masuk PIN ditolak: peran ${u.role.name} wajib memakai sandi` })
     return { ok: false, alasan: 'salah' }
   }
   const sesiId = randomBytes(32).toString('hex')
   const kedaluwarsa = new Date(Date.now() + UMUR_SESI_JAM * 3600_000)
   await db.$transaction(async (tx) => {
-    await tx.loginAttempt.create({ data: { username: hasil.kunci, ip: m.ip, success: true } })
+    await tandaiBerhasil(tx, hasil.percobaan)
     await tx.userSession.create({ data: { id: sesiId, userId: u.id, expiresAt: kedaluwarsa, ip: m.ip, userAgent: m.userAgent.slice(0, 300) } })
     await tx.appUser.update({ where: { id: u.id }, data: { lastLoginAt: new Date() } })
     await catatAudit(tx, k, { action: 'kasir.masuk_pin', docType: 'app_user', docId: u.id, summary: `${u.name} masuk dengan PIN sebagai ${u.role.name}` })
@@ -194,6 +194,6 @@ export async function periksaPenyetujuVoid(db: Db, m: MasukanPin) {
   const hasil = await periksaPin(db, m, 'penyetuju void')
   if (!hasil.ok) throw new GalatAturan(hasil.alasan === 'terkunci' ? PESAN_MASUK.terkunci : 'PIN penyetuju salah.', 'pinPenyetuju')
   // PIN benar mengosongkan hitungan gagal untuk penyetuju itu, sama seperti masuk berhasil.
-  await db.loginAttempt.create({ data: { username: hasil.kunci, ip: m.ip, success: true } })
+  await tandaiBerhasil(db, hasil.percobaan)
   return { id: calon.id, name: calon.name, username: calon.username, roleCode: calon.role.code }
 }

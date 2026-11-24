@@ -130,6 +130,16 @@ describe('login dan rate limit', () => {
     assert.deepEqual(await masuk('owner1', SANDI, '10.9.9.9'), { ok: false, alasan: 'terkunci' })
     assert.equal((await masuk('owner1', SANDI, '10.0.0.5')).ok, true)
   })
+  // Temuan audit A-5: 20 percobaan bersamaan untuk satu nama hanya mendapat 5 jatah tebakan.
+  test('percobaan bersamaan tidak bisa melewati batas gagal per nama dan per IP', async () => {
+    const hasil = await Promise.all(Array.from({ length: 20 }, (_, i) => masuk('tidakada-uji', `salah${i}`, `10.5.0.${i}`)))
+    assert.equal(hasil.filter((h) => !h.ok && h.alasan === 'salah').length, BATAS_GAGAL_NAMA)
+    assert.equal(hasil.filter((h) => !h.ok && h.alasan === 'terkunci').length, 20 - BATAS_GAGAL_NAMA)
+    assert.equal(await db.loginAttempt.count({ where: { username: 'tidakada-uji' } }), BATAS_GAGAL_NAMA)
+    const ip = await Promise.all(Array.from({ length: 30 }, (_, i) => masuk(`banjir${i}`, 'salah', '10.6.6.6')))
+    assert.equal(ip.filter((h) => !h.ok && h.alasan === 'salah').length, BATAS_GAGAL_IP)
+    assert.equal(await db.loginAttempt.count({ where: { ip: '10.6.6.6' } }), BATAS_GAGAL_IP)
+  })
   test('akun nonaktif dengan sandi benar ditolak dan tidak menambah hitungan gagal', async () => {
     const u = await buatAktor(db, 'kasir', 'kasir_mati')
     await ubahStatusPengguna(db, k(owner), owner, u.id, false)
