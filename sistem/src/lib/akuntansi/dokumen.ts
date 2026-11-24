@@ -176,11 +176,15 @@ async function barisPendapatan(tx: DbAtauTx, saleId: number, memo: string) {
   const baris: BarisJurnal[] = []
   for (const p of s.salePayments) baris.push(dk(p.paymentMethod.kind === 'tunai' ? 'kas_laci' : kunciKliring(p.paymentMethodId), p.amount, memo))
   baris.push(dk('potongan_penjualan', s.disc, memo), dk('penjualan', -s.sub, memo), dk('pendapatan_service', -s.svc, memo), dk('pajak_pb1', -s.tax, memo))
+  // Pembulatan tunai (KONTRAK 11 butir 155): uang diterima = total + rounding, jadi pembulatan naik dikredit dan
+  // pembulatan turun didebit ke akun pemetaan pembulatan. Bernilai 0 untuk penjualan tanpa tunai dan penjualan lama.
+  if (s.rounding !== 0n) baris.push(dk('pembulatan', -s.rounding, memo))
   return { s, baris }
 }
 
 // Jurnal penjualan: debit Kas Laci atau Piutang Kliring per metode dan Potongan Penjualan, kredit Penjualan,
-// Pendapatan Service, dan Pajak PB1; ditambah debit HPP kredit Persediaan dari gerak stok penjualan itu.
+// Pendapatan Service, dan Pajak PB1, ditambah baris Pembulatan bila ada; lalu debit HPP kredit Persediaan dari gerak
+// stok penjualan itu.
 export async function jurnalPenjualan(tx: Tx, saleId: number, oleh: number | null) {
   const { s, baris } = await barisPendapatan(tx, saleId, '')
   const memo = `Penjualan ${s.no}`

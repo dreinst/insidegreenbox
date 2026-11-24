@@ -73,5 +73,8 @@ jalan b2b.mjs
 jalan aset.mjs
 # Perbaikan audit area A dan B (KONTRAK 11 butir 127 sampai 141), sebelum klik.mjs yang mengunci login Admin.
 jalan audit-ab.mjs
+# Keputusan pemilik 24 November 2026 (KONTRAK 11 butir 155 sampai 157): pembulatan tunai, Aturan Persetujuan, alasan
+# kunjungan member. Sesudah kasir.mjs dan laporan.mjs, sebelum klik.mjs yang mengunci login Admin.
+jalan keputusan.mjs
 jalan klik.mjs
 exit $HASIL

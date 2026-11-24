@@ -383,6 +383,8 @@ export const NAMA_PERISTIWA: Record<string, string> = {
   'anggaran.setujui': 'Setujui anggaran',
   'anggaran.batal': 'Batalkan anggaran',
   'anggaran.revisi': 'Buat revisi anggaran',
+  // Keputusan pemilik 24 November 2026 (KONTRAK 11 butir 156).
+  'persetujuan.ubah': 'Ubah aturan persetujuan',
 }
 
 export const NAMA_ENTITAS: Record<string, string> = {
@@ -390,6 +392,7 @@ export const NAMA_ENTITAS: Record<string, string> = {
   role: 'Peran',
   role_permission: 'Izin peran',
   role_feature_switch: 'Saklar peran',
+  approval_rule: 'Aturan persetujuan',
   user_session: 'Sesi',
   // tahap 3A
   menu_category: 'Kategori menu',

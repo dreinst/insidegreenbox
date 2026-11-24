@@ -92,6 +92,22 @@ export function IsiStruk({ j }: { j: Jual }) {
           <dt>Total</dt>
           <dd>{rupiah(j.total)}</dd>
         </div>
+        {/* Pembulatan bagian tunai ke Rp 500 (KONTRAK 11 butir 155). */}
+        {j.rounding !== 0n ? (
+          <>
+            <div>
+              <dt>Pembulatan</dt>
+              <dd>
+                {j.rounding > 0n ? '' : '-'}
+                {rupiah(j.rounding > 0n ? j.rounding : -j.rounding)}
+              </dd>
+            </div>
+            <div className="struk-total">
+              <dt>Total bayar</dt>
+              <dd>{rupiah(j.total + j.rounding)}</dd>
+            </div>
+          </>
+        ) : null}
         {j.salePayments.map((b) => (
           <div key={b.id}>
             <dt>{b.paymentMethod.name}</dt>

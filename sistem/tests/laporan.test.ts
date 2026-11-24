@@ -21,7 +21,9 @@ let toko: Awaited<ReturnType<typeof siapkanToko>>
 let teh = 0
 const D1 = hariKe(-2)
 const D2 = hariKe(-1)
-const jual: Record<string, { id: number; total: number }> = {}
+const jual: Record<string, { id: number; total: number; pembulatan: number }> = {}
+// Uang diterima satu penjualan: total pas + pembulatan tunai (KONTRAK 11 butir 155).
+const terima = (n: string) => jual[n].total + jual[n].pembulatan
 let s1 = 0
 let s2 = 0
 
@@ -57,7 +59,7 @@ before(async () => {
   // j4: Teh Spesial dan Kopi Susu, member, tunai. D2 01:00.
   await simpan('j4', { mode: 'takeaway', memberId: toko.member, baris: [{ menuItemId: teh, qty: 1 }, { menuItemId: toko.menu['Kopi Susu'], qty: 1 }], bayar: tunai(200000) })
   await pindahJual(db, jual.j4.id, D2, '01:00')
-  const kas1 = 200000 + Number(jual.j1.total) + Number(jual.j4.total)
+  const kas1 = 200000 + terima('j1') + terima('j4')
   await tutupShift(db, k(kasir), kasir, s1, { kasDihitung: String(kas1) })
 
   // Shift kasir2 tanggal D2 dengan kas kurang 20.000 (tahap 6C: beralasan, langsung Ditutup tanpa persetujuan).
@@ -65,13 +67,13 @@ before(async () => {
   await pindahShift(db, s2, D2, '08:00')
   await simpan('j5', { mode: 'takeaway', baris: [{ menuItemId: toko.menu.Croissant, qty: 2 }], bayar: tunai(100000) }, kasir2)
   await pindahJual(db, jual.j5.id, D2, '09:00')
-  await tutupShift(db, k(kasir2), kasir2, s2, { kasDihitung: String(100000 + Number(jual.j5.total) - 20000), catatan: 'Kembalian salah' })
+  await tutupShift(db, k(kasir2), kasir2, s2, { kasDihitung: String(100000 + terima('j5') - 20000), catatan: 'Kembalian salah' })
 })
 after(() => hapus())
 
 const jumlahDb = async (dari: string, sampai: string) => {
-  const r = await db.sale.aggregate({ where: { status: 'Selesai', at: { gte: new Date(`${dari}T00:00:00+07:00`), lte: new Date(`${sampai}T23:59:59.999+07:00`) } }, _sum: { sub: true, disc: true, svc: true, tax: true, total: true }, _count: { _all: true } })
-  return { n: r._count._all, kotor: Number(r._sum.sub), potongan: Number(r._sum.disc), service: Number(r._sum.svc), pajak: Number(r._sum.tax), total: Number(r._sum.total) }
+  const r = await db.sale.aggregate({ where: { status: 'Selesai', at: { gte: new Date(`${dari}T00:00:00+07:00`), lte: new Date(`${sampai}T23:59:59.999+07:00`) } }, _sum: { sub: true, disc: true, svc: true, tax: true, total: true, rounding: true }, _count: { _all: true } })
+  return { n: r._count._all, kotor: Number(r._sum.sub), potongan: Number(r._sum.disc), service: Number(r._sum.svc), pajak: Number(r._sum.tax), total: Number(r._sum.total) + Number(r._sum.rounding) }
 }
 
 describe('rentang tanggal', () => {
@@ -91,15 +93,17 @@ describe('rekap penjualan', () => {
     const harap = await jumlahDb(D1, D2)
     assert.equal(r.jumlah.n, 4)
     assert.deepEqual({ n: r.jumlah.n, kotor: r.jumlah.kotor, potongan: r.jumlah.potongan, service: r.jumlah.service, pajak: r.jumlah.pajak, total: r.jumlah.total }, harap)
-    assert.equal(r.jumlah.total, jual.j1.total + jual.j2.total + jual.j4.total + jual.j5.total)
+    assert.equal(r.jumlah.total, terima('j1') + terima('j2') + terima('j4') + terima('j5'))
+    assert.equal(r.jumlah.pembulatan, jual.j1.pembulatan + jual.j4.pembulatan + jual.j5.pembulatan)
+    assert.equal(jual.j2.pembulatan, 0, 'QRIS tidak dibulatkan')
     assert.equal(r.jumlah.bersih, harap.kotor - harap.potongan)
     assert.equal(r.jumlah.nVoid, 1)
-    assert.equal(r.jumlah.nilaiVoid, Number(jual.j3.total))
+    assert.equal(r.jumlah.nilaiVoid, terima('j3'))
   })
   test('batas tanggal WIB: 00:10 WIB masuk hari berikutnya walau di UTC masih hari sebelumnya', async () => {
     const h1 = await rekapPenjualan(db, { dari: D1, sampai: D1 })
     assert.equal(h1.jumlah.n, 1)
-    assert.equal(h1.jumlah.total, Number(jual.j1.total))
+    assert.equal(h1.jumlah.total, terima('j1'))
     assert.equal(h1.jumlah.nVoid, 1)
     const h2 = await rekapPenjualan(db, { dari: D2, sampai: D2 })
     assert.equal(h2.jumlah.n, 3)
@@ -115,7 +119,7 @@ describe('rekap penjualan', () => {
     const dinein = await rekapPenjualan(db, { dari: D1, sampai: D2, mode: 'dinein' })
     assert.equal(dinein.jumlah.n, 1)
     const k2 = await rekapPenjualan(db, { dari: D1, sampai: D2, kasir: String(kasir2.id) })
-    assert.equal(k2.jumlah.total, Number(jual.j5.total))
+    assert.equal(k2.jumlah.total, terima('j5'))
   })
 })
 
@@ -179,9 +183,9 @@ describe('tutup harian dan selisih kas', () => {
     assert.equal(b.seharusnya, Number(sh.expectedCash))
     assert.equal(b.dihitung, Number(sh.countedCash))
     assert.equal(b.selisih, 0)
-    assert.equal(b.tunai, jual.j1.total + jual.j4.total)
+    assert.equal(b.tunai, terima('j1') + terima('j4'))
     assert.equal(b.perMetode[toko.metode.QRIS], Number(jual.j2.total))
-    assert.equal(r.ringkas.penjualan, jual.j1.total + jual.j2.total + jual.j4.total)
+    assert.equal(r.ringkas.penjualan, terima('j1') + terima('j2') + terima('j4'))
     assert.equal(r.ringkas.nVoid, 1)
     assert.deepEqual(
       r.belum.map((x) => x.metode),
@@ -209,7 +213,7 @@ describe('CSV', () => {
     assert.ok(csv.startsWith('﻿Tanggal,Transaksi,Penjualan kotor'))
     const baris = csv.trim().split('\r\n')
     assert.equal(baris.length, 1 + r.baris.length + 1)
-    assert.equal(baris.at(-1), `Jumlah,4,${r.jumlah.kotor},${r.jumlah.potongan},${r.jumlah.bersih},${r.jumlah.service},${r.jumlah.pajak},${r.jumlah.total},1,${r.jumlah.nilaiVoid}`)
+    assert.equal(baris.at(-1), `Jumlah,4,${r.jumlah.kotor},${r.jumlah.potongan},${r.jumlah.bersih},${r.jumlah.service},${r.jumlah.pajak},${r.jumlah.pembulatan},${r.jumlah.total},1,${r.jumlah.nilaiVoid}`)
     const aneh = keCsv({ kolom: [{ h: 'Nama', v: (b: { n: string }) => b.n }], baris: [{ n: '=SUM(A1)' }, { n: 'a,"b"' }] })
     assert.ok(aneh.includes("'=SUM(A1)"))
     assert.ok(aneh.includes('"a,""b"""'))

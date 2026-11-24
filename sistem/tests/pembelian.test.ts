@@ -3,6 +3,7 @@
 // alokasi pembayaran dan status bayar, pembatalan yang ditolak karena turunan, hutang pemasok, dan impor admin lama.
 import assert from 'node:assert/strict'
 import { after, before, describe, test } from 'node:test'
+import { ZodError } from 'zod'
 import { GalatAturan, GalatIzin } from '../src/lib/aksi'
 import type { Db } from '../src/lib/db'
 import type { Pengguna } from '../src/lib/izin-inti'
@@ -17,7 +18,8 @@ import { tambahPemasok, ubahPemasok, ubahStatusPemasok } from '../src/lib/beli/p
 import { buatPembayaran, simpanAlokasi, tagihanTerbuka, ubahStatusPembayaran } from '../src/lib/beli/pembayaran'
 import { buatPenerimaan, simpanBarisPenerimaan, ubahStatusPenerimaan } from '../src/lib/beli/penerimaan'
 import { buatPermintaan, tambahBarisPermintaan, ubahStatusPermintaan } from '../src/lib/beli/permintaan'
-import { buatPesanan, simpanBarisPesanan, tambahBarisPesanan, ubahStatusPesanan } from '../src/lib/beli/pesanan'
+import { buatPesanan, butuhSetujuPesanan, simpanBarisPesanan, tambahBarisPesanan, ubahStatusPesanan } from '../src/lib/beli/pesanan'
+import { bolehUbahAturan, daftarAturan, simpanAturan } from '../src/lib/persetujuan'
 import { buatRetur, simpanBarisRetur, ubahStatusRetur } from '../src/lib/beli/retur'
 import { isiBawaanStok } from '../src/lib/stok/bawaan'
 import { hariIni } from '../src/lib/stok/dokumen'
@@ -561,5 +563,92 @@ describe('pembantu dan impor', () => {
     assert.equal(await db.goodsReceipt.count({ where: { purchaseOrderId: selesai.id } }), 0)
     assert.equal((await db.purchaseOrder.findUniqueOrThrow({ where: { legacyNo: 'PO-002' } })).status, 'Disetujui')
     assert.equal((await db.purchaseOrder.findUniqueOrThrow({ where: { legacyNo: 'PO-003' } })).status, 'Draft')
+  })
+})
+
+// Keputusan pemilik 24 November 2026 (KONTRAK 11 butir 156): halaman Aturan Persetujuan hanya untuk Owner.
+describe('aturan persetujuan dari layar', () => {
+  // Isi formulir dari keadaan sekarang, seperti halaman mengirimnya, lalu timpa isian tertentu.
+  // Kunci timpa ditulis dengan jenis dokumen (wajib:purchase_order) supaya tes mudah dibaca, lalu diterjemahkan ke nomor
+  // urut baris seperti nama isian di halaman.
+  const isiForm = async (timpa: Record<string, string | null> = {}) => {
+    const f: Record<string, string> = {}
+    const nomor = new Map<string, number>()
+    ;(await daftarAturan(db)).forEach((b, i) => {
+      nomor.set(b.docType, i)
+      f[`jenis:${i}`] = b.docType
+      if (!b.info || b.info.tetap) return
+      if (b.wajib) f[`wajib:${i}`] = '1'
+      if (b.info.batas === 'nominal') f[`nominal:${i}`] = b.nominal === null ? '' : String(b.nominal)
+      if (b.info.batas === 'persen') f[`persen:${i}`] = b.persen ?? ''
+    })
+    for (const [kunci, v] of Object.entries(timpa)) {
+      const [jenis, dok] = kunci.split(/:(.*)/)
+      const k = `${jenis}:${nomor.get(dok)}`
+      if (v === null) delete f[k]
+      else f[k] = v
+    }
+    return f
+  }
+
+  test('daftar memuat semua baris dengan nama Indonesia; hanya Owner yang bisa mengubah', async () => {
+    const d = await daftarAturan(db)
+    const po = d.find((b) => b.docType === 'purchase_order')!
+    assert.equal(po.info?.nama, 'Pesanan Pembelian')
+    assert.equal(po.nominal, null, 'bawaan semua pesanan (butir 63)')
+    assert.ok(d.find((b) => b.docType === 'purchase_payment')?.info?.tetap)
+    assert.equal(d.length, await db.approvalRule.count())
+    await ditolak(() => simpanAturan(db, k(admin), admin, {}))
+    // Peran lain yang diberi izinnya tetap ditolak karena bukan Owner.
+    const spv = { ...admin, izin: { ...admin.izin, 'atur.persetujuan': 'LU' } }
+    await ditolak(() => simpanAturan(db, k(spv), spv, {}))
+    assert.equal(bolehUbahAturan(spv), false)
+    assert.equal(bolehUbahAturan(owner), true)
+    assert.equal(await simpanAturan(db, k(owner), owner, await isiForm()), 0, 'tanpa perubahan tidak menulis apa pun')
+  })
+
+  test('perubahan berlaku untuk pesanan pembelian dan pembelian langsung, tercatat sebelum dan sesudah', async () => {
+    assert.equal(await butuhSetujuPesanan(db, 1n), true)
+    const n = await simpanAturan(db, k(owner), owner, await isiForm({ 'nominal:purchase_order': '3.000.000', 'nominal:direct_purchase': '5000000' }))
+    assert.equal(n, 2)
+    assert.equal(await butuhSetujuPesanan(db, 3_000_000n), false)
+    assert.equal(await butuhSetujuPesanan(db, 3_000_001n), true)
+    const t = await buatLangsung(db, k(admin), admin, { supplierId: String(pemasok2), locationId: String(outlet), date: tgl(), payMode: 'tunai', sumber: 'kas' })
+    await tambahBarisLangsung(db, k(admin), admin, t.id, { jenis: 'biaya', description: 'Sewa tenda', price: '2000000' })
+    assert.equal(await butuhSetujuLangsung(db, t), false, 'di bawah batas baru Rp 5.000.000')
+    const a = await db.auditLog.findFirstOrThrow({ where: { action: 'persetujuan.ubah', docType: 'approval_rule', docId: 'purchase_order' } })
+    assert.deepEqual([a.beforeJson, a.afterJson], [{ nominal: null }, { nominal: '3000000' }])
+    assert.match(a.summary, /Pesanan Pembelian: wajib untuk semua nilai menjadi wajib di atas Rp 3\.000\.000/)
+
+    // Mematikan persetujuan pesanan: tidak ada pesanan yang wajib disetujui, batasnya tetap tersimpan.
+    await simpanAturan(db, k(owner), owner, await isiForm({ 'wajib:purchase_order': null }))
+    assert.equal(await butuhSetujuPesanan(db, 50_000_000n), false)
+    const po = await db.approvalRule.findUniqueOrThrow({ where: { docType: 'purchase_order' } })
+    assert.deepEqual([po.requiresApproval, po.minAmount, po.updatedBy], [false, 3_000_000n, owner.id])
+    // Pembelian langsung kembali ke batas lama, jadi dokumen yang sama sekarang wajib disetujui.
+    await simpanAturan(db, k(owner), owner, await isiForm({ 'wajib:purchase_order': '1', 'nominal:purchase_order': '', 'nominal:direct_purchase': '1.000.000' }))
+    assert.equal(await butuhSetujuLangsung(db, t), true)
+    assert.equal(await butuhSetujuPesanan(db, 1n), true)
+  })
+
+  test('validasi batas dan baris yang tidak bisa diubah', async () => {
+    await assert.rejects(simpanAturan(db, k(owner), owner, await isiForm({ 'nominal:direct_purchase': 'satu juta' })), (e: unknown) => e instanceof ZodError && String(e.issues[0].path[0]).startsWith('nominal:'))
+    await assert.rejects(simpanAturan(db, k(owner), owner, await isiForm({ 'nominal:direct_purchase': '0' })), ZodError)
+    await assert.rejects(simpanAturan(db, k(owner), owner, await isiForm({ 'persen:purchase_invoice': '150' })), ZodError)
+    await simpanAturan(db, k(owner), owner, await isiForm({ 'persen:purchase_invoice': '2,5' }))
+    assert.equal((await db.approvalRule.findUniqueOrThrow({ where: { docType: 'purchase_invoice' } })).minPct?.toString(), '2.5')
+    // Pembayaran Pembelian selalu wajib: isian rakitan diabaikan.
+    await simpanAturan(db, k(owner), owner, await isiForm({ 'wajib:purchase_payment': '' }))
+    assert.equal((await db.approvalRule.findUniqueOrThrow({ where: { docType: 'purchase_payment' } })).requiresApproval, true)
+    await simpanAturan(db, k(owner), owner, await isiForm({ 'persen:purchase_invoice': '5' }))
+    // Nama isian yang memuat "pin" (cash_transaction.pindah) dulu dibuang dari isian terjaga; kini nama memakai nomor urut.
+    const form = await isiForm()
+    assert.ok(Object.keys(form).every((x) => !/pin/i.test(x)), 'nama isian tidak memuat pin')
+    // Baris yang tidak ada di formulir (halaman basi) tidak disentuh.
+    const tanpaPindah = Object.fromEntries(Object.entries(form).filter(([, v]) => v !== 'cash_transaction.pindah'))
+    await simpanAturan(db, k(owner), owner, tanpaPindah)
+    assert.equal((await db.approvalRule.findUniqueOrThrow({ where: { docType: 'cash_transaction.pindah' } })).requiresApproval, true)
+    // Tidak ada aksi hapus: jumlah baris tetap.
+    assert.equal((await daftarAturan(db)).length, await db.approvalRule.count())
   })
 })

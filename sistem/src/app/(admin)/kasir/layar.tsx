@@ -4,7 +4,7 @@
 import { useActionState, useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { PesanHasil, TombolKirim } from '@/components/form'
 import { HASIL_AWAL, type HasilAksi } from '@/lib/aksi'
-import { bagiBayar, hitungKeranjang, kenaPotonganMember, rupiah, type JenisBaris } from '@/lib/hitung-kasir'
+import { bagiBayar, hitungKeranjang, kenaPotonganMember, rupiah, sisaTunaiBulat, type JenisBaris } from '@/lib/hitung-kasir'
 import type { HasilCariMember } from './aksi'
 
 type Kategori = { code: string; name: string }
@@ -80,7 +80,12 @@ export function LayarKasir({ kategori: semuaKategori, menu, paket, metode, biaya
   })
   const bagi = keranjang.length ? bagiBayar(t.total, masukanBayar) : null
   const nonTunai = masukanBayar.filter((b) => !b.tunai).reduce((a, b) => a + b.jumlah, 0)
-  const sisaTunai = Math.max(0, t.total - nonTunai)
+  // Bagian tunai dibulatkan ke Rp 500 (KONTRAK 11 butir 155). Sisa di bawah Rp 250 menjadi 0 dan ditolak bagiBayar,
+  // jadi pembulatannya tidak ditampilkan.
+  const tunaiBulat = sisaTunaiBulat(t.total, nonTunai, masukanBayar.some((b) => b.tunai))
+  const sisaTunai = tunaiBulat.bulat
+  const pembulatan = tunaiBulat.bulat > 0 ? tunaiBulat.pembulatan : 0
+  const totalBayar = t.total + pembulatan
   const jumlahItem = keranjang.reduce((a, b) => a + b.qty, 0)
 
   const kata = cari.trim().toLowerCase()
@@ -291,10 +296,25 @@ export function LayarKasir({ kategori: semuaKategori, menu, paket, metode, biaya
                   <dd>{rupiah(t.tax)}</dd>
                 </div>
               ) : null}
-              <div className="lk-total">
+              <div className={pembulatan ? undefined : 'lk-total'}>
                 <dt>Total</dt>
                 <dd>{rupiah(t.total)}</dd>
               </div>
+              {pembulatan ? (
+                <>
+                  <div>
+                    <dt>Pembulatan tunai</dt>
+                    <dd>
+                      {pembulatan > 0 ? '+' : '-'}
+                      {rupiah(Math.abs(pembulatan))}
+                    </dd>
+                  </div>
+                  <div className="lk-total">
+                    <dt>Total bayar</dt>
+                    <dd>{rupiah(totalBayar)}</dd>
+                  </div>
+                </>
+              ) : null}
             </dl>
 
             <fieldset className="lk-bayar">
@@ -385,7 +405,7 @@ export function LayarKasir({ kategori: semuaKategori, menu, paket, metode, biaya
 
             <input type="hidden" name="data" value={data} />
             <div className="tombol-baris">
-              <TombolKirim kelas="btn lebar lk-tombol-bayar">Bayar {keranjang.length ? rupiah(t.total) : ''}</TombolKirim>
+              <TombolKirim kelas="btn lebar lk-tombol-bayar">Bayar {keranjang.length ? rupiah(totalBayar) : ''}</TombolKirim>
               {keranjang.length ? (
                 <button type="button" className="tautan-tombol" onClick={kosongkan}>
                   Kosongkan pesanan
@@ -398,7 +418,7 @@ export function LayarKasir({ kategori: semuaKategori, menu, paket, metode, biaya
       {keranjang.length && !panelTampak ? (
         <div className="lk-bar-hp">
           <span>
-            {jumlahItem} item · <b>{rupiah(t.total)}</b>
+            {jumlahItem} item · <b>{rupiah(totalBayar)}</b>
           </span>
           <a href="#keranjang" className="btn kecil">
             Ke pembayaran

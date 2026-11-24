@@ -318,6 +318,13 @@ const JALUR: Record<string, React.ReactNode> = {
       <path d="M3 20h18" />
     </>
   ),
+  // Aturan persetujuan: dokumen dengan tanda centang.
+  persetujuan: (
+    <>
+      <path d="M6 3h9l4 4v14H6z" />
+      <path d="M15 3v4h4M9 14l2.5 2.5L16 12" />
+    </>
+  ),
   tutup: <path d="M6 6l12 12M18 6L6 18" />,
   keluar: <path d="M14 4h5v16h-5M10 8l-4 4 4 4M6 12h10" />,
 }

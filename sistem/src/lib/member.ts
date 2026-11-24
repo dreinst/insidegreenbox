@@ -113,7 +113,18 @@ export const skemaMember = z.object({
     .transform((v) => (v === '' ? 0 : Number(v))),
   discountOn: skemaCentang,
   note: skemaTeksOpsional('Catatan', 300),
+  // Keputusan pemilik 24 November 2026 (KONTRAK 11 butir 157): perubahan kunjungan wajib beralasan.
+  alasanKunjungan: z.string().trim().max(200, 'Alasan paling panjang 200 huruf.').default(''),
+  // Kunjungan yang tampil saat formulir dibuka. Bila isian kunjungan sama dengannya, kunjungan dianggap tidak diubah
+  // (penjualan di kasir bisa menambahnya selama formulir terbuka).
+  kunjunganAwal: z.preprocess((v) => (v === '' || v === null ? undefined : v), z.coerce.number().int().min(0).optional()),
 })
+
+export const ALASAN_KUNJUNGAN_MIN = 5
+
+function wajibAlasanKunjungan(alasan: string) {
+  if (alasan.length < ALASAN_KUNJUNGAN_MIN) throw new GalatAturan(`Isi alasan perubahan jumlah kunjungan, minimal ${ALASAN_KUNJUNGAN_MIN} huruf.`, 'alasanKunjungan')
+}
 
 function bacaWa(teks: string) {
   const wa = normalisasiWa(teks)
@@ -136,6 +147,8 @@ export async function tambahMember(db: Db, k: Konteks, aktor: Aktor, masukan: un
   const isi = skemaMember.parse(masukan)
   const d = bolehAturTingkat(aktor) ? isi : { ...isi, visits: 0, discountOn: true }
   const wa = bacaWa(d.wa)
+  // Member baru mulai 0 kunjungan; kunjungan awal di atas 0 sama dengan mengubah kunjungan, jadi wajib beralasan.
+  if (d.visits > 0) wajibAlasanKunjungan(d.alasanKunjungan)
   try {
     return await db.$transaction(async (tx) => {
       await waDipakai(tx, wa)
@@ -145,8 +158,8 @@ export async function tambahMember(db: Db, k: Konteks, aktor: Aktor, masukan: un
         action: 'member.tambah',
         docType: 'member',
         docId: m.id,
-        summary: `Menambah member ${m.name} (${wa})${tingkat ? `, tingkat ${tingkat.name}` : ''}`,
-        after: { name: m.name, wa: m.wa, visits: m.visits, discountOn: m.discountOn, tingkat: tingkat?.name ?? null },
+        summary: `Menambah member ${m.name} (${wa})${tingkat ? `, tingkat ${tingkat.name}` : ''}${m.visits ? `, ${m.visits} kunjungan. Alasan: ${d.alasanKunjungan}` : ''}`,
+        after: { name: m.name, wa: m.wa, visits: m.visits, discountOn: m.discountOn, tingkat: tingkat?.name ?? null, ...(m.visits ? { alasanKunjungan: d.alasanKunjungan } : {}) },
       })
       return m
     })
@@ -162,15 +175,30 @@ export async function ubahMember(db: Db, k: Konteks, aktor: Aktor, id: number, m
   const wa = bacaWa(isi.wa)
   try {
     return await db.$transaction(async (tx) => {
+      // Dikunci supaya penjualan atau void di kasir tidak menimpa atau tertimpa kunjungan yang disimpan di sini.
+      await tx.$executeRaw`SELECT id FROM member WHERE id = ${id} FOR UPDATE`
       const m = await tx.member.findUnique({ where: { id } })
       if (!m) throw new GalatAturan('Member tidak ditemukan.')
-      const d = bolehAturTingkat(aktor) ? isi : { ...isi, visits: m.visits, discountOn: m.discountOn }
+      const aturTingkat = bolehAturTingkat(aktor)
+      // Isian kunjungan yang sama dengan yang tampil saat formulir dibuka berarti tidak diubah, jadi nilai sekarang
+      // dipertahankan walau kasir menambah kunjungan selama formulir terbuka.
+      const visits = !aturTingkat || (isi.kunjunganAwal !== undefined && isi.visits === isi.kunjunganAwal) ? m.visits : isi.visits
+      const d = aturTingkat ? { ...isi, visits } : { ...isi, visits: m.visits, discountOn: m.discountOn }
+      if (d.visits !== m.visits) wajibAlasanKunjungan(d.alasanKunjungan)
       await waDipakai(tx, wa, id)
       const tingkat = await tingkatUntuk(tx, d.visits)
       const s = selisih({ name: m.name, wa: m.wa, visits: m.visits, discountOn: m.discountOn, note: m.note }, { name: d.name, wa, visits: d.visits, discountOn: d.discountOn, note: d.note })
       if (!s.berubah.length) return { m, berubah: 0 }
       const b = await tx.member.update({ where: { id }, data: { name: d.name, wa, visits: d.visits, discountOn: d.discountOn, note: d.note, tierId: tingkat?.id ?? null, updatedBy: aktor.id } })
-      await catatAudit(tx, k, { action: 'member.ubah', docType: 'member', docId: id, summary: `Mengubah ${labelKolom(s.berubah)} member ${b.name}`, before: s.sebelum, after: s.sesudah })
+      const alasan = s.berubah.includes('visits') ? d.alasanKunjungan : ''
+      await catatAudit(tx, k, {
+        action: 'member.ubah',
+        docType: 'member',
+        docId: id,
+        summary: `Mengubah ${labelKolom(s.berubah)} member ${b.name}${alasan ? ` (kunjungan ${m.visits} menjadi ${d.visits}). Alasan: ${alasan}` : ''}`,
+        before: s.sebelum,
+        after: { ...s.sesudah, ...(alasan ? { alasanKunjungan: alasan } : {}) },
+      })
       return { m: b, berubah: s.berubah.length }
     })
   } catch (e) {

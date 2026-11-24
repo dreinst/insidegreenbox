@@ -34,7 +34,7 @@ export default async function RincianMember({ params, searchParams }: { params: 
           <h2 id="j-data">Data member</h2>
           {bolehUbah ? (
             <FormMaster
-              aksi={ubahMemberAksi.bind(null, m.id)}
+              aksi={ubahMemberAksi.bind(null, m.id, m.visits)}
               medan={medanMember({ name: m.name, wa: m.wa, visits: String(m.visits), discountOn: m.discountOn, note: m.note }, bolehAturTingkat(p))}
               tombol="Simpan perubahan"
             />

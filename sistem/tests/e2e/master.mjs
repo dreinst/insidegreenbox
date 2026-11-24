@@ -308,6 +308,10 @@ let menuId
   cek('alur member: nomor WA salah ditolak, isian terjaga', (await page.locator('#k-wa ~ .galat-kolom').count()) === 1 && (await page.inputValue('#k-name')) === `Member Uji ${tanda}` && (await page.inputValue('#k-visits')) === '42')
   await potret(page, '1440-m-alur-member-galat')
   await page.fill('#k-wa', wa.replace(/^(\d{4})(\d{4})(\d{4})$/, '$1-$2-$3'))
+  // Keputusan pemilik 24 November 2026 (KONTRAK 11 butir 157): kunjungan awal di atas 0 wajib beralasan.
+  await kirim(page, 'form.form button[type=submit]')
+  cek('alur member: kunjungan awal tanpa alasan ditolak di isian alasan', (await page.locator('#k-alasanKunjungan ~ .galat-kolom').count()) === 1 && (await page.inputValue('#k-visits')) === '42')
+  await page.fill('#k-alasanKunjungan', 'Pindahan kartu stempel')
   await Promise.all([page.waitForURL(/\/member\/\d+\?pesan=dibuat/, { timeout: 30000 }), page.click('form.form button[type=submit]')])
   await page.waitForLoadState('networkidle')
   const mem = await satu('select m.wa, t.name tingkat from member m left join member_tier t on t.id=m.tier_id where m.name=$1', [`Member Uji ${tanda}`])

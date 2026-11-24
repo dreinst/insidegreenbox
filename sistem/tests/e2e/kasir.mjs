@@ -141,6 +141,7 @@ for (const [w, h] of [
   await potret(page, `${w}-kasir-shift-berjalan`)
 
   // Penjualan 1: dine in meja 5, tunai 100.000. 2 x 28.000 + 25.000 = 81.000, service 5% 4.050, pajak 10% 8.505.
+  // Total 93.555, tunai dibulatkan ke Rp 500 menjadi 93.500 (KONTRAK 11 butir 155), kembalian 6.500.
   await page.goto(`${BASE}/kasir`)
   await potret(page, `${w}-kasir-layar-kosong`)
   const ubin = (n) => `.lk-ubin button:has(b:text-is("${n}"))`
@@ -151,12 +152,15 @@ for (const [w, h] of [
   await page.fill('#k-meja', '5')
   await page.fill('#k-jumlah-0', '100000')
   const kembali = await page.textContent('.lk-kembali')
-  cek(`${w}px kasir: kembalian tunai dihitung`, kembali?.includes('6.445'), kembali)
+  cek(`${w}px kasir: kembalian tunai dihitung sesudah pembulatan`, kembali?.includes('6.500'), kembali)
+  const rincianBayar = await page.textContent('.lk-jumlah-dl')
+  cek(`${w}px kasir: pembulatan tunai dan total bayar tampil`, rincianBayar?.includes('Pembulatan tunai') && rincianBayar.includes('-Rp 55') && rincianBayar.includes('Total bayar') && rincianBayar.includes('93.500'), rincianBayar)
+  cek(`${w}px kasir: tombol bayar menyebut total bayar`, (await page.textContent('button.lk-tombol-bayar'))?.includes('93.500'))
   await potret(page, `${w}-kasir-keranjang`)
   await Promise.all([page.waitForURL(/\/kasir\?selesai=\d+/, { timeout: 20000 }), page.click('button.lk-tombol-bayar')])
   const idJual1 = Number(new URL(page.url()).searchParams.get('selesai'))
-  const j1 = await satu("select s.no, s.total, s.svc, s.tax, s.table_no, p.change, m.kind from sale s join sale_payment p on p.sale_id=s.id join payment_method m on m.id=p.payment_method_id where s.id=$1", [idJual1])
-  cek(`${w}px kasir: penjualan tunai tersimpan`, j1?.total === '93555' && j1.change === '6445' && j1.kind === 'tunai' && j1.table_no === '5', JSON.stringify(j1))
+  const j1 = await satu("select s.no, s.total, s.rounding, s.svc, s.tax, s.table_no, p.amount, p.change, m.kind from sale s join sale_payment p on p.sale_id=s.id join payment_method m on m.id=p.payment_method_id where s.id=$1", [idJual1])
+  cek(`${w}px kasir: penjualan tunai tersimpan`, j1?.total === '93555' && j1.rounding === '-55' && j1.amount === '93500' && j1.change === '6500' && j1.kind === 'tunai' && j1.table_no === '5', JSON.stringify(j1))
   const catatan = await satu("select note from sale_line where sale_id=$1 and name='Kopi Susu Greenbox'", [idJual1])
   cek(`${w}px kasir: catatan per baris tersimpan`, catatan?.note === 'Kurang manis')
   cek(`${w}px kasir: pesan sukses dan keranjang kosong`, (await page.textContent('.lk-selesai'))?.includes(j1?.no) && (await page.$$('.lk-baris li')).length === 0)

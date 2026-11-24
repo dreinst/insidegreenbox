@@ -105,9 +105,14 @@ const BARIS_3B: [string, string, string, string, string, string][] = [['kasir.pi
 // tambahan atas RANCANGAN 8.2 (KONTRAK 11).
 const BARIS_6A: [string, string, string, string, string, string][] = [['kas.piutang', 'Keuangan', 'Piutang pelanggan', 'L', 'L', '-']]
 
+// Keputusan pemilik 24 November 2026: halaman Aturan Persetujuan (approval_rule) hanya untuk Owner. Baris ini tambahan
+// atas RANCANGAN 8.2 (KONTRAK 11 butir 156). Tidak ada Tambah dan Hapus karena baris aturan tidak ditambah atau dihapus
+// dari layar.
+const BARIS_KPT: [string, string, string, string, string, string][] = [['atur.persetujuan', 'Pengaturan', 'Aturan persetujuan', 'LU', '-', '-']]
+
 const bersih = (s: string) => (s === '-' ? '' : s)
 
-export const MENU_IZIN: MenuIzin[] = [...BARIS, ...BARIS_3B, ...BARIS_6A].map(([kode, grup, nama, owner, admin, kasir]) => ({
+export const MENU_IZIN: MenuIzin[] = [...BARIS, ...BARIS_3B, ...BARIS_6A, ...BARIS_KPT].map(([kode, grup, nama, owner, admin, kasir]) => ({
   kode,
   grup,
   nama,
@@ -118,7 +123,7 @@ export const MENU_IZIN: MenuIzin[] = [...BARIS, ...BARIS_3B, ...BARIS_6A].map(([
 export const MENU_PER_KODE = new Map(MENU_IZIN.map((m) => [m.kode, m]))
 
 // Menu yang izinnya tidak boleh hilang dari peran owner (KONTRAK 4.6).
-export const MENU_TERKUNCI_OWNER = ['atur.pengguna', 'atur.peran', 'atur.saklar', 'atur.audit']
+export const MENU_TERKUNCI_OWNER = ['atur.pengguna', 'atur.peran', 'atur.saklar', 'atur.audit', 'atur.persetujuan']
 export const SAKLAR_TERKUNCI_OWNER = ['log.lihat_semua']
 
 export type SatuanBatas = 'rupiah' | 'hari' | 'persen'
@@ -315,6 +320,8 @@ export const SIDEBAR_GRUP: GrupSidebar[] = [
       { href: '/pengguna', label: 'Pengguna', menu: 'atur.pengguna', ikon: 'pengguna' },
       { href: '/peran', label: 'Peran dan Izin', menu: 'atur.peran', ikon: 'peran' },
       { href: '/saklar', label: 'Saklar Fitur', menu: 'atur.saklar', ikon: 'saklar' },
+      // Keputusan pemilik 24 November 2026: aturan persetujuan dokumen, hanya Owner (KONTRAK 11 butir 156).
+      { href: '/persetujuan', label: 'Aturan Persetujuan', menu: 'atur.persetujuan', ikon: 'persetujuan' },
       { href: '/audit', label: 'Jejak Audit', menu: 'atur.audit', ikon: 'audit' },
     ],
   },

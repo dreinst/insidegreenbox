@@ -155,10 +155,12 @@ describe('jurnal dokumen', () => {
     shiftId = (await bukaShift(db, k(kasir), kasir, { modal: '100000' })).id
     const j = await simpanPenjualan(db, k(kasir), kasir, { mode: 'takeaway', baris: [{ menuItemId: toko.menu['Kopi Susu'], qty: 1 }], bayar: [{ metodeId: toko.metode.Tunai, jumlah: 50000 }] })
     jualTunai = j.id
-    // 28.000 + service 5% 1.400 + pajak 10% dari 29.400 = 2.940; HPP 18 g x 300.
+    // 28.000 + service 5% 1.400 + pajak 10% dari 29.400 = 2.940; HPP 18 g x 300. Tunai 32.340 dibulatkan menjadi 32.500
+    // (KONTRAK 11 butir 155): kas laci 32.500, kelebihan 160 dikredit ke Pembulatan Penjualan.
     assert.equal(j.total, 32340)
+    assert.equal(j.pembulatan, 160)
     const { peta, j: jurnal } = (await isiJurnal('sale', j.id))!
-    assert.deepEqual(peta, { '1-1100': 32340n, '4-1000': -28000n, '4-2000': -1400n, '2-1300': -2940n, '5-1000': 5400n, '1-1500': -5400n })
+    assert.deepEqual(peta, { '1-1100': 32500n, '4-1000': -28000n, '4-2000': -1400n, '2-1300': -2940n, '4-9200': -160n, '5-1000': 5400n, '1-1500': -5400n })
     assert.equal(jurnal.docNo, (await db.sale.findUniqueOrThrow({ where: { id: j.id } })).no)
     const audit = await db.auditLog.findFirstOrThrow({ where: { action: 'penjualan.simpan', docId: String(j.id) } })
     assert.equal((audit.afterJson as { jurnal: string }).jurnal, jurnal.no)
@@ -168,9 +170,11 @@ describe('jurnal dokumen', () => {
     const q = await simpanPenjualan(db, k(kasir), kasir, { mode: 'takeaway', baris: [{ menuItemId: toko.menu.Croissant, qty: 2 }], bayar: [{ metodeId: toko.metode.QRIS, jumlah: 57750 }] })
     assert.deepEqual((await isiJurnal('sale', q.id))!.peta, { '1-1410': 57750n, '4-1000': -50000n, '4-2000': -2500n, '2-1300': -5250n })
     const m = await simpanPenjualan(db, k(kasir), kasir, { mode: 'takeaway', memberId: toko.member, baris: [{ menuItemId: toko.menu.Americano, qty: 2 }], bayar: [{ metodeId: toko.metode.Tunai, jumlah: 100000 }] })
-    // 44.000 - 10% 4.400 = 39.600; service 1.980; pajak 4.158; total 45.738.
+    // 44.000 - 10% 4.400 = 39.600; service 1.980; pajak 4.158; total 45.738, dibayar tunai 45.500 (pembulatan turun 238
+    // didebit ke Pembulatan Penjualan). QRIS tidak dibulatkan.
     assert.equal(m.total, 45738)
-    assert.deepEqual((await isiJurnal('sale', m.id))!.peta, { '1-1100': 45738n, '4-3000': 4400n, '4-1000': -44000n, '4-2000': -1980n, '2-1300': -4158n })
+    assert.equal(m.pembulatan, -238)
+    assert.deepEqual((await isiJurnal('sale', m.id))!.peta, { '1-1100': 45500n, '4-3000': 4400n, '4-1000': -44000n, '4-2000': -1980n, '2-1300': -4158n, '4-9200': 238n })
   })
 
   test('void membalik jurnal penjualan, termasuk HPP, bertanggal hari void', async () => {
@@ -180,6 +184,7 @@ describe('jurnal dokumen', () => {
     const balik = (await isiJurnal('sale', jualTunai, true))!
     assert.equal(balik.j.reversalOfId, maju.j.id)
     for (const [kode, v] of Object.entries(maju.peta)) assert.equal(balik.peta[kode], -v, `akun ${kode} dibalik`)
+    assert.equal(balik.peta['4-9200'], 160n, 'pembulatan ikut dibalik')
     assert.equal(await saldoAkun('1-1500'), persediaan + 5400n)
     await galat(() => voidPenjualan(db, k(owner), owner, jualTunai, { alasan: 'Lagi' }), /sudah void/)
   })
@@ -187,8 +192,9 @@ describe('jurnal dokumen', () => {
   test('kas keluar laci dan selisih kas tutup shift dijurnal', async () => {
     const m = await catatKasLaci(db, k(kasir), kasir, shiftId, { jenis: 'keluar', jumlah: '5000', alasan: 'Beli es batu' })
     assert.deepEqual((await isiJurnal('shift_cash_move', m.id))!.peta, { '6-1950': 5000n, '1-1100': -5000n })
-    // Kas seharusnya 100.000 + 45.738 - 5.000 = 140.738; dihitung kurang 2.000.
-    await tutupShift(db, k(kasir), kasir, shiftId, { kasDihitung: '138738', catatan: 'Uang kurang 2.000' })
+    // Kas seharusnya 100.000 + 45.500 (tunai sesudah pembulatan) - 5.000 = 140.500; dihitung kurang 2.000.
+    const t = await tutupShift(db, k(kasir), kasir, shiftId, { kasDihitung: '138500', catatan: 'Uang kurang 2.000' })
+    assert.equal(t.expectedCash, 140500n)
     assert.deepEqual((await isiJurnal('shift', shiftId))!.peta, { '6-1100': 2000n, '1-1100': -2000n })
   })
 
@@ -203,7 +209,9 @@ describe('jurnal dokumen', () => {
     assert.deepEqual((await isiJurnal('pos_settlement', qris.id))!.peta, { '1-1310': 57346n, '6-1200': 404n, '1-1410': -57750n })
     assert.equal(qris.bankAccountId, rek.id)
     await postingSetoran(db, k(owner), owner, tunai.id)
-    assert.deepEqual((await isiJurnal('pos_settlement', tunai.id))!.peta, { '1-1200': 38738n, '1-1100': -38738n })
+    // Setoran tunai = kas dihitung - modal = 38.500, sudah memakai angka sesudah pembulatan.
+    assert.equal(tunai.expectedTotal, 38500n)
+    assert.deepEqual((await isiJurnal('pos_settlement', tunai.id))!.peta, { '1-1200': 38500n, '1-1100': -38500n })
     assert.equal(await saldoAkun('1-1100'), 0n, 'kas laci nol sesudah semua disetor')
     assert.equal(await saldoAkun('1-1410'), 0n, 'kliring QRIS nol sesudah disetor')
     await batalSetoran(db, k(owner), owner, qris.id, { alasan: 'Mutasi belum masuk' })

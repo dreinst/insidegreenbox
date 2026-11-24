@@ -23,16 +23,30 @@ export const kembalian = (total: number, dibayar: number) => Math.max(0, dibayar
 export type MasukanBayar = { metodeId: number; tunai: boolean; jumlah: number; nama?: string }
 export type HasilBayar = { metodeId: number; tunai: boolean; amount: number; paid: number; change: number }
 
+// Keputusan pemilik 24 November 2026 (KONTRAK 11 butir 155): bagian tunai dibulatkan ke Rp 500 terdekat, setengah ke
+// atas (32.240 menjadi 32.000, 32.250 dan 32.340 menjadi 32.500). Non tunai tetap pas.
+export const PEMBULATAN_TUNAI = 500
+export const bulatTunai = (n: number) => Math.floor((n + PEMBULATAN_TUNAI / 2) / PEMBULATAN_TUNAI) * PEMBULATAN_TUNAI
+
+// Pratinjau layar kasir: sisa yang harus dibayar tunai sesudah non tunai, beserta pembulatannya. Tanpa baris tunai
+// (atau bila non tunai sudah menutup total) tidak ada pembulatan.
+export function sisaTunaiBulat(total: number, nonTunai: number, adaTunai: boolean) {
+  const sisa = Math.max(0, total - nonTunai)
+  const bulat = adaTunai && sisa > 0 ? bulatTunai(sisa) : sisa
+  return { sisa, bulat, pembulatan: bulat - sisa }
+}
+
 // Membagi pembayaran ke total. Non tunai dicatat sebesar jumlahnya dan tidak boleh melebihi total.
-// Tunai menutup sisa; kelebihannya menjadi kembalian. amount = bagian yang masuk ke penjualan.
-export function bagiBayar(total: number, bayar: MasukanBayar[]): { ok: true; baris: HasilBayar[]; kembalian: number } | { ok: false; pesan: string } {
+// Tunai menutup sisa yang sudah dibulatkan ke Rp 500; kelebihannya menjadi kembalian. amount = bagian yang masuk ke
+// penjualan, jadi jumlah amount = total + pembulatan.
+export function bagiBayar(total: number, bayar: MasukanBayar[]): { ok: true; baris: HasilBayar[]; kembalian: number; pembulatan: number } | { ok: false; pesan: string } {
   const isi = bayar.filter((b) => b.jumlah > 0)
   const ids = new Set<number>()
   for (const b of isi) {
     if (ids.has(b.metodeId)) return { ok: false, pesan: `Metode ${b.nama ?? 'bayar'} dipilih dua kali.` }
     ids.add(b.metodeId)
   }
-  if (total <= 0) return isi.length ? { ok: false, pesan: 'Total nol, tidak perlu pembayaran.' } : { ok: true, baris: [], kembalian: 0 }
+  if (total <= 0) return isi.length ? { ok: false, pesan: 'Total nol, tidak perlu pembayaran.' } : { ok: true, baris: [], kembalian: 0, pembulatan: 0 }
   if (!isi.length) return { ok: false, pesan: 'Isi pembayaran dulu.' }
   const tunai = isi.filter((b) => b.tunai)
   if (tunai.length > 1) return { ok: false, pesan: 'Pembayaran tunai hanya boleh satu baris.' }
@@ -43,17 +57,20 @@ export function bagiBayar(total: number, bayar: MasukanBayar[]): { ok: true; bar
   const baris: HasilBayar[] = nonTunai.map((b) => ({ metodeId: b.metodeId, tunai: false, amount: b.jumlah, paid: b.jumlah, change: 0 }))
   if (tunai.length) {
     if (sisa === 0) return { ok: false, pesan: 'Non tunai sudah menutup total, hapus pembayaran tunai.' }
+    const harus = bulatTunai(sisa)
+    // Sisa di bawah Rp 250 dibulatkan menjadi 0, jadi tidak ada uang tunai yang bisa diterima.
+    if (harus === 0) return { ok: false, pesan: `Sisa ${rupiah(sisa)} dibulatkan menjadi Rp 0 kalau dibayar tunai. Bayar sisa itu dengan non tunai, atau hapus pembayaran tunai.` }
     const t = tunai[0]
-    if (t.jumlah < sisa) return { ok: false, pesan: `Uang diterima kurang Rp ${(sisa - t.jumlah).toLocaleString('id-ID')}.` }
-    baris.push({ metodeId: t.metodeId, tunai: true, amount: sisa, paid: t.jumlah, change: t.jumlah - sisa })
-    return { ok: true, baris, kembalian: t.jumlah - sisa }
+    if (t.jumlah < harus) return { ok: false, pesan: `Uang diterima kurang Rp ${(harus - t.jumlah).toLocaleString('id-ID')}.` }
+    baris.push({ metodeId: t.metodeId, tunai: true, amount: harus, paid: t.jumlah, change: t.jumlah - harus })
+    return { ok: true, baris, kembalian: t.jumlah - harus, pembulatan: harus - sisa }
   }
   if (sisa > 0) return { ok: false, pesan: `Pembayaran kurang Rp ${sisa.toLocaleString('id-ID')}.` }
-  return { ok: true, baris, kembalian: 0 }
+  return { ok: true, baris, kembalian: 0, pembulatan: 0 }
 }
 
-// Kas seharusnya di laci = modal awal + penjualan tunai yang tidak void (sudah bersih dari kembalian)
-// + kas masuk laci - kas keluar laci (RANCANGAN 6.1).
+// Kas seharusnya di laci = modal awal + penjualan tunai yang tidak void (sudah bersih dari kembalian dan sudah
+// dibulatkan) + kas masuk laci - kas keluar laci (RANCANGAN 6.1).
 export function kasSeharusnya(modal: number, tunaiPenjualan: number, kasMasuk: number, kasKeluar: number) {
   return modal + tunaiPenjualan + kasMasuk - kasKeluar
 }
