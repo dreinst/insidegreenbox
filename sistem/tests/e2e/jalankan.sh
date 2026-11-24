@@ -47,23 +47,29 @@ done
 # Berkas uji dijalankan berurutan; semuanya selalu jalan, dan skrip gagal bila salah satunya gagal.
 # klik.mjs paling akhir, karena bagian 6 sengaja mengunci login sandi Admin selama 15 menit.
 HASIL=0
-BASE_URL="http://127.0.0.1:$PORT" E2E_DATABASE_URL="$DB_E2E" node tests/e2e/kasir.mjs || HASIL=1
-BASE_URL="http://127.0.0.1:$PORT" E2E_DATABASE_URL="$DB_E2E" node tests/e2e/master.mjs || HASIL=1
+# E2E_BERKAS (opsional) berisi nama berkas uji dipisah spasi, misalnya "kasir.mjs laporan.mjs". Urutannya tetap urutan
+# di bawah. Tanpa E2E_BERKAS semua berkas dijalankan.
+jalan() {
+  if [ -n "${E2E_BERKAS:-}" ] && [[ " $E2E_BERKAS " != *" $1 "* ]]; then return 0; fi
+  BASE_URL="http://127.0.0.1:$PORT" E2E_DATABASE_URL="$DB_E2E" node "tests/e2e/$1" || HASIL=1
+}
+jalan kasir.mjs
+jalan master.mjs
 # tahap 5A: laporan dan setoran memakai shift yang ditinggalkan kasir.mjs, jadi berjalan sesudahnya.
-BASE_URL="http://127.0.0.1:$PORT" E2E_DATABASE_URL="$DB_E2E" node tests/e2e/laporan.mjs || HASIL=1
+jalan laporan.mjs
 # tahap 4A: persediaan.
-BASE_URL="http://127.0.0.1:$PORT" E2E_DATABASE_URL="$DB_E2E" node tests/e2e/stok.mjs || HASIL=1
+jalan stok.mjs
 # tahap 4B: resep, potong stok penjualan, dan produksi.
-BASE_URL="http://127.0.0.1:$PORT" E2E_DATABASE_URL="$DB_E2E" node tests/e2e/produksi.mjs || HASIL=1
+jalan produksi.mjs
 # tahap 4C: pembelian, sesudah stok.mjs karena memakai bahan dan saldo awal impor.
-BASE_URL="http://127.0.0.1:$PORT" E2E_DATABASE_URL="$DB_E2E" node tests/e2e/pembelian.mjs || HASIL=1
+jalan pembelian.mjs
 # tahap 5B: akuntansi (jual lalu buku besar, memorial, laporan keuangan, tutup periode, akses).
-BASE_URL="http://127.0.0.1:$PORT" E2E_DATABASE_URL="$DB_E2E" node tests/e2e/akuntansi.mjs || HASIL=1
+jalan akuntansi.mjs
 # tahap 5C: jurnal pembelian, kas dan bank, rekonsiliasi; sesudah akuntansi.mjs karena memakai pemasok impor dan jurnalnya.
-BASE_URL="http://127.0.0.1:$PORT" E2E_DATABASE_URL="$DB_E2E" node tests/e2e/kas.mjs || HASIL=1
+jalan kas.mjs
 # tahap 6A: penjualan B2B dan profil usaha, sesudah pembelian.mjs (konversi kg biji kopi) dan kasir.mjs (struk), sebelum klik.mjs.
-BASE_URL="http://127.0.0.1:$PORT" E2E_DATABASE_URL="$DB_E2E" node tests/e2e/b2b.mjs || HASIL=1
+jalan b2b.mjs
 # tahap 6B: jurnal B2B, aset tetap, dan anggaran, sesudah b2b.mjs (piutang) dan sebelum klik.mjs.
-BASE_URL="http://127.0.0.1:$PORT" E2E_DATABASE_URL="$DB_E2E" node tests/e2e/aset.mjs || HASIL=1
-BASE_URL="http://127.0.0.1:$PORT" E2E_DATABASE_URL="$DB_E2E" node tests/e2e/klik.mjs || HASIL=1
+jalan aset.mjs
+jalan klik.mjs
 exit $HASIL

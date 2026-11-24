@@ -113,6 +113,7 @@ export const NAMA_PERISTIWA: Record<string, string> = {
   'promo.nonaktifkan': 'Nonaktifkan promo',
   'metode_bayar.tambah': 'Tambah metode bayar',
   'metode_bayar.ubah': 'Ubah metode bayar',
+  'metode_bayar.tarif': 'Tambah tarif MDR',
   'metode_bayar.aktifkan': 'Aktifkan metode bayar',
   'metode_bayar.nonaktifkan': 'Nonaktifkan metode bayar',
   'tingkat.tambah': 'Tambah tingkat member',
@@ -131,6 +132,7 @@ export const NAMA_PERISTIWA: Record<string, string> = {
   'shift.kas': 'Kas laci',
   'shift.tutup': 'Tutup shift',
   'shift.setujui': 'Setujui selisih shift',
+  'shift.tutup_ditolak': 'Tutup shift ditolak',
   'penjualan.simpan': 'Simpan penjualan',
   'penjualan.void': 'Void penjualan',
   // tahap 4A

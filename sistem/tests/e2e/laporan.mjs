@@ -1,7 +1,7 @@
 // Uji klik tahap 5A (laporan dan setoran POS), dijalankan jalankan.sh sesudah kasir.mjs dan master.mjs, sebelum
 // klik.mjs. Owner menambah rekening bank, Kasir (masuk dengan sandi, PIN-nya sudah dikunci kasir.mjs) menjual tunai
-// dan QRIS lalu menutup shift, Admin membuat setoran hari ini lalu memposting Tunai dan QRIS, Debit dengan selisih
-// diajukan dan disetujui Owner. Laporan dicocokkan dengan basis data, CSV diunduh, akses tanpa izin ditolak, dan
+// dan QRIS lalu menutup shift, Admin membuat setoran hari ini lalu memposting Tunai, QRIS, dan Debit dengan selisih
+// (tahap 6C: selisih tidak lagi butuh Owner; MDR bawaan dihitung per transaksi dari tarif). Laporan dicocokkan dengan basis data, CSV diunduh, akses tanpa izin ditolak, dan
 // semua halaman baru dibuka per peran di 1440 dan 390 px tanpa galat konsol dan tanpa luapan horizontal.
 // Potret ke tests/potret/, ringkasan ke tests/hasil/e2e-laporan.json.
 import 'dotenv/config'
@@ -143,7 +143,7 @@ let idShift = 0
   await ctx.close()
 }
 
-// 2. Admin membuat setoran hari ini, memposting Tunai dan QRIS, dan mengajukan Debit yang berselisih.
+// 2. Admin membuat setoran hari ini lalu memposting Tunai, QRIS, dan Debit yang berselisih.
 const setoran = {}
 {
   const { ctx, page, galat } = await konteks(1440, 900)
@@ -161,6 +161,20 @@ const setoran = {}
   const harapQris = await satu(`select coalesce(sum(p.amount),0)::bigint t from sale_payment p join sale s on s.id=p.sale_id join payment_method m on m.id=p.payment_method_id where s.status='Selesai' and m.name='QRIS' and ${syaratHari}`, [hariIni])
   cek('setoran: nilai sistem QRIS sama dengan penjualan QRIS hari ini', setoran.QRIS.expected_total === harapQris.t, `${setoran.QRIS.expected_total} lawan ${harapQris.t}`)
   cek('setoran: rekening QRIS terisi rekening aktif', !!setoran.QRIS.bank_account_id)
+  // tahap 6C: MDR bawaan = jumlah MDR per transaksi dengan tarif yang berlaku pada tanggal penjualan.
+  for (const m of ['QRIS', 'Debit']) {
+    const harap = await satu(
+      `select coalesce(sum(case when tr.free_limit is not null and p.amount <= tr.free_limit then 0 else round(p.amount * tr.mdr_pct / 100) end),0)::bigint mdr
+       from sale_payment p join sale s on s.id=p.sale_id join payment_method m on m.id=p.payment_method_id
+       left join lateral (select t.mdr_pct, t.free_limit from payment_method_mdr t where t.payment_method_id=p.payment_method_id and t.effective_from <= (s.at at time zone 'Asia/Jakarta')::date order by t.effective_from desc limit 1) tr on true
+       where s.status='Selesai' and m.name=$2 and ${syaratHari}`,
+      [hariIni, m],
+    )
+    const st = await satu('select mdr_fee from pos_settlement where id=$1', [setoran[m].id])
+    cek(`setoran: MDR ${m} dihitung per transaksi dari tarif`, st.mdr_fee === harap.mdr, `${st.mdr_fee} lawan ${harap.mdr}`)
+  }
+  const nDebit = await satu(`select count(*)::int n from sale_payment p join sale s on s.id=p.sale_id join payment_method m on m.id=p.payment_method_id where s.status='Selesai' and m.name='Debit' and ${syaratHari}`, [hariIni])
+  cek('setoran: Debit punya transaksi dan MDR-nya bukan nol (tarif bawaan 1%)', nDebit.n > 0 && (await satu('select mdr_fee from pos_settlement where id=$1', [setoran.Debit.id])).mdr_fee !== '0')
   await potret(page, '1440-admin-setoran-daftar')
   await page.setViewportSize({ width: 390, height: 844 })
   await potret(page, '390-admin-setoran-daftar')
@@ -208,20 +222,22 @@ const setoran = {}
   await Promise.all([page.waitForURL(/\?pesan=setoran-posting/), page.click('button:text-is("Posting setoran")')])
   cek('setoran: Admin memposting setoran QRIS', (await satu('select status from pos_settlement where id=$1', [setoran.QRIS.id])).status === 'Diposting')
 
-  // Debit: nilai disetor dikurangi 20.000, jadi butuh Owner. Tombol posting hilang, Admin mengajukan.
+  // Debit: nilai disetor dikurangi 20.000. Sejak tahap 6C selisih tidak butuh Owner, jadi Admin langsung memposting.
   await page.goto(`${BASE}/setoran/${setoran.Debit.id}`)
+  cek('setoran: keterangan tarif MDR Debit tampil', (await page.textContent('#j-data + dl'))?.includes('MDR 1%'))
   const bd = await satu('select id, actual from pos_settlement_line where pos_settlement_id=$1 order by id limit 1', [setoran.Debit.id])
   await page.fill(`input[name="actual_${bd.id}"]`, String(Number(bd.actual) - 20000))
   cek('setoran: selisih dihitung di layar saat mengetik', (await page.textContent('.lap-ringkas div:last-child dd')).includes('-Rp 20.000'))
   await Promise.all([page.waitForURL(/\?pesan=setoran-tersimpan/), page.click('button:text-is("Simpan setoran")')])
-  cek('setoran: alasan butuh Owner tampil', (await page.textContent('.lap-peringatan')).includes('butuh persetujuan Owner'))
-  cek('setoran: Admin tidak melihat tombol posting untuk selisih di atas batas', (await page.$$('button:text-is("Posting setoran"), button:text-is("Setujui dan posting")')).length === 0)
+  cek('setoran: selisih tidak lagi memunculkan alasan butuh Owner', !((await page.textContent('main')) ?? '').includes('butuh persetujuan Owner'))
+  cek('setoran: Admin melihat tombol posting walau berselisih', (await page.$$('button:text-is("Posting setoran")')).length === 1)
   await potret(page, '1440-admin-setoran-debit-selisih')
   await page.setViewportSize({ width: 390, height: 844 })
   await potret(page, '390-admin-setoran-debit-selisih')
   await page.setViewportSize({ width: 1440, height: 900 })
-  await Promise.all([page.waitForURL(/\?pesan=setoran-ajukan/), page.click('button:text-is("Ajukan ke Owner")')])
-  cek('setoran: Debit diajukan', (await satu('select status from pos_settlement where id=$1', [setoran.Debit.id])).status === 'Diajukan')
+  await Promise.all([page.waitForURL(/\?pesan=setoran-posting/), page.click('button:text-is("Posting setoran")')])
+  const d = await satu('select status, approved_by, diff from pos_settlement where id=$1', [setoran.Debit.id])
+  cek('setoran: Admin memposting Debit berselisih tanpa Owner', d.status === 'Diposting' && d.approved_by === null && d.diff === '-20000', JSON.stringify(d))
   cek('setoran: Admin tanpa galat konsol', galat.length === 0, galat.slice(0, 3).join(' | '))
   // Admin hanya melihat rekening.
   const r = await page.goto(`${BASE}/rekening/baru`)
@@ -229,21 +245,17 @@ const setoran = {}
   await ctx.close()
 }
 
-// 3. Owner menyetujui dan memposting Debit.
+// 3. Owner tidak punya antrean setoran, dan jejak audit Debit tanpa langkah persetujuan.
 {
   const { ctx, page, galat } = await konteks(1440, 900)
   await masuk(page, AKUN.owner)
   await page.goto(`${BASE}/setoran`)
-  cek('setoran: antrean persetujuan tampil untuk Owner', (await page.textContent('.lap-peringatan')).includes('menunggu persetujuan'))
+  cek('setoran: tidak ada antrean persetujuan untuk Owner', !((await page.textContent('main')) ?? '').includes('menunggu persetujuan'))
   await page.goto(`${BASE}/setoran/${setoran.Debit.id}`)
-  await potret(page, '1440-owner-setoran-debit-diajukan')
-  await Promise.all([page.waitForURL(/\?pesan=setoran-posting/), page.click('button:text-is("Setujui dan posting")')])
-  const d = await satu('select status, approved_by, diff from pos_settlement where id=$1', [setoran.Debit.id])
-  const idOwner = (await satu('select id from app_user where username=$1', [AKUN.owner.u])).id
-  cek('setoran: Owner menyetujui dan memposting Debit', d.status === 'Diposting' && d.approved_by === idOwner && d.diff === '-20000', JSON.stringify(d))
+  await potret(page, '1440-owner-setoran-debit-diposting')
   await page.goto(`${BASE}/audit?entitas=pos_settlement&dok=${setoran.Debit.id}`)
   const aksi = await page.$$eval('.tabel tbody td[data-label="Aksi"]', (td) => td.map((x) => x.textContent.trim()))
-  cek('audit: buat, ubah, ajukan, setujui, posting setoran', ['Buat setoran', 'Ubah setoran', 'Ajukan setoran', 'Setujui setoran', 'Posting setoran'].every((a) => aksi.includes(a)), aksi.join(', '))
+  cek('audit: buat, ubah, posting setoran tanpa ajukan dan setujui', ['Buat setoran', 'Ubah setoran', 'Posting setoran'].every((a) => aksi.includes(a)) && !aksi.includes('Setujui setoran'), aksi.join(', '))
   cek('setoran: Owner tanpa galat konsol', galat.length === 0, galat.slice(0, 3).join(' | '))
   await ctx.close()
 }
