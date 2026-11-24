@@ -53,3 +53,6 @@
   .jr-tabel tfoot td { background: none; border: 0 }
   .jr-tabel tfoot td.jr-jumlah { display: none }
 }
+
+/* audit C-4: pelanggan atau pemasok baris jurnal */
+.jr-pihak { display: block }

@@ -10,6 +10,7 @@ import type { Db, DbAtauTx, Tx } from '../db'
 import { pastikanIzin, punyaIzin, saklarNyala, type Pengguna } from '../izin-inti'
 import { ambilNomor } from '../nomor'
 import { transisiSah } from '../status'
+import { skemaUang } from '../master'
 import { tanggalIso } from '../waktu'
 import { buatJurnalBalik, pastikanPeriodeTerbuka, tanggalJurnal } from './jurnal'
 
@@ -31,13 +32,19 @@ export const skemaKepalaMemorial = z.object({
   memo: z.string().trim().min(3, 'Tulis keterangan jurnal, minimal 3 huruf.').max(300, 'Keterangan paling panjang 300 huruf.'),
 })
 
-const uang = z.preprocess((v) => String(v ?? '').replace(/[^\d]/g, ''), z.string().transform((s) => (s === '' ? 0n : BigInt(s))).refine((n) => n <= 100_000_000_000n, 'Nilai terlalu besar.'))
+// Sama dengan isian uang lain (skemaUang): koma, tanda minus, dan desimal ditolak dengan pesan, tidak dibuang (audit C-3).
+const uang = (label: string) => z.preprocess((v) => (v == null ? '' : String(v)), skemaUang({ label, min: 0n, max: 100_000_000_000n, wajib: false }))
+
+// Pihak baris Piutang Usaha (pelanggan, "c:<id>") atau Hutang Usaha (pemasok, "s:<id>"), supaya buku pembantunya bisa
+// dicocokkan per pelanggan atau pemasok (audit C-4).
+const skemaPihak = z.preprocess((v) => (v == null ? '' : String(v).trim()), z.string().regex(/^(|[cs]:[1-9]\d{0,9})$/, 'Pilih pelanggan atau pemasok dari daftar.'))
 
 export const skemaBarisMemorial = z
   .object({
     accountId: z.coerce.number({ message: 'Pilih akun.' }).int('Pilih akun.').positive('Pilih akun.'),
-    debit: uang,
-    kredit: uang,
+    debit: uang('Debit'),
+    kredit: uang('Kredit'),
+    pihak: skemaPihak.default(''),
     memo: z.string().trim().max(200, 'Keterangan baris paling panjang 200 huruf.').default(''),
   })
   .refine((b) => (b.debit > 0n) !== (b.kredit > 0n), { path: ['debit'], message: 'Isi debit atau kredit saja, lebih dari 0.' })
@@ -98,17 +105,71 @@ export async function tambahBarisMemorial(db: Db, k: Konteks, aktor: Aktor, id: 
     const a = await tx.account.findUnique({ where: { id: d.accountId } })
     if (!a) throw new GalatAturan('Akun tidak ditemukan.', 'accountId')
     if (!a.active || !a.isPostable) throw new GalatAturan(`${a.code} ${a.name} nonaktif atau akun induk, pilih akun lain.`, 'accountId')
-    const l = await tx.journalLine.create({ data: { journalId: id, accountId: a.id, debit: d.debit, credit: d.kredit, memo: d.memo } })
+    const pihak = await pihakBaris(tx, a, d.pihak)
+    const l = await tx.journalLine.create({ data: { journalId: id, accountId: a.id, debit: d.debit, credit: d.kredit, memo: d.memo, customerId: pihak.customerId, supplierId: pihak.supplierId } })
     await tx.journal.update({ where: { id }, data: { updatedBy: aktor.id } })
     await catatAudit(tx, k, {
       action: 'memorial.baris_tambah',
       docType: 'journal',
       docId: id,
       summary: `Menambah baris ${a.code} ${a.name} ${d.debit ? `debit ${rp(d.debit)}` : `kredit ${rp(d.kredit)}`} di ${j.no}`,
-      after: { lineId: l.id, akun: a.code, debit: d.debit, kredit: d.kredit, memo: d.memo },
+      after: { lineId: l.id, akun: a.code, debit: d.debit, kredit: d.kredit, memo: d.memo, ...(pihak.nama ? { pihak: pihak.nama } : {}) },
     })
     return l
   })
+}
+
+// Akun yang saldonya dibaca juga dari buku pembantu (kartu stok, dokumen pembelian dan penjualan, register aset). Baris
+// memorial ke akun ini tetap boleh, karena memorial satu-satunya jalan koreksinya (audit C-1), tetapi buku besar akan
+// berbeda dari halaman buku pembantunya kecuali memorial itu memang mengoreksi selisih yang sudah ada.
+const BUKU_PEMBANTU: [string, string][] = [
+  ['persediaan', 'kartu stok'],
+  ['bdp', 'barang dalam proses di perintah produksi'],
+  ['grni', 'penerimaan barang belum difakturkan'],
+  ['hutang_usaha', 'halaman Hutang Pemasok'],
+  ['piutang_usaha', 'halaman Piutang Pelanggan'],
+  ['kliring', 'setoran POS non tunai'],
+  ['kas_laci', 'kas laci shift kasir'],
+  ['uang_muka_beli', 'pembayaran pembelian'],
+  ['aset_tetap', 'register Aset Tetap'],
+  ['akumulasi_penyusutan', 'register Aset Tetap'],
+]
+
+export async function akunBukuPembantu(db: DbAtauTx) {
+  const hasil = new Map<number, string>()
+  for (const m of await db.accountMapping.findMany({ select: { key: true, accountId: true } })) {
+    const b = BUKU_PEMBANTU.find(([k]) => m.key === k || m.key.startsWith(`${k}.`))
+    if (b && !hasil.has(m.accountId)) hasil.set(m.accountId, b[1])
+  }
+  for (const a of await db.fixedAsset.findMany({ where: { status: { in: ['aktif', 'dilepas'] } }, select: { assetAccountId: true, accumAccountId: true } })) {
+    for (const id of [a.assetAccountId, a.accumAccountId]) if (id && !hasil.has(id)) hasil.set(id, 'register Aset Tetap')
+  }
+  return hasil
+}
+
+async function akunPeta(tx: DbAtauTx, kunci: string) {
+  return (await tx.accountMapping.findUnique({ where: { key: kunci } }))?.accountId ?? null
+}
+
+// Baris ke akun Piutang Usaha wajib menyebut pelanggan, ke Hutang Usaha wajib menyebut pemasok; akun lain tanpa pihak.
+async function pihakBaris(tx: DbAtauTx, a: { id: number; code: string; name: string }, pihak: string) {
+  const [piutang, hutang] = await Promise.all([akunPeta(tx, 'piutang_usaha'), akunPeta(tx, 'hutang_usaha')])
+  const [jenis, idTeks] = pihak.split(':')
+  const idPihak = Number(idTeks)
+  if (a.id === piutang) {
+    if (jenis !== 'c') throw new GalatAturan(`Baris ${a.code} ${a.name} wajib menyebut pelanggan, supaya Piutang Pelanggan bisa dicocokkan per pelanggan.`, 'pihak')
+    const c = await tx.customer.findUnique({ where: { id: idPihak }, select: { id: true, name: true } })
+    if (!c) throw new GalatAturan('Pelanggan tidak ditemukan.', 'pihak')
+    return { customerId: c.id, supplierId: null, nama: `Pelanggan ${c.name}` }
+  }
+  if (a.id === hutang) {
+    if (jenis !== 's') throw new GalatAturan(`Baris ${a.code} ${a.name} wajib menyebut pemasok, supaya Hutang Pemasok bisa dicocokkan per pemasok.`, 'pihak')
+    const s = await tx.supplier.findUnique({ where: { id: idPihak }, select: { id: true, name: true } })
+    if (!s) throw new GalatAturan('Pemasok tidak ditemukan.', 'pihak')
+    return { customerId: null, supplierId: s.id, nama: `Pemasok ${s.name}` }
+  }
+  if (pihak) throw new GalatAturan('Pelanggan atau pemasok hanya diisi untuk baris Piutang Usaha atau Hutang Usaha.', 'pihak')
+  return { customerId: null, supplierId: null, nama: null }
 }
 
 export async function hapusBarisMemorial(db: Db, k: Konteks, aktor: Aktor, id: number, idBaris: number) {
@@ -264,7 +325,7 @@ export async function ambilJurnal(db: DbAtauTx, id: number) {
   const j = await db.journal.findUnique({
     where: { id },
     include: {
-      journalLines: { include: { account: { select: { id: true, code: true, name: true, kind: true, active: true, isPostable: true } } }, orderBy: { id: 'asc' } },
+      journalLines: { include: { account: { select: { id: true, code: true, name: true, kind: true, active: true, isPostable: true } }, customer: { select: { name: true } }, supplier: { select: { name: true } } }, orderBy: { id: 'asc' } },
       reversalOf: { select: { id: true, no: true } },
       reversals: { select: { id: true, no: true, date: true } },
       period: { select: { yearMonth: true, status: true } },

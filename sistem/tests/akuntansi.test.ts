@@ -8,7 +8,9 @@ import { ubahAkun, tambahAkun, simpanPemetaan, ubahStatusAkun } from '../src/lib
 import { bentukUlangJurnal } from '../src/lib/akuntansi/bentuk-ulang'
 import { buatJurnal, dk, periodeDari } from '../src/lib/akuntansi/jurnal'
 import { bukuBesar, cocokkanPersediaan, labaRugi, neraca, neracaSaldo } from '../src/lib/akuntansi/laporan'
-import { buatMemorial, tambahBarisMemorial, ubahStatusMemorial } from '../src/lib/akuntansi/memorial'
+import { akunBukuPembantu, buatMemorial, tambahBarisMemorial, ubahStatusMemorial } from '../src/lib/akuntansi/memorial'
+import { tambahPelanggan } from '../src/lib/b2b/pelanggan'
+import { tambahPemasok } from '../src/lib/beli/pemasok'
 import { pasangBawaanAkuntansi } from '../src/lib/akuntansi/pemetaan'
 import { bukaPeriode, bulanIni, geserBulan, tutupPeriode } from '../src/lib/akuntansi/periode'
 import type { Db } from '../src/lib/db'
@@ -257,6 +259,39 @@ describe('jurnal memorial dan tutup periode', () => {
     const bb = await bukuBesar(db, { akun: String(modal.id) })
     assert.ok(bb.akun && bb.baris.some((b) => b.no === m.no))
     assert.equal(bb.saldoAkhir, Number(-(sebelum - 1_000_000n)))
+  })
+
+  test('C-3: angka memorial dengan koma, minus, atau desimal ditolak dengan pesan, tidak dibuang diam-diam', async () => {
+    const m = await buatMemorial(db, k(owner), owner, { date: tgl(), memo: 'Uji angka memorial' })
+    const kas = await db.account.findUniqueOrThrow({ where: { code: '1-1200' } })
+    for (const isi of ['1,5', '-5000', '10.000,50', '12abc']) {
+      await assert.rejects(tambahBarisMemorial(db, k(owner), owner, m.id, { accountId: String(kas.id), debit: isi, kredit: '' }), /Debit harus berupa rupiah bulat/)
+    }
+    await assert.rejects(tambahBarisMemorial(db, k(owner), owner, m.id, { accountId: String(kas.id), debit: '', kredit: '1.000.000.000.000' }), /Kredit paling besar/)
+    assert.equal(await db.journalLine.count({ where: { journalId: m.id } }), 0)
+    await tambahBarisMemorial(db, k(owner), owner, m.id, { accountId: String(kas.id), debit: '10.000', kredit: '' })
+    assert.equal((await db.journalLine.findFirstOrThrow({ where: { journalId: m.id } })).debit, 10_000n)
+    await ubahStatusMemorial(db, k(owner), owner, m.id, 'batal')
+  })
+
+  test('C-4: baris Piutang Usaha wajib pelanggan, Hutang Usaha wajib pemasok; akun buku pembantu ditandai', async () => {
+    const pel = await tambahPelanggan(db, k(owner), owner, { code: 'CUS-MEMO', name: 'Hotel Memorial', paymentDays: '30' })
+    const pem = await tambahPemasok(db, k(owner), owner, { code: 'SUP-MEMO', name: 'Pemasok Memorial', creditDays: '30' })
+    const kode = async (code: string) => (await db.account.findUniqueOrThrow({ where: { code } })).id
+    const m = await buatMemorial(db, k(owner), owner, { date: tgl(), memo: 'Koreksi piutang dan hutang' })
+    const [piutang, hutang, modal] = [await kode('1-1450'), await kode('2-1100'), await kode('3-1000')]
+    await galat(() => tambahBarisMemorial(db, k(owner), owner, m.id, { accountId: String(piutang), debit: '5000', kredit: '' }), /wajib menyebut pelanggan/)
+    await galat(() => tambahBarisMemorial(db, k(owner), owner, m.id, { accountId: String(piutang), debit: '5000', kredit: '', pihak: `s:${pem.id}` }), /wajib menyebut pelanggan/)
+    await galat(() => tambahBarisMemorial(db, k(owner), owner, m.id, { accountId: String(hutang), debit: '', kredit: '5000' }), /wajib menyebut pemasok/)
+    await galat(() => tambahBarisMemorial(db, k(owner), owner, m.id, { accountId: String(modal), debit: '', kredit: '5000', pihak: `c:${pel.id}` }), /hanya diisi untuk baris Piutang/)
+    await tambahBarisMemorial(db, k(owner), owner, m.id, { accountId: String(piutang), debit: '5000', kredit: '', pihak: `c:${pel.id}` })
+    await tambahBarisMemorial(db, k(owner), owner, m.id, { accountId: String(hutang), debit: '', kredit: '5000', pihak: `s:${pem.id}` })
+    const baris = await db.journalLine.findMany({ where: { journalId: m.id }, orderBy: { id: 'asc' } })
+    assert.deepEqual(baris.map((l) => [l.customerId, l.supplierId]), [[pel.id, null], [null, pem.id]])
+    const pembantu = await akunBukuPembantu(db)
+    for (const c of ['1-1450', '2-1100', '1-1500', '2-1200', '1-1600', '1-1410', '1-2100', '1-2900']) assert.ok(pembantu.has(await kode(c)), `${c} ditandai buku pembantu`)
+    assert.ok(!pembantu.has(await kode('3-1000')) && !pembantu.has(await kode('1-1200')), 'modal dan kas besar tidak ditandai')
+    await ubahStatusMemorial(db, k(owner), owner, m.id, 'batal')
   })
 
   test('periode tertutup menolak posting dan pembatalan bertanggal di dalamnya; Owner membuka lagi dengan alasan', async () => {
