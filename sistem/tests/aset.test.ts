@@ -206,11 +206,32 @@ describe('pelepasan aset', () => {
     assert.deepEqual((await barisJurnal('fixed_asset', d.id)).isi, ['1-1310 K 2000000', '1-2100 D 2000000'])
     const x = await buatPelepasan(db, k(owner), owner, { fixedAssetId: String(d.id), date: hariIniIso(), proceeds: '1500000', tujuan: String(rek.id) })
     await postingPelepasan(db, k(owner), owner, x.id)
+    // C-6: penyusutan bulan ini sudah dihitung sebelum Oven diaktifkan, jadi bulan ini disusulkan di jurnal pelepasan
+    // (2.000.000 / 48 bulan = 41.666).
     const sesudah = await db.assetDisposal.findUniqueOrThrow({ where: { id: x.id } })
-    assert.equal(sesudah.gainLoss, -500_000n)
-    assert.deepEqual((await barisJurnal('asset_disposal', x.id)).isi, ['1-1310 D 1500000', '1-2100 K 2000000', '6-1800 D 500000'].sort())
+    assert.equal(sesudah.accumDepreciation, 41_666n)
+    assert.equal(sesudah.bookValue, 1_958_334n)
+    assert.equal(sesudah.gainLoss, -458_334n)
+    assert.deepEqual((await barisJurnal('asset_disposal', x.id)).isi, ['1-1310 D 1500000', '1-2100 K 2000000', '1-2900 D 41666', '1-2900 K 41666', '6-1700 D 41666', '6-1800 D 458334'].sort())
     // Aset yang dilepas tidak ikut penyusutan bulan berikutnya dan tidak bisa dibatalkan.
     await galat(() => batalkanAset(db, k(owner), owner, d.id, 'Salah input aset'), /Hanya aset Aktif/)
+  })
+
+  test('C-6: aset bertanggal perolehan mundur yang belum pernah disusutkan lalu dilepas: penyusutan tertinggal disusulkan', async () => {
+    const f = await tambahAset(db, k(owner), owner, { name: 'Grinder lama', categoryId: String(peralatan), acquiredDate: tgl(M(1), 2), cost: '1200000', usefulMonths: '12', sumber: 'kas' })
+    await aktifkanAset(db, k(owner), owner, f.id)
+    const x = await buatPelepasan(db, k(owner), owner, { fixedAssetId: String(f.id), date: hariIniIso(), proceeds: '1200000' })
+    await postingPelepasan(db, k(owner), owner, x.id)
+    const d = await db.assetDisposal.findUniqueOrThrow({ where: { id: x.id } })
+    // Bulan M(1), M(2), dan bulan ini: 3 x 100.000.
+    assert.equal(d.accumDepreciation, 300_000n)
+    assert.equal(d.bookValue, 900_000n)
+    assert.equal(d.gainLoss, 300_000n, 'laba, bukan 0')
+    assert.equal((await aset(f.id)).accumDepreciation, 0n, 'akumulasi aset tidak diubah; batal pelepasan mengembalikan jadwal semula')
+    await batalPelepasan(db, k(owner), owner, x.id, 'Uji susulan dibatalkan')
+    const b = await barisJurnal('asset_disposal', x.id, true)
+    assert.ok(b.isi.includes('6-1700 K 300000') && b.isi.includes('1-2100 D 1200000'))
+    assert.equal((await aset(f.id)).status, 'aktif')
   })
 
   test('aset Aktif tanpa penyusutan bisa dibatalkan dengan jurnal balik', async () => {

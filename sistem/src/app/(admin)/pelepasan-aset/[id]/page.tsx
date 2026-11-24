@@ -29,8 +29,9 @@ export default async function RincianPelepasan({ params, searchParams }: { param
   const iz = (h: 'T' | 'H' | 'P') => punyaIzin(p.izin, 'aset.penyusutan', h)
   const draf = x.status === 'Draft'
   // Draf: nilai dari angka aset saat ini; sesudah diposting: salinan saat posting.
-  const nilai = draf ? hitungPelepasan(a, x.proceeds) : { buku: x.bookValue, labaRugi: x.gainLoss }
-  const akum = draf ? a.accumDepreciation : x.accumDepreciation
+  const hitung = draf ? hitungPelepasan(a, x.proceeds, x.date) : null
+  const nilai = hitung ?? { buku: x.bookValue, labaRugi: x.gainLoss }
+  const akum = hitung ? hitung.akumulasi : x.accumDepreciation
   const rekening = draf && iz('T') ? await db.bankAccount.findMany({ where: { active: true }, orderBy: { id: 'asc' } }) : []
   const tujuan = x.bankAccountId ? await db.bankAccount.findUnique({ where: { id: x.bankAccountId } }) : null
   return (
@@ -44,12 +45,13 @@ export default async function RincianPelepasan({ params, searchParams }: { param
         isi={[
           ['Nilai perolehan', formatRupiah(draf ? a.cost : x.cost)],
           ['Akumulasi penyusutan', formatRupiah(akum)],
+          ...(hitung?.susulan ? ([['Termasuk penyusutan susulan', formatRupiah(hitung.susulan)]] as [string, string][]) : []),
           ['Nilai buku', formatRupiah(nilai.buku)],
           ['Hasil penjualan', formatRupiah(x.proceeds)],
           [nilai.labaRugi >= 0n ? 'Laba pelepasan' : 'Rugi pelepasan', formatNilai(nilai.labaRugi), nilai.labaRugi < 0n],
         ]}
       />
-      {draf ? <p className="as-catatan">Angka di atas memakai akumulasi penyusutan saat ini dan dihitung ulang saat diposting.</p> : null}
+      {draf ? <p className="as-catatan">Angka di atas memakai akumulasi penyusutan sampai bulan tanggal pelepasan dan dihitung ulang saat diposting. Penyusutan yang belum dicatat sampai bulan itu ikut dijurnal sebagai penyusutan susulan.</p> : null}
       <div className="kisi">
         <section className="kartu" aria-labelledby="j-data">
           <h2 id="j-data">Data dokumen</h2>
