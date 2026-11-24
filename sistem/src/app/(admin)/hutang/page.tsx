@@ -50,7 +50,7 @@ export default async function HutangPemasok({ searchParams }: { searchParams: Pr
         label="Ringkasan hutang"
         isi={[
           ['Saldo hutang', formatRupiah(h.total), h.total < 0n],
-          ...h.umur.map((u) => [u.kelompok, formatRupiah(u.sisa)] as [string, string]),
+          ...h.umur.map((u) => [u.kelompok, u.sisa < 0n ? `-${formatRupiah(-u.sisa)}` : formatRupiah(u.sisa)] as [string, string]),
           ['Diterima belum difakturkan', formatRupiah(h.belumFaktur)],
         ]}
       />

@@ -97,7 +97,11 @@ export async function hutangPemasok(db: Db, s: SaringHutang = {}, acuan = new Da
   }
   for (const t of terima) if (bdbf.get(t.supplierId)) ambil(t.supplierId, t.pemasok).belumFaktur = bdbf.get(t.supplierId)!
   const perPemasok = [...peta.values()].sort((a, b) => a.pemasok.localeCompare(b.pemasok, 'id'))
-  const umur = KELOMPOK_UMUR.map((k) => ({ kelompok: k, sisa: dok.filter((d) => d.kelompok === k).reduce((n, d) => n + d.sisa, 0n) }))
+  const umur: { kelompok: string; sisa: bigint }[] = KELOMPOK_UMUR.map((k) => ({ kelompok: k, sisa: dok.filter((d) => d.kelompok === k).reduce((n, d) => n + d.sisa, 0n) }))
+  // Temuan audit B-4: nota debit yang belum dipakai mengurangi saldo tetapi tidak punya umur, jadi tampil sebagai
+  // kelompok sendiri (bernilai minus) supaya jumlah semua kelompok sama dengan saldo hutang.
+  const nota = dok.filter((d) => d.jenis === 'Nota debit').reduce((n, d) => n + d.sisa, 0n)
+  if (nota !== 0n) umur.push({ kelompok: 'Nota debit belum dipakai', sisa: nota })
   return {
     perPemasok,
     dokumen: dok.sort((a, b) => a.pemasok.localeCompare(b.pemasok, 'id') || (a.dueDate ?? a.date).getTime() - (b.dueDate ?? b.date).getTime() || a.id - b.id),

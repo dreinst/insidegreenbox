@@ -419,6 +419,14 @@ describe('pembelian langsung dan pembayaran', () => {
     assert.equal(h.perPemasok.find((p) => p.supplierId === pemasok)?.belumFaktur, 460_000n)
     assert.equal(h.total, 12_000n)
     assert.equal(h.dokumen[0].kelompok, 'Belum jatuh tempo')
+    // Temuan audit B-4: nota debit yang belum dipakai menjadi kelompok sendiri, jadi jumlah kelompok = saldo hutang.
+    const lokasi = (await db.location.findUniqueOrThrow({ where: { code: 'OUTLET' } })).id
+    const nd = await db.purchaseReturn.create({ data: { supplierId: pemasok2, locationId: lokasi, no: 'RB-UJI-B4', date: hariIni(), reason: 'Uji nota debit', status: 'Diposting', debitNoteAmount: 9_000n } })
+    const h2 = await hutangPemasok(db)
+    assert.equal(h2.total, 3_000n)
+    assert.deepEqual(h2.umur.at(-1), { kelompok: 'Nota debit belum dipakai', sisa: -9_000n })
+    assert.equal(h2.umur.reduce((n, u) => n + u.sisa, 0n), h2.total)
+    await db.purchaseReturn.delete({ where: { id: nd.id } })
     const csv = csvHutang(h.dokumen)
     assert.ok(csv.startsWith('﻿Pemasok,Jenis'))
     assert.match(csv, /Pemasok B,Pembelian langsung,BL-\d{4}-\d{4},,\d{4}-\d{2}-\d{2},\d{4}-\d{2}-\d{2},22000,10000,12000,0,Belum jatuh tempo/)
