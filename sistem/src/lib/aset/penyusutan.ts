@@ -7,7 +7,7 @@
 // dengan D = nilai perolehan - nilai sisa dan n = umur manfaat. Penyusutan bulan itu = terjadwal - akumulasi yang sudah
 // dicatat, jadi pembulatan tersebar rata, jumlahnya tepat D di bulan ke-n, aset yang sudah habis disusutkan tidak ikut,
 // dan bulan yang terlewat (misalnya aset diaktifkan belakangan) terkejar di dokumen berikutnya. Tanpa impor Next.
-import { GalatAturan } from '../aksi'
+import { GalatAturan, GalatSaklar } from '../aksi'
 import { buatJurnal, buatJurnalBalik, dk, namaPeriode, pastikanPeriodeTerbuka, type BarisJurnal } from '../akuntansi/jurnal'
 import { catatAudit, type Konteks } from '../audit'
 import { kunciBaris, type Aktor } from '../beli/dokumen'
@@ -131,7 +131,7 @@ export async function hitungPenyusutan(db: Db, k: Konteks, aktor: Aktor, masukan
 export async function batalPenyusutan(db: Db, k: Konteks, aktor: Aktor, id: number, alasan: string) {
   pastikanIzin(aktor, MENU_SUSUT, 'P')
   const teks = alasan.trim()
-  if (!saklarNyala(aktor, 'dok.batal_posting')) throw new GalatAturan('Membatalkan penyusutan butuh saklar Batalkan dokumen diposting.')
+  if (!saklarNyala(aktor, 'dok.batal_posting')) throw new GalatSaklar('dok.batal_posting', 'Membatalkan penyusutan butuh saklar Batalkan dokumen diposting.')
   if (teks.length < 5) throw new GalatAturan('Tulis alasan pembatalan, minimal 5 huruf.', 'alasan')
   if (teks.length > 300) throw new GalatAturan('Alasan paling panjang 300 huruf.', 'alasan')
   return db.$transaction(async (tx: Tx) => {

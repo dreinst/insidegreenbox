@@ -1,6 +1,6 @@
 // Pembantu bersama dokumen penjualan B2B (tahap 6A): pelanggan aktif, pilihan barang jual, harga khusus pelanggan, dan
 // aturan saklar b2b.ubah_harga. Pola dokumen mengikuti pembelian (src/lib/beli). Tanpa impor Next.
-import { GalatAturan } from '../aksi'
+import { GalatAturan, GalatSaklar } from '../aksi'
 import type { DbAtauTx } from '../db'
 import { saklarNyala } from '../izin-inti'
 import { formatRupiah, PER_HALAMAN, sesuaiHalaman } from '../master'
@@ -54,7 +54,7 @@ export async function hargaKhusus(tx: DbAtauTx, customerId: number, productId: n
 // bebas harga, karena Greenbox belum punya harga jual standar untuk produk.
 export function periksaHargaJual(aktor: Aktor, nama: string, harga: bigint, daftar: bigint | null, kolom = 'price') {
   if (daftar !== null && harga !== daftar && !saklarNyala(aktor, 'b2b.ubah_harga')) {
-    throw new GalatAturan(`Harga ${nama} harus sama dengan harga khusus pelanggan ${formatRupiah(daftar)}. Mengubahnya butuh saklar Ubah harga jual B2B.`, kolom)
+    throw new GalatSaklar('b2b.ubah_harga', `Harga ${nama} harus sama dengan harga khusus pelanggan ${formatRupiah(daftar)}. Mengubahnya butuh saklar Ubah harga jual B2B.`, kolom)
   }
 }
 

@@ -2,7 +2,7 @@
 // (KONTRAK 3.2, RANCANGAN 2.2): Draft -> (Diajukan ->) Diposting, Diajukan -> Draft, Draft | Diajukan -> Batal,
 // Diposting -> Batal lewat gerak balik. Tanpa impor Next.
 import type { DocStatus } from '@/generated/prisma/client'
-import { GalatAturan, GalatIzin } from '../aksi'
+import { GalatAturan, GalatIzin, GalatSaklar } from '../aksi'
 import { balikJurnalDokStok, jurnalDokStok } from '../akuntansi/dokumen'
 import { catatAudit, type Konteks } from '../audit'
 import type { Db, Tx } from '../db'
@@ -41,7 +41,7 @@ export function periksaTanggal(aktor: Aktor, tanggal: Date, kolom = 'date', seka
   if (mundur === 0) return
   const batas = saklarNyala(aktor, 'dok.tanggal_mundur') ? batasSaklar(aktor, 'dok.tanggal_mundur') : 0
   if (batas !== null && mundur > batas) {
-    throw new GalatAturan(batas === 0 ? 'Kamu hanya boleh membuat dokumen bertanggal hari ini.' : `Tanggal dokumen paling jauh mundur ${batas} hari.`, kolom)
+    throw new GalatSaklar('dok.tanggal_mundur', batas === 0 ? 'Kamu hanya boleh membuat dokumen bertanggal hari ini.' : `Tanggal dokumen paling jauh mundur ${batas} hari.`, kolom)
   }
 }
 
@@ -136,7 +136,7 @@ export async function ubahStatusDok<K extends KepalaDok>(db: Db, k: Konteks, akt
       if (kini.status === 'Diposting') {
         // Batal sesudah posting: gerak balik, butuh izin Posting, saklar dok.batal_posting, dan alasan (KONTRAK 3.2).
         pastikanIzin(aktor, info.menu, 'P')
-        if (!saklarNyala(aktor, 'dok.batal_posting')) throw new GalatAturan('Membatalkan dokumen yang sudah Diposting butuh saklar Batalkan dokumen diposting.')
+        if (!saklarNyala(aktor, 'dok.batal_posting')) throw new GalatSaklar('dok.batal_posting', 'Membatalkan dokumen yang sudah Diposting butuh saklar Batalkan dokumen diposting.')
         if (alasan.length < 5) throw new GalatAturan('Tulis alasan pembatalan, minimal 5 huruf.', 'alasan')
         await kait.periksaBatalPosting?.(tx, kini)
         const balik = await balikDokumen(tx, { docType: kait.jenis, docId: kini.id, docNo: kini.no, tanggal: hariIni(sekarang), oleh: aktor.id })

@@ -1,7 +1,7 @@
 // Master Produk dan Satuan (tahap 4A): produk bahan, setengah jadi, dan jadi; kategori produk; satuan; konversi satuan
 // beli ke satuan dasar. Izin memakai stok.produk. Master tidak dihapus, hanya dinonaktifkan. Tanpa impor Next.
 import { z } from 'zod'
-import { GalatAturan } from '../aksi'
+import { GalatAturan, GalatSaklar } from '../aksi'
 import { catatAudit, selisih, type Konteks } from '../audit'
 import type { Db, Tx } from '../db'
 import { pastikanIzin, saklarNyala, type Pengguna } from '../izin-inti'
@@ -105,7 +105,7 @@ export async function ubahProduk(db: Db, k: Konteks, aktor: Aktor, id: number, m
       const dipakai = (await tx.stockLedger.count({ where: { productId: id } })) > 0
       if (dipakai && s.berubah.includes('baseUnitId')) throw new GalatAturan('Satuan dasar tidak bisa diganti karena produk sudah punya gerak stok.', 'baseUnitId')
       if (dipakai && (s.berubah.includes('code') || s.berubah.includes('name')) && !saklarNyala(aktor, 'produk.ubah_kode_nama')) {
-        throw new GalatAturan('Kode dan nama produk yang sudah dipakai transaksi hanya bisa diubah pemegang saklar Ubah kode dan nama produk.', s.berubah.includes('code') ? 'code' : 'name')
+        throw new GalatSaklar('produk.ubah_kode_nama', 'Kode dan nama produk yang sudah dipakai transaksi hanya bisa diubah pemegang saklar Ubah kode dan nama produk.', s.berubah.includes('code') ? 'code' : 'name')
       }
       const b = await tx.product.update({ where: { id }, data: { ...dataProduk(d), updatedBy: aktor.id } })
       await catatAudit(tx, k, {

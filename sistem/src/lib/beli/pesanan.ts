@@ -2,7 +2,7 @@
 // pesanan (approval_rule purchase_order dengan min_amount kosong, KONTRAK 11 butir 63) wajib diajukan dan disetujui
 // pemegang Setujui (Owner). Progres terima (Belum, Sebagian, Penuh) dari qty diterima penerimaan Diposting. Tanpa impor Next.
 import { z } from 'zod'
-import { GalatAturan } from '../aksi'
+import { GalatAturan, GalatSaklar } from '../aksi'
 import { catatAudit, type Konteks } from '../audit'
 import type { Db, Tx } from '../db'
 import { pastikanIzin, saklarNyala } from '../izin-inti'
@@ -145,7 +145,7 @@ export async function ubahKepalaPesanan(db: Db, k: Konteks, aktor: Aktor, id: nu
 // Harga yang berbeda dari harga terakhir butuh saklar beli.ubah_harga_po. Produk yang belum pernah dibeli bebas harga.
 export function periksaHargaPesanan(aktor: Aktor, nama: string, harga: bigint, terakhir: bigint, kolom = 'price') {
   if (terakhir > 0n && harga !== terakhir && !saklarNyala(aktor, 'beli.ubah_harga_po')) {
-    throw new GalatAturan(`Harga ${nama} harus sama dengan harga terakhir ${formatRupiah(terakhir)}. Mengubah harga butuh saklar Ubah harga pesanan.`, kolom)
+    throw new GalatSaklar('beli.ubah_harga_po', `Harga ${nama} harus sama dengan harga terakhir ${formatRupiah(terakhir)}. Mengubah harga butuh saklar Ubah harga pesanan.`, kolom)
   }
 }
 
@@ -153,7 +153,7 @@ export function periksaHargaPesanan(aktor: Aktor, nama: string, harga: bigint, t
 function periksaQtyPermintaan(aktor: Aktor, qty: Desimal, pr: { qty: Desimal | string; qtyOrdered: Desimal | string }, nama: string) {
   const sisa = des(pr.qty).minus(des(pr.qtyOrdered))
   if (qty.gt(sisa) && !saklarNyala(aktor, 'beli.ubah_qty_pr')) {
-    throw new GalatAturan(`Qty ${nama} melebihi sisa permintaan (${formatQty(sisa)}). Melebihi permintaan butuh saklar Ubah qty permintaan.`, 'qty')
+    throw new GalatSaklar('beli.ubah_qty_pr', `Qty ${nama} melebihi sisa permintaan (${formatQty(sisa)}). Melebihi permintaan butuh saklar Ubah qty permintaan.`, 'qty')
   }
 }
 
@@ -172,7 +172,7 @@ export async function tambahBarisPesanan(db: Db, k: Konteks, aktor: Aktor, id: n
       unitId = prLine.unitId
       qty = qty ?? des(prLine.qty).minus(des(prLine.qtyOrdered))
     } else {
-      if (!saklarNyala(aktor, 'beli.po_tanpa_pr')) throw new GalatAturan('Pesanan harus merujuk permintaan pembelian. Membuat pesanan tanpa permintaan butuh saklar Pesanan tanpa permintaan.', 'prLineId')
+      if (!saklarNyala(aktor, 'beli.po_tanpa_pr')) throw new GalatSaklar('beli.po_tanpa_pr', 'Pesanan harus merujuk permintaan pembelian. Membuat pesanan tanpa permintaan butuh saklar Pesanan tanpa permintaan.', 'prLineId')
       const it = skemaBarang.safeParse(d.item ?? '')
       if (!it.success) throw new GalatAturan('Pilih produk dan satuannya.', 'item')
       ;({ productId, unitId } = it.data)
@@ -286,7 +286,7 @@ export const KAIT_PESANAN: KaitBeli<KepalaPesanan> = {
     for (const b of baris) {
       if (!b.product.active) throw new GalatAturan(`Produk ${b.product.name} sudah nonaktif. Hapus barisnya dulu.`)
       if (!b.isFree && b.price <= 0n) throw new GalatAturan(`Isi harga ${b.product.name}, atau tandai sebagai barang bonus.`)
-      if (!b.purchaseRequestLine && !saklarNyala(aktor, 'beli.po_tanpa_pr')) throw new GalatAturan(`Baris ${b.product.name} tidak merujuk permintaan. Pesanan tanpa permintaan butuh saklar Pesanan tanpa permintaan.`)
+      if (!b.purchaseRequestLine && !saklarNyala(aktor, 'beli.po_tanpa_pr')) throw new GalatSaklar('beli.po_tanpa_pr', `Baris ${b.product.name} tidak merujuk permintaan. Pesanan tanpa permintaan butuh saklar Pesanan tanpa permintaan.`)
     }
   },
   setujui: async (tx, d, aktor) => {
@@ -319,7 +319,7 @@ export const KAIT_PESANAN: KaitBeli<KepalaPesanan> = {
     for (const id of [...prDisentuh].sort((a, b) => a - b)) await perbaruiProgresPermintaan(tx, id)
   },
   tutup: async (_tx, _d, aktor) => {
-    if (!saklarNyala(aktor, 'beli.tutup_po')) throw new GalatAturan('Menutup sisa pesanan butuh saklar Tutup pesanan.')
+    if (!saklarNyala(aktor, 'beli.tutup_po')) throw new GalatSaklar('beli.tutup_po', 'Menutup sisa pesanan butuh saklar Tutup pesanan.')
   },
 }
 

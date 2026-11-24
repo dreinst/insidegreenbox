@@ -4,7 +4,7 @@
 // akumulasi, dan beban disalin dari pemetaan saat aktivasi, supaya penyusutan dan pelepasan sesudahnya memakai akun
 // yang sama walau pemetaan diubah. Tanpa impor Next.
 import { z } from 'zod'
-import { GalatAturan } from '../aksi'
+import { GalatAturan, GalatSaklar } from '../aksi'
 import { buatJurnal, buatJurnalBalik, dk } from '../akuntansi/jurnal'
 import { kunciAset, kunciBank, pembacaAkun } from '../akuntansi/pemetaan'
 import { catatAudit, selisih, type Konteks } from '../audit'
@@ -205,7 +205,7 @@ export async function batalkanAset(db: Db, k: Konteks, aktor: Aktor, id: number,
   return db.$transaction(async (tx) => {
     const a = await muatTerkunci(tx, id)
     if (a.status !== 'aktif') throw new GalatAturan('Hanya aset Aktif yang bisa dibatalkan. Draf cukup dihapus.')
-    if (!saklarNyala(aktor, 'dok.batal_posting')) throw new GalatAturan('Membatalkan aset yang sudah aktif butuh saklar Batalkan dokumen diposting.')
+    if (!saklarNyala(aktor, 'dok.batal_posting')) throw new GalatSaklar('dok.batal_posting', 'Membatalkan aset yang sudah aktif butuh saklar Batalkan dokumen diposting.')
     if (teks.length < 5) throw new GalatAturan('Tulis alasan pembatalan, minimal 5 huruf.', 'alasan')
     if (teks.length > 300) throw new GalatAturan('Alasan paling panjang 300 huruf.', 'alasan')
     const susut = await tx.assetDepreciation.count({ where: { fixedAssetId: id, run: { status: 'Diposting' } } })

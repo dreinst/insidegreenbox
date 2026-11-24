@@ -4,7 +4,7 @@
 // Pelaksana yang disetujui dulu: Pembayaran. Tanpa impor Next.
 import type { DocStatus, PayStatus, Progress } from '@/generated/prisma/client'
 import { z } from 'zod'
-import { GalatAturan, GalatIzin } from '../aksi'
+import { GalatAturan, GalatIzin, GalatSaklar } from '../aksi'
 import { BALIK_JURNAL_BELI, JURNAL_BELI, type JenisBeliJurnal } from '../akuntansi/beli'
 import { pastikanPeriodeTerbuka } from '../akuntansi/jurnal'
 import { catatAudit, type Konteks } from '../audit'
@@ -212,7 +212,7 @@ export async function ubahStatusBeli<K extends KepalaBeli>(db: Db, k: Konteks, a
       if (kini.status === 'Diposting') {
         // Batal sesudah posting: gerak balik, butuh izin Posting, saklar dok.batal_posting, dan alasan (KONTRAK 3.2).
         pastikanIzin(aktor, inf.menu, 'P')
-        if (!saklarNyala(aktor, 'dok.batal_posting')) throw new GalatAturan('Membatalkan dokumen yang sudah Diposting butuh saklar Batalkan dokumen diposting.')
+        if (!saklarNyala(aktor, 'dok.batal_posting')) throw new GalatSaklar('dok.batal_posting', 'Membatalkan dokumen yang sudah Diposting butuh saklar Batalkan dokumen diposting.')
         if (alasan.length < 5) throw new GalatAturan('Tulis alasan pembatalan, minimal 5 huruf.', 'alasan')
         // tahap 5C: dokumen bertanggal di periode tertutup tidak bisa dibatalkan, begitu juga bila hari ini tertutup.
         await pastikanPeriodeTerbuka(tx, kini.date, `Pembatalan ${kini.no}`)

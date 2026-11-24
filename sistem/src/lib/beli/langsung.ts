@@ -3,7 +3,7 @@
 // (dibayar dari kas atau rekening bank); kredit menjadi hutang yang dibayar lewat Pembayaran Pembelian. Baris "hanya
 // biaya" (tidak distok) butuh saklar beli.langsung_biaya. Tanpa impor Next.
 import { z } from 'zod'
-import { GalatAturan } from '../aksi'
+import { GalatAturan, GalatSaklar } from '../aksi'
 import { catatAudit, type Konteks } from '../audit'
 import type { Db, DbAtauTx, Tx } from '../db'
 import { batasSaklar, pastikanIzin, saklarNyala } from '../izin-inti'
@@ -72,8 +72,8 @@ export const skemaBarisLangsung = z.object({
 })
 
 function periksaCaraBayar(aktor: Aktor, cara: string) {
-  if (cara === 'tunai' && !saklarNyala(aktor, 'beli.langsung_tunai')) throw new GalatAturan('Pembelian langsung tunai butuh saklar Pembelian langsung tunai.', 'payMode')
-  if (cara === 'kredit' && !saklarNyala(aktor, 'beli.langsung_kredit')) throw new GalatAturan('Pembelian langsung kredit butuh saklar Pembelian langsung kredit.', 'payMode')
+  if (cara === 'tunai' && !saklarNyala(aktor, 'beli.langsung_tunai')) throw new GalatSaklar('beli.langsung_tunai', 'Pembelian langsung tunai butuh saklar Pembelian langsung tunai.', 'payMode')
+  if (cara === 'kredit' && !saklarNyala(aktor, 'beli.langsung_kredit')) throw new GalatSaklar('beli.langsung_kredit', 'Pembelian langsung kredit butuh saklar Pembelian langsung kredit.', 'payMode')
 }
 
 async function rekeningSumber(tx: Tx, sumber: string, payMode: string) {
@@ -149,7 +149,7 @@ export function periksaHargaLangsung(aktor: Aktor, nama: string, harga: bigint, 
   if (terakhir <= 0n || saklarNyala(aktor, 'beli.ubah_harga_langsung')) return
   const batas = batasSaklar(aktor, 'beli.ubah_harga_langsung') ?? 20
   const beda = new Desimal((harga - terakhir).toString()).abs().times(100).div(terakhir.toString())
-  if (beda.gt(batas)) throw new GalatAturan(`Harga ${nama} berbeda ${beda.toFixed(0)}% dari harga terakhir ${formatRupiah(terakhir)}, melebihi batas ${batas}%. Butuh saklar Ubah harga pembelian langsung.`, 'price')
+  if (beda.gt(batas)) throw new GalatSaklar('beli.ubah_harga_langsung', `Harga ${nama} berbeda ${beda.toFixed(0)}% dari harga terakhir ${formatRupiah(terakhir)}, melebihi batas ${batas}%. Butuh saklar Ubah harga pembelian langsung.`, 'price')
 }
 
 export async function hitungUlangLangsung(tx: Tx, id: number) {
@@ -175,7 +175,7 @@ export async function tambahBarisLangsung(db: Db, k: Konteks, aktor: Aktor, id: 
     let after: Record<string, unknown>
     const jenis = d.jenis ?? (!d.item && d.description ? 'biaya' : 'barang')
     if (jenis === 'biaya') {
-      if (!saklarNyala(aktor, 'beli.langsung_biaya')) throw new GalatAturan('Baris hanya biaya butuh saklar Baris hanya biaya.', 'jenis')
+      if (!saklarNyala(aktor, 'beli.langsung_biaya')) throw new GalatSaklar('beli.langsung_biaya', 'Baris hanya biaya butuh saklar Baris hanya biaya.', 'jenis')
       if (d.description.length < 3) throw new GalatAturan('Keterangan biaya minimal 3 huruf.', 'description')
       const jumlah = d.amount || d.price
       if (jumlah <= 0n) throw new GalatAturan('Jumlah biaya harus lebih dari 0.', 'amount')
@@ -249,7 +249,7 @@ export const KAIT_LANGSUNG: KaitBeli<KepalaLangsung> = {
     const baris = await tx.directPurchaseLine.findMany({ where: { directPurchaseId: d.id }, include: { product: true } })
     if (!baris.length) throw new GalatAturan('Tambahkan minimal satu baris dulu.')
     periksaCaraBayar(aktor, d.payMode)
-    if (baris.some((b) => !b.productId) && !saklarNyala(aktor, 'beli.langsung_biaya')) throw new GalatAturan('Dokumen ini punya baris hanya biaya, yang butuh saklar Baris hanya biaya.')
+    if (baris.some((b) => !b.productId) && !saklarNyala(aktor, 'beli.langsung_biaya')) throw new GalatSaklar('beli.langsung_biaya', 'Dokumen ini punya baris hanya biaya, yang butuh saklar Baris hanya biaya.')
     for (const b of baris) if (b.product && !b.product.active) throw new GalatAturan(`Produk ${b.product.name} sudah nonaktif. Hapus barisnya dulu.`)
   },
   posting: async (tx, d, asal) => {

@@ -4,7 +4,7 @@
 // Barisnya disimpan langsung di journal_line selama Draft dan baru berlaku saat posted_at terisi. Tanpa impor Next.
 import { z } from 'zod'
 import type { DocStatus, Prisma } from '@/generated/prisma/client'
-import { GalatAturan, GalatIzin } from '../aksi'
+import { GalatAturan, GalatIzin, GalatSaklar } from '../aksi'
 import { catatAudit, type Konteks } from '../audit'
 import type { Db, DbAtauTx, Tx } from '../db'
 import { pastikanIzin, punyaIzin, saklarNyala, type Pengguna } from '../izin-inti'
@@ -190,7 +190,7 @@ export async function ubahStatusMemorial(db: Db, k: Konteks, aktor: Aktor, id: n
       if (alasan.length > 300) throw new GalatAturan('Alasan paling panjang 300 huruf.', 'alasan')
       if (j.status === 'Diposting') {
         pastikanIzin(aktor, MENU, 'P')
-        if (!saklarNyala(aktor, 'dok.batal_posting')) throw new GalatAturan('Membatalkan jurnal yang sudah Diposting butuh saklar Batalkan dokumen diposting.')
+        if (!saklarNyala(aktor, 'dok.batal_posting')) throw new GalatSaklar('dok.batal_posting', 'Membatalkan jurnal yang sudah Diposting butuh saklar Batalkan dokumen diposting.')
         if (alasan.length < 5) throw new GalatAturan('Tulis alasan pembatalan, minimal 5 huruf.', 'alasan')
         const balik = await buatJurnalBalik(tx, { docType: SUMBER_MEMORIAL, docId: id, docNo: j.no, tanggal: tanggalJurnal(sekarang), memo: `Batal ${j.no}: ${alasan}`, oleh: aktor.id })
         sesudah = { jurnalBalik: balik?.no ?? null }

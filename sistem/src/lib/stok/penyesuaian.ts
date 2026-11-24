@@ -2,7 +2,7 @@
 // Kurang memakai harga rata-rata; tambah memakai harga rata-rata kecuali harga satuan diisi. Saklar stok.sesuai_kurang
 // dan stok.sesuai_tambah terpisah. Penyesuaian yang punya baris tambah wajib disetujui (approval_rule). Tanpa impor Next.
 import { z } from 'zod'
-import { GalatAturan } from '../aksi'
+import { GalatAturan, GalatSaklar } from '../aksi'
 import { catatAudit, type Konteks } from '../audit'
 import type { Db, Tx } from '../db'
 import { pastikanIzin, saklarNyala } from '../izin-inti'
@@ -103,8 +103,8 @@ export async function ubahKepalaPenyesuaian(db: Db, k: Konteks, aktor: Aktor, id
 }
 
 function periksaSaklarArah(aktor: Aktor, arah: string) {
-  if (arah === 'kurang' && !saklarNyala(aktor, 'stok.sesuai_kurang')) throw new GalatAturan('Kamu tidak punya saklar Penyesuaian stok kurang.', 'direction')
-  if (arah === 'tambah' && !saklarNyala(aktor, 'stok.sesuai_tambah')) throw new GalatAturan('Kamu tidak punya saklar Penyesuaian stok tambah.', 'direction')
+  if (arah === 'kurang' && !saklarNyala(aktor, 'stok.sesuai_kurang')) throw new GalatSaklar('stok.sesuai_kurang', 'Kamu tidak punya saklar Penyesuaian stok kurang.', 'direction')
+  if (arah === 'tambah' && !saklarNyala(aktor, 'stok.sesuai_tambah')) throw new GalatSaklar('stok.sesuai_tambah', 'Kamu tidak punya saklar Penyesuaian stok tambah.', 'direction')
 }
 
 export async function tambahBarisPenyesuaian(db: Db, k: Konteks, aktor: Aktor, idDok: number, masukan: unknown) {

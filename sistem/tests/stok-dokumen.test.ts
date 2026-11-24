@@ -2,7 +2,7 @@
 // alur status, saklar, izin, audit; dan impor saldo awal.
 import assert from 'node:assert/strict'
 import { after, before, describe, test } from 'node:test'
-import { GalatAturan, GalatIzin } from '../src/lib/aksi'
+import { GalatAturan, GalatIzin, GalatSaklar } from '../src/lib/aksi'
 import type { Db } from '../src/lib/db'
 import type { Pengguna } from '../src/lib/izin-inti'
 import { tambahAlasan, ubahStatusAlasan } from '../src/lib/stok/alasan'
@@ -157,6 +157,10 @@ describe('penyesuaian stok', () => {
       /saklar Penyesuaian stok tambah/,
       'direction',
     )
+    await assert.rejects(
+      tambahBarisPenyesuaian(db, k(admin), admin, d.id, { productId: String(kopi), reasonId: String(rusak), direction: 'tambah', qty: '5' }),
+      (e: unknown) => e instanceof GalatSaklar && e.kode === 'stok.sesuai_tambah',
+    )
     await galat(
       () => tambahBarisPenyesuaian(db, k(admin), admin, d.id, { productId: String(kopi), reasonId: String(rusak), direction: 'kurang', qty: '5', unitCost: '10' }),
       /harga rata-rata/,
@@ -168,8 +172,10 @@ describe('penyesuaian stok', () => {
     const baris = await db.stockAdjustmentLine.findFirstOrThrow({ where: { stockAdjustmentId: d.id } })
     assert.equal(baris.unitCost.toString(), '320')
     await galat(() => tambahBarisPenyesuaian(db, k(admin), admin, d.id, { productId: String(kopi), reasonId: String(rusak), direction: 'kurang', qty: '1' }), /Hanya draf/)
-    // Admin tidak punya saklar batal posting.
+    // Admin tidak punya saklar batal posting. Temuan audit B-5: penolakan saklar memakai GalatSaklar yang membawa kode
+    // saklarnya, supaya jalankanAksi mencatatnya sebagai izin.ditolak.
     await galat(() => ubahStatusPenyesuaian(db, k(admin), admin, d.id, 'batal', { alasan: 'Salah catat' }), /saklar Batalkan/)
+    await assert.rejects(ubahStatusPenyesuaian(db, k(admin), admin, d.id, 'batal', { alasan: 'Salah catat' }), (e: unknown) => e instanceof GalatSaklar && e.kode === 'dok.batal_posting')
     // Owner membatalkan: stok kembali, butuh alasan.
     await galat(() => ubahStatusPenyesuaian(db, k(owner), owner, d.id, 'batal', { alasan: '' }), /alasan/, 'alasan')
     await ubahStatusPenyesuaian(db, k(owner), owner, d.id, 'batal', { alasan: 'Ternyata tidak tumpah' })

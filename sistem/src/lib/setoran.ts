@@ -4,7 +4,7 @@
 // Tanggal shift = tanggal WIB saat shift dibuka. Tanpa Next, dipanggil aksi server dan tes.
 import { z } from 'zod'
 import type { Prisma } from '@/generated/prisma/client'
-import { GalatAturan } from './aksi'
+import { GalatAturan, GalatSaklar } from './aksi'
 import { balikJurnalSetoran, jurnalSetoran } from './akuntansi/dokumen'
 import { tanggalJurnal } from './akuntansi/jurnal'
 import { catatAudit, type Konteks } from './audit'
@@ -459,7 +459,7 @@ export async function batalSetoran(db: Db, k: Konteks, aktor: Aktor, id: number,
     if (!transisiSah('pelaksana', st.status as StatusDokumen, 'Batal')) throw new GalatAturan('Setoran ini sudah Batal.')
     if (st.status === 'Diposting') {
       pastikanIzin(aktor, MENU, 'P')
-      if (!saklarNyala(aktor, 'dok.batal_posting')) throw new GalatAturan('Membatalkan setoran yang sudah diposting butuh saklar Batalkan dokumen diposting. Minta Owner.')
+      if (!saklarNyala(aktor, 'dok.batal_posting')) throw new GalatSaklar('dok.batal_posting', 'Membatalkan setoran yang sudah diposting butuh saklar Batalkan dokumen diposting. Minta Owner.')
     }
     const b = await tx.posSettlement.update({ where: { id }, data: { status: 'Batal', cancelledBy: aktor.id, cancelledAt: new Date(), cancelReason: d.alasan, updatedBy: aktor.id } })
     await tx.posSettlementLine.updateMany({ where: { posSettlementId: id }, data: { cancelled: true } })

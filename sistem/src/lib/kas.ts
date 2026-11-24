@@ -5,7 +5,7 @@
 // saat Diposting dan dibalik saat dibatalkan, di transaksi yang sama. Tanpa impor Next.
 import type { AccountKind, DocStatus } from '@/generated/prisma/client'
 import { z } from 'zod'
-import { GalatAturan, GalatIzin } from './aksi'
+import { GalatAturan, GalatIzin, GalatSaklar } from './aksi'
 import { buatJurnal, buatJurnalBalik, pastikanPeriodeTerbuka, type BarisJurnal, type HasilJurnal } from './akuntansi/jurnal'
 import { kunciBank, pembacaAkun } from './akuntansi/pemetaan'
 import { catatAudit, type Konteks } from './audit'
@@ -349,7 +349,7 @@ export async function ubahStatusKasTx(tx: Tx, k: Konteks, aktor: Aktor, id: numb
     if (alasan.length > 300) throw new GalatAturan('Alasan paling panjang 300 huruf.', 'alasan')
     if (c.status === 'Diposting') {
       pastikanIzin(aktor, menu, 'P')
-      if (!saklarNyala(aktor, 'dok.batal_posting')) throw new GalatAturan('Membatalkan dokumen yang sudah Diposting butuh saklar Batalkan dokumen diposting.')
+      if (!saklarNyala(aktor, 'dok.batal_posting')) throw new GalatSaklar('dok.batal_posting', 'Membatalkan dokumen yang sudah Diposting butuh saklar Batalkan dokumen diposting.')
       if (alasan.length < 5) throw new GalatAturan('Tulis alasan pembatalan, minimal 5 huruf.', 'alasan')
       const tgl = hariIni(sekarang)
       await pastikanPeriodeTerbuka(tx, tgl, `Pembatalan ${c.no}`)

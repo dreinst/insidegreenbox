@@ -4,7 +4,7 @@
 // rekening (hasil penjualan), debit akumulasi penyusutan, kredit aset tetap (nilai perolehan), dan sisanya ke Laba atau
 // Rugi Pelepasan Aset. Aset menjadi Dilepas dan tidak disusutkan lagi. Tanpa impor Next.
 import { z } from 'zod'
-import { GalatAturan } from '../aksi'
+import { GalatAturan, GalatSaklar } from '../aksi'
 import { buatJurnal, buatJurnalBalik, dk, namaPeriode } from '../akuntansi/jurnal'
 import { kunciBank } from '../akuntansi/pemetaan'
 import { catatAudit, selisih, type Konteks } from '../audit'
@@ -146,7 +146,7 @@ export async function batalPelepasan(db: Db, k: Konteks, aktor: Aktor, id: numbe
   return db.$transaction(async (tx) => {
     const x = await muatTerkunci(tx, id)
     if (x.status !== 'Diposting') throw new GalatAturan('Hanya pelepasan Diposting yang dibatalkan. Draf cukup dihapus.')
-    if (!saklarNyala(aktor, 'dok.batal_posting')) throw new GalatAturan('Membatalkan dokumen yang sudah Diposting butuh saklar Batalkan dokumen diposting.')
+    if (!saklarNyala(aktor, 'dok.batal_posting')) throw new GalatSaklar('dok.batal_posting', 'Membatalkan dokumen yang sudah Diposting butuh saklar Batalkan dokumen diposting.')
     if (teks.length < 5) throw new GalatAturan('Tulis alasan pembatalan, minimal 5 huruf.', 'alasan')
     if (teks.length > 300) throw new GalatAturan('Alasan paling panjang 300 huruf.', 'alasan')
     await kunciBaris(tx, 'fixed_asset', x.fixedAssetId)

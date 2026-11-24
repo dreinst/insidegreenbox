@@ -4,7 +4,7 @@
 // dasar, nilai = qty x harga ditambah bagian biaya tambahan. Progres faktur (Belum, Sebagian, Penuh) dihitung dari qty
 // difakturkan ditambah qty yang diretur sebelum difakturkan. Tanpa impor Next.
 import { z } from 'zod'
-import { GalatAturan } from '../aksi'
+import { GalatAturan, GalatSaklar } from '../aksi'
 import { catatAudit, type Konteks } from '../audit'
 import type { Db, Tx } from '../db'
 import { pastikanIzin, saklarNyala } from '../izin-inti'
@@ -134,7 +134,7 @@ export async function simpanBarisPenerimaan(db: Db, k: Konteks, aktor: Aktor, id
       const batas = batasTerima(b.purchaseOrderLine, b.product.receiptTolPct)
       if (qty.gt(batas)) throw new GalatAturan(`Qty ${b.product.name} melebihi sisa pesanan (${formatQty(batas)}).`, `qty_${b.id}`)
       if (h.data !== b.purchaseOrderLine.price && !saklarNyala(aktor, 'beli.ubah_harga_po')) {
-        throw new GalatAturan(`Harga ${b.product.name} harus sama dengan harga pesanan ${formatRupiah(b.purchaseOrderLine.price)}. Mengubah harga butuh saklar Ubah harga pesanan.`, `price_${b.id}`)
+        throw new GalatSaklar('beli.ubah_harga_po', `Harga ${b.product.name} harus sama dengan harga pesanan ${formatRupiah(b.purchaseOrderLine.price)}. Mengubah harga butuh saklar Ubah harga pesanan.`, `price_${b.id}`)
       }
       if (!b.purchaseOrderLine.isFree && h.data <= 0n) throw new GalatAturan(`Harga ${b.product.name} harus lebih dari 0.`, `price_${b.id}`)
       await tx.goodsReceiptLine.update({ where: { id: b.id }, data: { qty, price: h.data } })

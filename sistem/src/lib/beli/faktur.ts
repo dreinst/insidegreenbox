@@ -4,7 +4,7 @@
 // nanti dijurnal ke Selisih Harga Pembelian (KONTRAK 11). Selisih di atas batas approval_rule (bawaan 5 persen dari nilai
 // penerimaan yang difakturkan) wajib disetujui Owner. Tanpa impor Next.
 import { z } from 'zod'
-import { GalatAturan } from '../aksi'
+import { GalatAturan, GalatSaklar } from '../aksi'
 import { catatAudit, type Konteks } from '../audit'
 import type { Db, Tx } from '../db'
 import { pastikanIzin, saklarNyala } from '../izin-inti'
@@ -210,9 +210,9 @@ export async function simpanBarisFaktur(db: Db, k: Konteks, aktor: Aktor, id: nu
         qty = q.data
         const sisa = sisaFaktur(b.goodsReceiptLine!)
         if (qty.gt(sisa)) throw new GalatAturan(`Qty ${nama} melebihi qty yang belum difakturkan (${formatQty(sisa)}).`, `qty_${b.id}`)
-        if ((!qty.eq(sisa) || h.data !== b.goodsReceiptLine!.price) && !bolehUbah) throw new GalatAturan(`Qty dan harga ${nama} harus sama dengan penerimaan. Mengubahnya butuh saklar Ubah harga faktur.`, `price_${b.id}`)
+        if ((!qty.eq(sisa) || h.data !== b.goodsReceiptLine!.price) && !bolehUbah) throw new GalatSaklar('beli.ubah_harga_faktur', `Qty dan harga ${nama} harus sama dengan penerimaan. Mengubahnya butuh saklar Ubah harga faktur.`, `price_${b.id}`)
       } else if (b.kind === 'biaya_terima' && h.data !== b.goodsReceipt!.extraCost && !bolehUbah) {
-        throw new GalatAturan(`Biaya tambahan harus sama dengan penerimaan (${formatRupiah(b.goodsReceipt!.extraCost)}). Mengubahnya butuh saklar Ubah harga faktur.`, `price_${b.id}`)
+        throw new GalatSaklar('beli.ubah_harga_faktur', `Biaya tambahan harus sama dengan penerimaan (${formatRupiah(b.goodsReceipt!.extraCost)}). Mengubahnya butuh saklar Ubah harga faktur.`, `price_${b.id}`)
       }
       if (qty.eq(des(b.qty)) && h.data === b.price) continue
       await tx.purchaseInvoiceLine.update({ where: { id: b.id }, data: { qty, price: h.data } })

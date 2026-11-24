@@ -18,6 +18,19 @@ export class GalatAturan extends Error {
   }
 }
 
+// Ditolak karena saklar fitur mati (temuan audit B-5). Tampil ke pengguna seperti GalatAturan, tetapi jalankanAksi juga
+// mencatatnya sebagai izin.ditolak supaya percobaan di luar wewenang terlihat Owner.
+export class GalatSaklar extends GalatAturan {
+  constructor(
+    public kode: string,
+    pesan: string,
+    kolom?: string,
+  ) {
+    super(pesan, kolom)
+    this.name = 'GalatSaklar'
+  }
+}
+
 export class GalatIzin extends Error {
   constructor(
     public menu: string,
