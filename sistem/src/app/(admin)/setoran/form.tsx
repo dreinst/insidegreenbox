@@ -70,7 +70,7 @@ function IsiUbah({ hasil, kirim, kepala, baris, rekening, tunai }: { hasil: Hasi
         <div className={`kolom${g('mdrFee') ? ' salah' : ''}`}>
           <label htmlFor="k-mdrFee">Biaya MDR</label>
           <input id="k-mdrFee" name="mdrFee" type="text" inputMode="numeric" autoComplete="off" defaultValue={nilaiAwal(hasil, 'mdrFee', String(kepala.mdrFee))} onChange={(e) => setMdr(angka(e.target.value))} aria-invalid={g('mdrFee') ? true : undefined} />
-          {g('mdrFee') ? <small className="galat-kolom">{g('mdrFee')}</small> : <small>Bawaan dari persen MDR metode, boleh diubah sesuai mutasi.</small>}
+          {g('mdrFee') ? <small className="galat-kolom">{g('mdrFee')}</small> : <small>Bawaan dihitung per transaksi dengan tarif yang berlaku pada tanggal penjualan, boleh diubah sesuai mutasi.</small>}
         </div>
         <div className={`kolom lebar${g('note') ? ' salah' : ''}`}>
           <label htmlFor="k-note">Catatan</label>

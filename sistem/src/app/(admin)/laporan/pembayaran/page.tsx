@@ -17,7 +17,7 @@ export default async function RingkasanPembayaran({ searchParams }: { searchPara
     <>
       <KepalaHalaman
         judul="Ringkasan Pembayaran"
-        keterangan={`Pembayaran penjualan selesai ${d.rentang.dari} sampai ${d.rentang.sampai} (WIB). Sudah disetor artinya shift dan metodenya ada di setoran yang Diposting. MDR diperkirakan dari persen MDR metode saat ini.`}
+        keterangan={`Pembayaran penjualan selesai ${d.rentang.dari} sampai ${d.rentang.sampai} (WIB). Sudah disetor artinya shift dan metodenya ada di setoran yang Diposting. MDR diperkirakan per transaksi dengan tarif yang berlaku pada tanggal penjualan.`}
       />
       <SaringanLaporan
         dasar="/laporan/pembayaran"
