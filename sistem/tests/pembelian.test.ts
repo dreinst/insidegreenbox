@@ -50,13 +50,12 @@ const saldo = async (p: number) => {
   return { qty: b?.qty.toString() ?? '0', nilai: b?.value ?? 0n, rata: b?.avgCost.toString() ?? '0' }
 }
 
-// Pesanan kopi dalam kg ke pemasok utama, langsung dikonfirmasi atau disetujui Owner.
-async function pesanKopi(kgQty: string, harga: string, opsi: { setujuOleh?: Pengguna } = {}) {
+// Pesanan kopi dalam kg ke pemasok utama: Admin mengajukan, lalu Owner menyetujui (semua PO lewat Owner, KONTRAK 11 butir 63).
+async function pesanKopi(kgQty: string, harga: string) {
   const po = await buatPesanan(db, k(admin), admin, { supplierId: String(pemasok), locationId: String(outlet), date: tgl() })
   await tambahBarisPesanan(db, k(admin), admin, po.id, { item: `${kopi}:${kg}`, qty: kgQty, price: harga })
-  const p = opsi.setujuOleh ?? admin
-  if (p !== admin) await ubahStatusPesanan(db, k(admin), admin, po.id, 'ajukan')
-  await ubahStatusPesanan(db, k(p), p, po.id, 'setujui')
+  await ubahStatusPesanan(db, k(admin), admin, po.id, 'ajukan')
+  await ubahStatusPesanan(db, k(owner), owner, po.id, 'setujui')
   return po
 }
 
@@ -102,8 +101,8 @@ describe('pemasok', () => {
   })
 })
 
-describe('permintaan dan batas persetujuan pesanan', () => {
-  test('PR disetujui Admin, PO dari PR di atas batas butuh Owner, qty dipesan dan progres PR terbarui', async () => {
+describe('permintaan dan persetujuan Owner untuk semua pesanan', () => {
+  test('PR disetujui Admin, PO dari PR butuh Owner, qty dipesan dan progres PR terbarui', async () => {
     const pr = await buatPermintaan(db, k(admin), admin, { locationId: String(outlet), date: tgl() })
     await tambahBarisPermintaan(db, k(admin), admin, pr.id, { item: `${kopi}:${kg}`, qty: '12' })
     await ubahStatusPermintaan(db, k(admin), admin, pr.id, 'setujui')
@@ -111,11 +110,11 @@ describe('permintaan dan batas persetujuan pesanan', () => {
     const po = await buatPesanan(db, k(admin), admin, { supplierId: String(pemasok), locationId: String(outlet), date: tgl() }, pr.id)
     const [b] = await db.purchaseOrderLine.findMany({ where: { purchaseOrderId: po.id } })
     assert.equal(b.qty.toString(), '12')
-    // Produk belum pernah dibeli: harga bawaan 0, wajib diisi sebelum dikonfirmasi.
-    await galat(() => ubahStatusPesanan(db, k(admin), admin, po.id, 'setujui'), /harga/i)
+    // Produk belum pernah dibeli: harga bawaan 0, wajib diisi sebelum diajukan.
+    await galat(() => ubahStatusPesanan(db, k(admin), admin, po.id, 'ajukan'), /harga/i)
     await simpanBarisPesanan(db, k(admin), admin, po.id, { [`qty_${b.id}`]: '12', [`price_${b.id}`]: '450.000' })
     assert.equal((await db.purchaseOrder.findUniqueOrThrow({ where: { id: po.id } })).total, 5_400_000n)
-    // Di atas Rp 5.000.000: tidak bisa dikonfirmasi langsung dan Admin tidak memegang Setujui.
+    // Semua PO lewat Owner: Admin tidak bisa menyetujui langsung dari Draft, dan sesudah diajukan pun tidak memegang Setujui.
     await galat(() => ubahStatusPesanan(db, k(admin), admin, po.id, 'setujui'), /perlu disetujui/)
     await ubahStatusPesanan(db, k(admin), admin, po.id, 'ajukan')
     await ditolak(() => ubahStatusPesanan(db, k(admin), admin, po.id, 'setujui'))
@@ -129,11 +128,29 @@ describe('permintaan dan batas persetujuan pesanan', () => {
     assert.equal(prs.status, 'Selesai')
   })
 
-  test('PO di bawah batas cukup dikonfirmasi Admin; harga beda dari harga terakhir butuh saklar', async () => {
-    const po = await pesanKopi('1', '400000')
-    assert.equal((await db.purchaseOrder.findUniqueOrThrow({ where: { id: po.id } })).status, 'Disetujui')
+  test('PO kecil (Rp 100.000) dari Admin tidak bisa disetujui Admin dan harus diajukan; Owner bisa menyetujui', async () => {
+    const po = await buatPesanan(db, k(admin), admin, { supplierId: String(pemasok), locationId: String(outlet), date: tgl() })
+    await tambahBarisPesanan(db, k(admin), admin, po.id, { item: `${kopi}:${kg}`, qty: '1', price: '100000' })
+    assert.equal((await db.purchaseOrder.findUniqueOrThrow({ where: { id: po.id } })).total, 100_000n)
+    await galat(() => ubahStatusPesanan(db, k(admin), admin, po.id, 'setujui'), /perlu disetujui Owner/)
+    assert.equal((await db.purchaseOrder.findUniqueOrThrow({ where: { id: po.id } })).status, 'Draft')
+    await ubahStatusPesanan(db, k(admin), admin, po.id, 'ajukan')
+    await ditolak(() => ubahStatusPesanan(db, k(admin), admin, po.id, 'setujui'))
+    assert.equal((await db.purchaseOrder.findUniqueOrThrow({ where: { id: po.id } })).status, 'Diajukan')
+    // Owner tidak bisa melompati Draft, tetapi bisa menyetujui yang sudah diajukan.
+    await ubahStatusPesanan(db, k(owner), owner, po.id, 'setujui')
+    const sesudah = await db.purchaseOrder.findUniqueOrThrow({ where: { id: po.id } })
+    assert.equal(sesudah.status, 'Disetujui')
+    assert.equal(sesudah.approvedBy, owner.id)
     await ubahStatusPesanan(db, k(owner), owner, po.id, 'batal', { alasan: 'uji batal' })
     // Admin tanpa saklar beli.ubah_harga_po hanya boleh harga terakhir (sesudah ada penerimaan, dicek di bawah).
+  })
+
+  test('PO dari Owner sendiri juga tidak boleh melompati Diajukan', async () => {
+    const po = await buatPesanan(db, k(owner), owner, { supplierId: String(pemasok), locationId: String(outlet), date: tgl() })
+    await tambahBarisPesanan(db, k(owner), owner, po.id, { item: `${kopi}:${kg}`, qty: '1', price: '100000' })
+    await galat(() => ubahStatusPesanan(db, k(owner), owner, po.id, 'setujui'), /perlu disetujui Owner/)
+    await ubahStatusPesanan(db, k(owner), owner, po.id, 'batal', { alasan: 'uji batal' })
   })
 })
 

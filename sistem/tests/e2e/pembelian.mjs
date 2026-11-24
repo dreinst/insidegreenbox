@@ -1,4 +1,4 @@
-// Uji klik modul pembelian tahap 4C: permintaan, pesanan di atas batas disetujui Owner, penerimaan sebagian lalu sisa,
+// Uji klik modul pembelian tahap 4C: permintaan, semua pesanan disetujui Owner, penerimaan sebagian lalu sisa,
 // faktur dari dua penerimaan, pembayaran disetujui lalu diposting, retur, pembelian langsung tunai, hutang pemasok,
 // akses tanpa izin, dan jejak audit. Dijalankan oleh tests/e2e/jalankan.sh sesudah stok.mjs, atau langsung:
 // BASE_URL=... E2E_DATABASE_URL=... node tests/e2e/pembelian.mjs
@@ -178,7 +178,7 @@ await potret(a, '1440-b-permintaan-draf')
 await kirim(a, tombol('Setujui sekarang'))
 cek('permintaan: Disetujui oleh Admin', (await status('purchase_request', idPr)) === 'Disetujui', await pesanGalat(a))
 
-// d. Pesanan dari permintaan, harga 450.000 per kg sehingga total di atas Rp 5.000.000.
+// d. Pesanan dari permintaan, harga 450.000 per kg (total Rp 5.400.000). Semua PO lewat Owner, berapa pun nilainya.
 await a.selectOption('#k-supplierId', String(idPemasok))
 await kirimKe(a, tombol('Buat draf pesanan'), /\/pesanan\/\d+\?pesan=draf/)
 idPo = idDari(a.url())
@@ -187,7 +187,7 @@ cek('pesanan: baris dari permintaan 12 kg dengan harga terakhir', pol.q === 12 &
 await a.fill(`#k-price_${pol.id}`, '450.000')
 await kirim(a, tombol('Simpan qty dan harga'))
 cek('pesanan: total Rp 5.400.000', Number((await satu('select total from purchase_order where id=$1', [idPo])).total) === 5_400_000, await pesanGalat(a))
-cek('pesanan: Admin tidak bisa mengonfirmasi langsung karena di atas batas', (await a.locator(tombol('Setujui sekarang')).count()) === 0 && (await a.locator(tombol('Ajukan untuk disetujui')).count()) === 1)
+cek('pesanan: Admin tidak bisa mengonfirmasi langsung, hanya Ajukan', (await a.locator(tombol('Setujui sekarang')).count()) === 0 && (await a.locator(tombol('Ajukan untuk disetujui')).count()) === 1)
 await potret(a, '1440-b-pesanan-draf')
 await kirim(a, tombol('Ajukan untuk disetujui'))
 cek('pesanan: Diajukan, Admin tidak melihat tombol Setujui', (await status('purchase_order', idPo)) === 'Diajukan' && (await a.locator(tombol('Setujui')).count()) === 0)

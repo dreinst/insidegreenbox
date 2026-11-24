@@ -7,7 +7,7 @@ import { FormMaster } from '@/components/form-master'
 import { LencanaStatus, formatTanggal } from '@/components/stok'
 import { TombolAksi } from '@/components/stok-form'
 import { KepalaHalaman } from '@/components/umum'
-import { aturanBeli, nilaiBaris, pilihanBarang, sisaQty, tombolBeli } from '@/lib/beli/dokumen'
+import { nilaiBaris, pilihanBarang, sisaQty, tombolBeli } from '@/lib/beli/dokumen'
 import { pilihanPemasok } from '@/lib/beli/pemasok'
 import { barisPermintaanTerbuka } from '@/lib/beli/permintaan'
 import { butuhSetujuPesanan, muatPesanan } from '@/lib/beli/pesanan'
@@ -26,20 +26,12 @@ export default async function RincianPesanan({ params, searchParams }: { params:
   const p = await wajibIzin('beli.pesanan', 'L')
   const id = Number((await params).id)
   if (!Number.isInteger(id) || id <= 0) notFound()
-  const [d, { pesan }, aturan] = await Promise.all([muatPesanan(db, id), searchParams, aturanBeli(db, 'purchase_order')])
+  const [d, { pesan }] = await Promise.all([muatPesanan(db, id), searchParams])
   if (!d) notFound()
   const butuhSetuju = await butuhSetujuPesanan(db, d.total)
   const t = tombolBeli(p, 'purchase_order', d.status, butuhSetuju, d.submittedBy, { bolehTutup: saklarNyala(p, 'beli.tutup_po') })
   const [lokasi, pemasok, barang, prTerbuka] = t.ubah ? await Promise.all([pilihanLokasi(db), pilihanPemasok(db), pilihanBarang(db), barisPermintaanTerbuka(db)]) : [[], [], [], []]
-  const batas = aturan?.minAmount ?? null
-  const catatan =
-    d.status === 'Draft' || d.status === 'Diajukan'
-      ? butuhSetuju
-        ? `Total di atas ${formatRupiah(batas ?? 0n)}, jadi pesanan ini perlu diajukan dan disetujui Owner.`
-        : batas !== null
-          ? `Total sampai ${formatRupiah(batas)} cukup dikonfirmasi dengan Setujui sekarang.`
-          : undefined
-      : undefined
+  const catatan = d.status === 'Draft' && butuhSetuju ? 'Semua pesanan pembelian perlu diajukan dan disetujui Owner. Admin hanya bisa mengajukan.' : undefined
   const bolehTerima = d.status === 'Disetujui' && punyaIzin(p.izin, 'beli.penerimaan', 'T')
   return (
     <>

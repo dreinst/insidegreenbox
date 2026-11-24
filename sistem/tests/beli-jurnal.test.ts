@@ -79,6 +79,7 @@ async function cocokSemua(label: string) {
 async function pesanTerima(qty: Record<number, string>, harga: Record<number, string>, extraCost = '', tanggal = tgl()) {
   const po = await buatPesanan(db, k(owner), owner, { supplierId: String(pemasok), locationId: String(outlet), date: tanggal })
   for (const [p, q] of Object.entries(qty)) await tambahBarisPesanan(db, k(owner), owner, po.id, { item: `${p}:${gram}`, qty: q, price: harga[Number(p)] })
+  await ubahStatusPesanan(db, k(owner), owner, po.id, 'ajukan')
   await ubahStatusPesanan(db, k(owner), owner, po.id, 'setujui')
   const gr = await buatPenerimaan(db, k(owner), owner, { purchaseOrderId: String(po.id), locationId: String(outlet), date: tanggal, extraCost })
   return gr

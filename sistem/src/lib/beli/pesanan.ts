@@ -1,6 +1,6 @@
-// Pesanan Pembelian (tahap 4C, RANCANGAN 3.2). Dokumen rencana ke satu pemasok, tanpa efek stok dan jurnal. Pesanan di atas
-// batas approval_rule (bawaan Rp 5.000.000) wajib diajukan dan disetujui pemegang Setujui; di bawah batas cukup
-// dikonfirmasi pembuatnya. Progres terima (Belum, Sebagian, Penuh) dari qty diterima penerimaan Diposting. Tanpa impor Next.
+// Pesanan Pembelian (tahap 4C, RANCANGAN 3.2). Dokumen rencana ke satu pemasok, tanpa efek stok dan jurnal. Semua
+// pesanan (approval_rule purchase_order dengan min_amount kosong, KONTRAK 11 butir 63) wajib diajukan dan disetujui
+// pemegang Setujui (Owner). Progres terima (Belum, Sebagian, Penuh) dari qty diterima penerimaan Diposting. Tanpa impor Next.
 import { z } from 'zod'
 import { GalatAturan } from '../aksi'
 import { catatAudit, type Konteks } from '../audit'
