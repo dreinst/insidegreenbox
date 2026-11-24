@@ -9,7 +9,7 @@ import type { Db, Tx } from '../db'
 import { pastikanIzin } from '../izin-inti'
 import { formatRupiah, skemaTanggal, skemaUang } from '../master'
 import { ambilNomor } from '../nomor'
-import { Desimal, des, formatQty, isianQty, skemaQty } from '../stok/angka'
+import { Desimal, des, formatQty, isianQty, skemaQty, pesanQtyRancu } from '../stok/angka'
 import { catatGerak } from '../stok/mesin'
 import { balikJurnalFakturJual, jurnalFakturJual } from '../akuntansi/dokumen-b2b'
 import {
@@ -166,6 +166,8 @@ export async function tambahBarisFakturJual(db: Db, k: Konteks, aktor: Aktor, id
     if (!d.qty || !d.qty.gt(0)) throw new GalatAturan('Qty wajib diisi.', 'qty')
     const p = await produkJual(tx, productId)
     const faktor = await faktorSatuan(tx, productId, unitId)
+    const rancu = pesanQtyRancu((masukan as Record<string, unknown>)?.qty, faktor)
+    if (rancu) throw new GalatAturan(rancu, 'qty')
     const daftar = await hargaKhusus(tx, f.customerId, productId, unitId)
     const harga = d.price || daftar || 0n
     if (harga <= 0n) throw new GalatAturan(`Isi harga ${p.name}, karena pelanggan ini belum punya harga khusus untuk produk dan satuan itu.`, 'price')
@@ -202,6 +204,8 @@ export async function simpanBarisFakturJual(db: Db, k: Konteks, aktor: Aktor, id
     for (const b of baris) {
       const q = skemaQty({ label: `Qty ${b.product.name}` }).safeParse(String(masukan[`qty_${b.id}`] ?? isianQty(b.qty)))
       if (!q.success) throw new GalatAturan(q.error.issues[0].message, `qty_${b.id}`)
+      const rancu = pesanQtyRancu(masukan[`qty_${b.id}`], b.factor, `Qty ${b.product.name}`)
+      if (rancu) throw new GalatAturan(rancu, `qty_${b.id}`)
       const h = skemaUang({ label: `Harga ${b.product.name}`, max: 1_000_000_000n }).safeParse(String(masukan[`price_${b.id}`] ?? b.price.toString()))
       if (!h.success) throw new GalatAturan(h.error.issues[0].message, `price_${b.id}`)
       if (q.data.eq(des(b.qty)) && h.data === b.price) continue

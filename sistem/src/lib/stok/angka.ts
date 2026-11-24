@@ -35,6 +35,18 @@ export function bacaAngka(teks: string): Desimal | null {
   return minus ? d.neg() : d
 }
 
+// Temuan audit B-6 (KONTRAK 11 butir 139): untuk satuan konversi (faktor ke satuan dasar bukan 1, misalnya kg ke gram),
+// isian berpola ribuan seperti "1.250" bisa dimaksud 1.250 atau 1,25. Isian seperti itu ditolak dengan pesan yang
+// menyebut kedua tafsiran. Satuan dasar (gram, ml, pcs) tetap memakai aturan bacaAngka biasa.
+export function pesanQtyRancu(teks: unknown, faktor: Angka, nama = 'Qty') {
+  if (typeof teks !== 'string' || des(faktor).eq(1)) return null
+  const t = teks.trim()
+  if (!/^-?[1-9]\d{0,2}(\.\d{3})+$/.test(t)) return null
+  const tanpaTitik = t.replace(/\./g, '')
+  const desimal = t.replace('.', ',')
+  return `${nama} "${t}" bisa berarti ${FMT_QTY.format(Number(tanpaTitik))} atau ${desimal}. Tulis ${tanpaTitik} tanpa titik, atau pakai koma untuk pecahan (${desimal}).`
+}
+
 type OpsiQty = { label: string; boleh0?: boolean; bolehMinus?: boolean }
 
 // Skema zod untuk qty satuan dasar: paling banyak 3 desimal. Isian kosong menjadi null (skemaQty menolaknya).

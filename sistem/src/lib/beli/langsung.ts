@@ -9,7 +9,7 @@ import type { Db, DbAtauTx, Tx } from '../db'
 import { batasSaklar, pastikanIzin, saklarNyala } from '../izin-inti'
 import { formatRupiah, skemaTanggal } from '../master'
 import { ambilNomor } from '../nomor'
-import { Desimal, des, formatQty, skemaQty } from '../stok/angka'
+import { Desimal, des, formatQty, skemaQty, pesanQtyRancu } from '../stok/angka'
 import { catatGerak } from '../stok/mesin'
 import {
   BATAS_BARIS_BELI,
@@ -189,6 +189,8 @@ export async function tambahBarisLangsung(db: Db, k: Konteks, aktor: Aktor, id: 
       if (!q.success) throw new GalatAturan(q.error.issues[0].message, 'qty')
       const p = await produkBeli(tx, it.data.productId)
       const faktor = await faktorSatuan(tx, p.id, it.data.unitId)
+      const rancu = pesanQtyRancu((masukan as Record<string, unknown>)?.qty, faktor)
+      if (rancu) throw new GalatAturan(rancu, 'qty')
       const terakhir = hargaTerakhir(p.lastCost, faktor)
       const harga = d.price || terakhir
       if (harga <= 0n) throw new GalatAturan('Harga harus lebih dari 0.', 'price')

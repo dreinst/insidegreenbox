@@ -466,6 +466,15 @@ describe('persetujuan pembelian tunai dan baris jasa (B-2)', () => {
     assert.deepEqual(r.map((x) => [x.docType, x.requiresApproval, x.minAmount]), [['direct_purchase', true, 1_000_000n], ['purchase_invoice.jasa', true, 1_000_000n]])
   })
 
+  // Temuan audit B-6: "1.250" kg ditolak karena rancu, "1,25" kg diterima sebagai 1.250 g.
+  test('qty satuan kg berpola ribuan ditolak, koma desimal diterima', async () => {
+    const t = await buatLangsung(db, k(admin), admin, { supplierId: String(pemasok), locationId: String(outlet), date: tgl(), payMode: 'kredit', sumber: 'kas' })
+    await galat(() => tambahBarisLangsung(db, k(admin), admin, t.id, { jenis: 'barang', item: `${kopi}:${kg}`, qty: '1.250' }), /bisa berarti 1\.250 atau 1,250/)
+    await tambahBarisLangsung(db, k(admin), admin, t.id, { jenis: 'barang', item: `${kopi}:${kg}`, qty: '1,25' })
+    const b = await db.directPurchaseLine.findFirstOrThrow({ where: { directPurchaseId: t.id } })
+    assert.equal(b.qty.toString(), '1.25')
+  })
+
   test('pembelian langsung tunai di atas batas wajib Owner, sama dengan batas dan kredit boleh Admin', async () => {
     const buat = async (payMode: string, biaya: string) => {
       const t = await buatLangsung(db, k(admin), admin, { supplierId: String(pemasok2), locationId: String(outlet), date: tgl(), payMode, sumber: 'kas' })

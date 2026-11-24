@@ -6,7 +6,7 @@ import { GalatAturan, GalatIzin, GalatSaklar } from '../src/lib/aksi'
 import type { Db } from '../src/lib/db'
 import type { Pengguna } from '../src/lib/izin-inti'
 import { tambahAlasan, ubahStatusAlasan } from '../src/lib/stok/alasan'
-import { bacaAngka } from '../src/lib/stok/angka'
+import { bacaAngka, pesanQtyRancu } from '../src/lib/stok/angka'
 import { KODE_SALDO_AWAL, isiBawaanStok } from '../src/lib/stok/bawaan'
 import { hariIni, periksaTanggal } from '../src/lib/stok/dokumen'
 import { BAHAN_LAMA, imporStok, kodeBahan } from '../src/lib/stok/impor'
@@ -66,6 +66,15 @@ describe('angka dan tanggal', () => {
     assert.equal(bacaAngka('0.125')?.toString(), '0.125')
     assert.equal(bacaAngka('abc'), null)
     assert.equal(bacaAngka('1,2,3'), null)
+  })
+  // Temuan audit B-6: pola ribuan untuk satuan konversi (kg ke gram) ditolak karena rancu, satuan dasar tidak.
+  test('qty berpola ribuan untuk satuan konversi dianggap rancu', () => {
+    assert.equal(pesanQtyRancu('1.250', '1000'), 'Qty "1.250" bisa berarti 1.250 atau 1,250. Tulis 1250 tanpa titik, atau pakai koma untuk pecahan (1,250).')
+    assert.equal(pesanQtyRancu('1.250', '1'), null)
+    assert.equal(pesanQtyRancu('1,25', '1000'), null)
+    assert.equal(pesanQtyRancu('1250', '1000'), null)
+    assert.equal(pesanQtyRancu('12.5', '1000'), null)
+    assert.equal(pesanQtyRancu(undefined, '1000'), null)
   })
   test('tanggal mundur mengikuti saklar dok.tanggal_mundur', () => {
     const sekarang = new Date('2026-11-20T10:00:00+07:00')

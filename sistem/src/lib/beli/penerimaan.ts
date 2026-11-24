@@ -10,7 +10,7 @@ import type { Db, Tx } from '../db'
 import { pastikanIzin, saklarNyala } from '../izin-inti'
 import { formatRupiah, skemaUang } from '../master'
 import { ambilNomor } from '../nomor'
-import { Desimal, des, formatNilai, formatQty, isianQty, skemaQtyOpsional } from '../stok/angka'
+import { Desimal, des, formatNilai, formatQty, isianQty, skemaQtyOpsional, pesanQtyRancu } from '../stok/angka'
 import { catatGerak } from '../stok/mesin'
 import {
   DOK_BELI,
@@ -122,6 +122,8 @@ export async function simpanBarisPenerimaan(db: Db, k: Konteks, aktor: Aktor, id
     for (const b of baris) {
       const q = skemaQtyOpsional({ label: `Qty ${b.product.name}`, boleh0: true }).safeParse(String(masukan[`qty_${b.id}`] ?? isianQty(b.qty)))
       if (!q.success) throw new GalatAturan(q.error.issues[0].message, `qty_${b.id}`)
+      const rancu = pesanQtyRancu(masukan[`qty_${b.id}`], b.factor, `Qty ${b.product.name}`)
+      if (rancu) throw new GalatAturan(rancu, `qty_${b.id}`)
       const h = b.purchaseOrderLine.isFree ? { success: true as const, data: 0n } : skemaUang({ label: `Harga ${b.product.name}`, min: 0n }).safeParse(String(masukan[`price_${b.id}`] ?? b.price.toString()))
       if (!h.success) throw new GalatAturan(h.error.issues[0].message, `price_${b.id}`)
       const qty = q.data ?? new Desimal(0)

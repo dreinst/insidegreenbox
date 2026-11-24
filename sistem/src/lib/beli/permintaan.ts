@@ -8,7 +8,7 @@ import type { Db, Tx } from '../db'
 import { pastikanIzin } from '../izin-inti'
 import { skemaTanggal } from '../master'
 import { ambilNomor } from '../nomor'
-import { des, formatQty, skemaQty } from '../stok/angka'
+import { des, formatQty, skemaQty, pesanQtyRancu } from '../stok/angka'
 import {
   BATAS_BARIS_BELI,
   DOK_BELI,
@@ -101,7 +101,9 @@ export async function tambahBarisPermintaan(db: Db, k: Konteks, aktor: Aktor, id
   return db.$transaction(async (tx) => {
     const pr = await muatDraf(tx, id)
     const p = await produkBeli(tx, d.item.productId)
-    await faktorSatuan(tx, p.id, d.item.unitId)
+    const faktor = await faktorSatuan(tx, p.id, d.item.unitId)
+    const rancu = pesanQtyRancu((masukan as Record<string, unknown>)?.qty, faktor)
+    if (rancu) throw new GalatAturan(rancu, 'qty')
     if ((await tx.purchaseRequestLine.count({ where: { purchaseRequestId: id } })) >= BATAS_BARIS_BELI) throw new GalatAturan(`Satu dokumen paling banyak ${BATAS_BARIS_BELI} baris.`)
     const u = await tx.unit.findUniqueOrThrow({ where: { id: d.item.unitId } })
     const b = await tx.purchaseRequestLine.create({ data: { purchaseRequestId: id, productId: p.id, unitId: u.id, qty: d.qty, note: d.lineNote } })
