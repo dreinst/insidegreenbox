@@ -6,10 +6,10 @@ import { after, before, describe, test } from 'node:test'
 import { GalatAturan, GalatIzin } from '../src/lib/aksi'
 import { buatFakturJual, simpanBarisFakturJual, tambahBarisFakturJual, ubahStatusFakturJual } from '../src/lib/b2b/faktur'
 import { simpanHargaPelanggan, tambahPelanggan } from '../src/lib/b2b/pelanggan'
-import { buatTerima, piutangTerbuka, simpanAlokasiTerima, ubahStatusTerima } from '../src/lib/b2b/penerimaan'
+import { buatTerima, piutangTerbuka, simpanAlokasiTerima, ubahKepalaTerima, ubahStatusTerima } from '../src/lib/b2b/penerimaan'
 import { buatPesananJual, tambahBarisPesananJual, ubahStatusPesananJual } from '../src/lib/b2b/pesanan'
 import { csvPiutang, piutangPelanggan } from '../src/lib/b2b/piutang'
-import { buatReturJual, simpanBarisReturJual, ubahStatusReturJual } from '../src/lib/b2b/retur'
+import { buatReturJual, simpanBarisReturJual, ubahKepalaReturJual, ubahStatusReturJual } from '../src/lib/b2b/retur'
 import type { Db } from '../src/lib/db'
 import type { Pengguna } from '../src/lib/izin-inti'
 import { simpanPenjualan } from '../src/lib/penjualan'
@@ -218,6 +218,26 @@ describe('retur penjualan', () => {
     assert.equal(f.paidAmount, 150000n)
     assert.equal(f.payStatus, 'Sebagian')
     assert.equal((await db.salesReturn.findUniqueOrThrow({ where: { id: retur.id } })).creditUsed, 100000n)
+  })
+})
+
+describe('C-9: tanggal penerimaan dan retur lawan tanggal faktur', () => {
+  test('penerimaan bertanggal sebelum faktur atau nota kredit ditolak; tanggal retur tidak bisa diubah ke sebelum faktur', async () => {
+    const kemarin = new Date(hariIni().getTime() - 86_400_000).toISOString().slice(0, 10)
+    const t = await buatTerima(db, k(admin), admin, { customerId: String(pelanggan), date: kemarin, tujuan: 'kas' })
+    await galat(() => simpanAlokasiTerima(db, k(admin), admin, t.id, { [`terima_f${fj2}`]: '10000' }), /sesudah tanggal penerimaan/)
+    // Alokasi diisi saat tanggalnya sah, lalu tanggal kepala dimundurkan: posting tetap menolak.
+    await ubahKepalaTerima(db, k(admin), admin, t.id, { customerId: String(pelanggan), date: tgl(), tujuan: 'kas' })
+    await simpanAlokasiTerima(db, k(admin), admin, t.id, { [`terima_f${fj2}`]: '10000' })
+    await ubahKepalaTerima(db, k(admin), admin, t.id, { customerId: String(pelanggan), date: kemarin, tujuan: 'kas' })
+    await galat(() => ubahStatusTerima(db, k(owner), owner, t.id, 'posting'), /sesudah tanggal penerimaan/)
+    assert.equal((await db.customerPayment.findUniqueOrThrow({ where: { id: t.id } })).status, 'Draft')
+    await ubahStatusTerima(db, k(admin), admin, t.id, 'batal')
+
+    const r = await buatReturJual(db, k(admin), admin, { salesInvoiceId: String(fj2), date: tgl(), reason: 'Uji tanggal retur' })
+    await galat(() => ubahKepalaReturJual(db, k(admin), admin, r.id, { date: kemarin, reason: 'Uji tanggal retur' }), /sebelum tanggal faktur/)
+    assert.equal((await db.salesReturn.findUniqueOrThrow({ where: { id: r.id } })).date.toISOString().slice(0, 10), tgl())
+    await ubahStatusReturJual(db, k(admin), admin, r.id, 'batal')
   })
 })
 
