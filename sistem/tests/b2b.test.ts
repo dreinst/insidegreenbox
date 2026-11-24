@@ -279,6 +279,7 @@ describe('piutang pelanggan', () => {
     assert.equal(h.total, 50000n, 'FJ kedua Rp 200.000 - dibayar Rp 150.000')
     assert.equal(h.perPelanggan[0].jatuhTempo, 0n)
     assert.equal(h.umur[0].sisa, 50000n, 'belum jatuh tempo')
+    assert.equal(h.umur.reduce((n, u) => n + u.sisa, 0n), h.total, 'jumlah kelompok umur = saldo (temuan audit B-4)')
     const csv = csvPiutang(h.dokumen)
     assert.ok(csv.startsWith('﻿Pelanggan,Jenis,Nomor'))
     assert.match(csv, /Kantor Maju,Faktur,FJ-/)

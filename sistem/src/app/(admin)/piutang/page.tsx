@@ -54,7 +54,7 @@ export default async function PiutangPelanggan({ searchParams }: { searchParams:
         label="Ringkasan piutang"
         isi={[
           ['Saldo piutang', formatRupiah(h.total), h.total < 0n],
-          ...h.umur.map((u) => [u.kelompok, formatRupiah(u.sisa)] as [string, string]),
+          ...h.umur.map((u) => [u.kelompok, u.sisa < 0n ? `-${formatRupiah(-u.sisa)}` : formatRupiah(u.sisa)] as [string, string]),
           ['Nota kredit belum terpakai', formatRupiah(h.kredit)],
         ]}
       />

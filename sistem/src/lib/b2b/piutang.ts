@@ -54,7 +54,10 @@ export async function piutangPelanggan(db: Db, s: SaringPiutang = {}, acuan = ne
     p.dokumen++
   }
   const perPelanggan = [...peta.values()].sort((a, b) => a.pelanggan.localeCompare(b.pelanggan, 'id'))
-  const umur = KELOMPOK_UMUR.map((k) => ({ kelompok: k, sisa: dok.filter((d) => d.kelompok === k).reduce((n, d) => n + d.sisa, 0n) }))
+  const umur: { kelompok: string; sisa: bigint }[] = KELOMPOK_UMUR.map((k) => ({ kelompok: k, sisa: dok.filter((d) => d.kelompok === k).reduce((n, d) => n + d.sisa, 0n) }))
+  // Sama dengan Hutang Pemasok (temuan audit B-4): nota kredit belum dipakai menjadi kelompok sendiri yang bernilai minus.
+  const kredit = dok.filter((d) => d.jenis === 'Nota kredit').reduce((n, d) => n + d.sisa, 0n)
+  if (kredit !== 0n) umur.push({ kelompok: 'Nota kredit belum dipakai', sisa: kredit })
   return {
     perPelanggan,
     dokumen: dok.sort((a, b) => a.pelanggan.localeCompare(b.pelanggan, 'id') || (a.dueDate ?? a.date).getTime() - (b.dueDate ?? b.date).getTime() || a.id - b.id),
