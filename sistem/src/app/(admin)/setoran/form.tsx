@@ -1,4 +1,5 @@
 'use client'
+import { InputBerkas, MB } from '@/components/berkas'
 // Formulir setoran POS. Isian terjaga saat galat lewat nilaiAwal dan key={hasil.n} (KONTRAK 6).
 import { useActionState, useState } from 'react'
 import { galatKolom, nilaiAwal, PesanHasil, TombolKirim } from '@/components/form'
@@ -79,7 +80,7 @@ function IsiUbah({ hasil, kirim, kepala, baris, rekening, tunai }: { hasil: Hasi
         </div>
         <div className={`kolom lebar${g('bukti') ? ' salah' : ''}`}>
           <label htmlFor="k-bukti">Bukti setor (boleh kosong)</label>
-          <input id="k-bukti" name="bukti" type="file" accept="image/webp,image/png,image/jpeg,application/pdf" aria-invalid={g('bukti') ? true : undefined} />
+          <InputBerkas id="k-bukti" name="bukti" maks={2 * MB} accept="image/webp,image/png,image/jpeg,application/pdf" aria-invalid={g('bukti') ? true : undefined} />
           {g('bukti') ? <small className="galat-kolom">{g('bukti')}</small> : <small>Foto atau PDF slip setor, paling besar 2 MB. Berkas baru menggantikan yang lama.</small>}
           {kepala.bukti ? (
             <label className="st-centang">

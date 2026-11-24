@@ -2,6 +2,7 @@
 // Formulir bersama untuk modul master tahap 3A. Isinya digerakkan daftar medan (bisa dikirim dari halaman server),
 // jadi tiap modul tidak perlu menulis ulang formulir. Isian tetap terjaga saat galat lewat nilaiAwal (KONTRAK 6).
 import { useActionState, useState } from 'react'
+import { InputBerkas, MB } from '@/components/berkas'
 import { galatKolom, nilaiAwal, PesanHasil, TombolKirim } from '@/components/form'
 import { HASIL_AWAL, type HasilAksi } from '@/lib/aksi'
 
@@ -105,7 +106,7 @@ export function IsiMedan({ m, hasil }: { m: Medan; hasil: HasilAksi }) {
             <label htmlFor={`${id}-unggah`} className="sr">
               Unggah foto baru
             </label>
-            <input id={`${id}-unggah`} name="fotoUnggah" type="file" accept="image/webp,image/png,image/jpeg" aria-invalid={galatBerkas ? true : undefined} aria-describedby={galatBerkas ? 'k-fotoUnggah-g' : undefined} />
+            <InputBerkas id={`${id}-unggah`} name="fotoUnggah" maks={2 * MB} accept="image/webp,image/png,image/jpeg" aria-invalid={galatBerkas ? true : undefined} aria-describedby={galatBerkas ? 'k-fotoUnggah-g' : undefined} />
           </div>
         </div>
         {galatBerkas ? (

@@ -1,4 +1,5 @@
 'use client'
+import { InputBerkas, MB } from '@/components/berkas'
 // Formulir klien Rekonsiliasi Bank (tahap 5C): impor mutasi dengan berkas CSV dan pemetaan kolom, serta pencocokan satu
 // baris mutasi dengan satu atau beberapa baris jurnal. Isian terjaga saat galat (KONTRAK 6).
 import { useActionState } from 'react'
@@ -23,7 +24,7 @@ export function FormImpor({ aksi, medan, kelompok }: { aksi: Aksi; medan: Medan[
           ))}
         <div className={`kolom lebar${salah ? ' salah' : ''}`}>
           <label htmlFor="k-berkas">Berkas CSV mutasi</label>
-          <input id="k-berkas" name="berkas" type="file" accept=".csv,text/csv,text/plain" required aria-invalid={salah ? true : undefined} aria-describedby={salah ? 'k-berkas-g' : 'k-berkas-b'} />
+          <InputBerkas id="k-berkas" name="berkas" maks={MB} accept=".csv,text/csv,text/plain" required aria-invalid={salah ? true : undefined} aria-describedby={salah ? 'k-berkas-g' : 'k-berkas-b'} />
           {salah ? (
             <small id="k-berkas-g" className="galat-kolom">
               {salah}

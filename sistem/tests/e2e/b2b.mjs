@@ -315,6 +315,34 @@ await buka(o, '/profil-usaha')
 await o.fill('#k-receiptHeader', kepala)
 await o.fill('#k-npwp', '01.234.567.8-901.000')
 await o.fill('#k-taxPct', '30')
+// C-5: logo 4 MB ditolak di peramban sebelum dikirim; isian lain tetap, tanpa layar galat.
+{
+  const png = Buffer.concat([Buffer.from('89504e470d0a1a0a', 'hex'), Buffer.alloc(4 * 1024 * 1024)])
+  await o.setInputFiles('#k-receiptLogo-unggah', { name: 'logo-besar.png', mimeType: 'image/png', buffer: png })
+  const pesanBesar = await o.locator('#k-receiptLogo-unggah-terlalu-besar').textContent().catch(() => '')
+  const kosong = await o.$eval('#k-receiptLogo-unggah', (i) => i.files.length === 0)
+  cek('profil: logo 4 MB ditolak di peramban dengan pesan, isian lain tetap', /paling besar 2 MB/.test(pesanBesar ?? '') && kosong && (await o.inputValue('#k-receiptHeader')) === kepala, pesanBesar)
+  await potret(o, '1440-j-profil-logo-besar')
+  // Berkas besar yang lolos dari pemeriksaan peramban (dipasang tanpa event change) jatuh ke halaman galat berbahasa
+  // Indonesia dengan sidebar tetap tampil, bukan layar galat Next berbahasa Inggris.
+  await o.evaluate(() => {
+    const i = document.querySelector('#k-receiptLogo-unggah')
+    const dt = new DataTransfer()
+    dt.items.add(new File([new Uint8Array(4 * 1024 * 1024)], 'lolos.png', { type: 'image/png' }))
+    i.files = dt.files
+  })
+  const galatSebelum = O.galat.length
+  await o.click(tombol('Simpan profil'))
+  await o.waitForSelector('text=Halaman ini gagal dimuat', { timeout: 30000 }).catch(() => {})
+  const isi = await o.textContent('main')
+  cek('galat: unggahan di atas batas server menampilkan halaman galat berbahasa Indonesia dengan sidebar', /Halaman ini gagal dimuat/.test(isi ?? '') && (await o.locator('nav a[href="/profil-usaha"]').count()) > 0 && !/This page couldn/.test(isi ?? ''), (isi ?? '').slice(0, 120))
+  await potret(o, '1440-j-galat-unggah')
+  O.galat.splice(galatSebelum)
+  await buka(o, '/profil-usaha')
+  await o.fill('#k-receiptHeader', kepala)
+  await o.fill('#k-npwp', '01.234.567.8-901.000')
+  await o.fill('#k-taxPct', '30')
+}
 await kirim(o, tombol('Simpan profil'))
 cek('profil: pajak di atas 25 persen ditolak dan isian terjaga', /antara 0 dan 25/.test(await pesanGalat(o)) && (await o.inputValue('#k-receiptHeader')) === kepala)
 await o.fill('#k-taxPct', '10')
