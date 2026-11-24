@@ -6,6 +6,8 @@ import { db } from '@/lib/db'
 import { wajibIzin } from '@/lib/izin'
 import { punyaIzin } from '@/lib/izin-inti'
 import { JENIS_METODE, daftarMetode, type JenisMetode, type SaringMetode } from '@/lib/metode-bayar'
+import { tarifPadaBanyak, teksTarif } from '@/lib/mdr'
+import { tanggalIso } from '@/lib/waktu'
 
 export const metadata: Metadata = { title: 'Metode Bayar' }
 
@@ -13,6 +15,8 @@ export default async function DaftarMetode({ searchParams }: { searchParams: Pro
   const p = await wajibIzin('akun.metode_bayar', 'L')
   const s = await searchParams
   const hasil = await daftarMetode(db, s)
+  // tahap 6C: MDR dari tarif yang berlaku hari ini.
+  const tarif = await tarifPadaBanyak(db, hasil.baris.map((m) => m.id), tanggalIso(new Date()))
   const disaring = !!(s.q || s.jenis || s.status)
   const bolehUbah = punyaIzin(p.izin, 'akun.metode_bayar', 'U')
   return (
@@ -65,9 +69,7 @@ export default async function DaftarMetode({ searchParams }: { searchParams: Pro
               <tr>
                 <th scope="col">Nama</th>
                 <th scope="col">Jenis</th>
-                <th scope="col" className="angka">
-                  MDR
-                </th>
+                <th scope="col">MDR hari ini</th>
                 <th scope="col">Buka laci</th>
                 <th scope="col">Status</th>
                 <th scope="col">
@@ -84,9 +86,7 @@ export default async function DaftarMetode({ searchParams }: { searchParams: Pro
                     </Link>
                   </td>
                   <td data-label="Jenis">{JENIS_METODE[m.kind as JenisMetode] ?? m.kind}</td>
-                  <td data-label="MDR" className="angka">
-                    {m.mdrPct.toString().replace('.', ',')}%
-                  </td>
+                  <td data-label="MDR hari ini">{teksTarif(tarif.get(m.id) ?? null)}</td>
                   <td data-label="Buka laci">{m.openDrawer ? 'Ya' : 'Tidak'}</td>
                   <td data-label="Status">
                     <Lencana aktif={m.active} />

@@ -9,6 +9,7 @@ const PESAN: Record<string, string> = {
   aktif: 'Sudah diaktifkan.',
   nonaktif: 'Sudah dinonaktifkan.',
   harga: 'Harga baru sudah berlaku dan tercatat di riwayat harga.',
+  tarif: 'Tarif MDR baru tersimpan di riwayat tarif.',
 }
 
 export function PesanMaster({ kode }: { kode?: string }) {

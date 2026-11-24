@@ -1452,6 +1452,7 @@ model Shift {
   note               String              @default("")
   status             ShiftStatus         @default(Buka)
   // tahap 3B: siapa yang menutup, batas selisih yang berlaku saat ditutup, dan catatan persetujuan Owner.
+  // tahap 6C: shift baru tidak lagi butuh persetujuan, jadi diff_limit selalu kosong untuk shift baru (butir 121).
   closedBy           Int?                @map("closed_by")
   diffLimit          BigInt?             @map("diff_limit")
   approvalNote       String?             @map("approval_note")
@@ -1685,20 +1686,39 @@ model FiscalPeriod {
 }
 
 model PaymentMethod {
-  id                Int             @id @default(autoincrement())
-  clearingAccountId Int?            @map("clearing_account_id")
-  clearingAccount   Account?        @relation("MetodeAkunKliring", fields: [clearingAccountId], references: [id])
-  depositAccountId  Int?            @map("deposit_account_id")
-  depositAccount    Account?        @relation("MetodeAkunSetoran", fields: [depositAccountId], references: [id])
-  name              String          @unique
-  kind              String          @default("tunai")
-  mdrPct            Decimal         @default(0) @map("mdr_pct") @db.Decimal(6, 3)
-  openDrawer        Boolean         @default(false) @map("open_drawer")
-  active            Boolean         @default(true)
+  id                Int                @id @default(autoincrement())
+  clearingAccountId Int?               @map("clearing_account_id")
+  clearingAccount   Account?           @relation("MetodeAkunKliring", fields: [clearingAccountId], references: [id])
+  depositAccountId  Int?               @map("deposit_account_id")
+  depositAccount    Account?           @relation("MetodeAkunSetoran", fields: [depositAccountId], references: [id])
+  name              String             @unique
+  kind              String             @default("tunai")
+  mdrPct            Decimal            @default(0) @map("mdr_pct") @db.Decimal(6, 3)
+  openDrawer        Boolean            @default(false) @map("open_drawer")
+  active            Boolean            @default(true)
   salePayments      SalePayment[]
   posSettlements    PosSettlement[]
+  tarifMdr          PaymentMethodMdr[]
 
   @@map("payment_method")
+}
+
+// tahap 6C: riwayat tarif MDR per metode bayar (KONTRAK 11 butir 123). Tarif yang berlaku untuk satu penjualan
+// adalah baris dengan effective_from paling akhir yang tidak sesudah tanggal WIB penjualan. free_limit kosong
+// berarti tidak ada nominal yang bebas MDR. Baris tidak diubah atau dihapus; tarif baru ditambah sebagai baris baru.
+model PaymentMethodMdr {
+  id              Int           @id @default(autoincrement())
+  paymentMethodId Int           @map("payment_method_id")
+  paymentMethod   PaymentMethod @relation(fields: [paymentMethodId], references: [id], onDelete: Restrict)
+  mdrPct          Decimal       @map("mdr_pct") @db.Decimal(6, 3)
+  freeLimit       BigInt?       @map("free_limit")
+  effectiveFrom   DateTime      @map("effective_from") @db.Date
+  note            String        @default("")
+  createdBy       Int?          @map("created_by")
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@unique([paymentMethodId, effectiveFrom])
+  @@map("payment_method_mdr")
 }
 
 model BankAccount {

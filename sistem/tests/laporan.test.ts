@@ -153,7 +153,7 @@ describe('rekap penjualan menu', () => {
 })
 
 describe('ringkasan pembayaran', () => {
-  test('nominal per metode cocok dengan total, MDR dari persen metode, belum disetor', async () => {
+  test('nominal per metode cocok dengan total, MDR per transaksi dari tarif metode, belum disetor', async () => {
     const r = await ringkasanPembayaran(db, { dari: D1, sampai: D2 })
     const harap = await jumlahDb(D1, D2)
     assert.equal(r.jumlah.nominal, harap.total)

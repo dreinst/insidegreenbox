@@ -3,8 +3,8 @@
 // penjualan memakai waktu sale.at di WIB, tanggal shift memakai waktu shift dibuka di WIB. Tanpa Next.
 import { Prisma } from '@/generated/prisma/client'
 import type { Db } from './db'
-import { persen } from './hitung-kasir'
 import { saklarNyala, type Pengguna } from './izin-inti'
+import { SQL_MDR, SQL_TARIF } from './mdr'
 import { MODE, KATEGORI_PAKET } from './penjualan'
 import { dariKolomTanggal, keKolomTanggal, metodeTunaiUtama, nilaiSistem, syaratShiftTanggal } from './setoran'
 import { STATUS_SHIFT } from './shift'
@@ -181,7 +181,8 @@ const SUDAH_SETOR = Prisma.sql`EXISTS (
     AND (sl.payment_method_id = p.payment_method_id OR (lm.kind = 'tunai' AND pm.kind = 'tunai')))`
 
 // 3. Ringkasan Pembayaran per metode.
-export type BarisBayar = { id: number; metode: string; n: number; nominal: number; mdr: number; neto: number; sudah: number; belum: number; mdrPct: number }
+// tahap 6C: estimasi MDR dihitung per transaksi dengan tarif yang berlaku pada tanggal penjualan (KONTRAK 11 butir 124).
+export type BarisBayar = { id: number; metode: string; n: number; nominal: number; mdr: number; neto: number; sudah: number; belum: number }
 
 export async function ringkasanPembayaran(db: Db, s: SaringLaporan) {
   const r = rentang(s)
@@ -191,18 +192,17 @@ export async function ringkasanPembayaran(db: Db, s: SaringLaporan) {
   if (s.setoran === 'sudah') w.push(SUDAH_SETOR)
   if (s.setoran === 'belum') w.push(Prisma.sql`NOT ${SUDAH_SETOR}`)
   const baris = await db.$queryRaw<Record<string, unknown>[]>`
-    SELECT pm.id, pm.name, pm.mdr_pct::text AS mdr, COUNT(DISTINCT s.id)::bigint AS n, SUM(p.amount)::bigint AS nominal,
+    SELECT pm.id, pm.name, SUM(${SQL_MDR})::bigint AS mdr, COUNT(DISTINCT s.id)::bigint AS n, SUM(p.amount)::bigint AS nominal,
       COALESCE(SUM(p.amount) FILTER (WHERE ${SUDAH_SETOR}), 0)::bigint AS sudah
-    FROM sale_payment p JOIN sale s ON s.id = p.sale_id JOIN shift sh ON sh.id = s.shift_id JOIN payment_method pm ON pm.id = p.payment_method_id
+    FROM sale_payment p JOIN sale s ON s.id = p.sale_id JOIN shift sh ON sh.id = s.shift_id JOIN payment_method pm ON pm.id = p.payment_method_id ${SQL_TARIF}
     WHERE ${Prisma.join(w, ' AND ')}
-    GROUP BY pm.id, pm.name, pm.mdr_pct ORDER BY pm.id`
+    GROUP BY pm.id, pm.name ORDER BY pm.id`
   const hasil: BarisBayar[] = baris.map((b) => {
     const nominal = N(b.nominal)
-    const mdrPct = Number(b.mdr)
-    const mdr = persen(nominal, mdrPct)
-    return { id: N(b.id), metode: String(b.name), n: N(b.n), nominal, mdr, neto: nominal - mdr, sudah: N(b.sudah), belum: nominal - N(b.sudah), mdrPct }
+    const mdr = N(b.mdr)
+    return { id: N(b.id), metode: String(b.name), n: N(b.n), nominal, mdr, neto: nominal - mdr, sudah: N(b.sudah), belum: nominal - N(b.sudah) }
   })
-  const jumlah = hasil.reduce((a, b) => ({ ...a, n: a.n + b.n, nominal: a.nominal + b.nominal, mdr: a.mdr + b.mdr, neto: a.neto + b.neto, sudah: a.sudah + b.sudah, belum: a.belum + b.belum }), { id: 0, metode: 'Jumlah', n: 0, nominal: 0, mdr: 0, neto: 0, sudah: 0, belum: 0, mdrPct: 0 } as BarisBayar)
+  const jumlah = hasil.reduce((a, b) => ({ ...a, n: a.n + b.n, nominal: a.nominal + b.nominal, mdr: a.mdr + b.mdr, neto: a.neto + b.neto, sudah: a.sudah + b.sudah, belum: a.belum + b.belum }), { id: 0, metode: 'Jumlah', n: 0, nominal: 0, mdr: 0, neto: 0, sudah: 0, belum: 0 } as BarisBayar)
   // Transaksi dihitung per metode, jadi satu transaksi dengan dua metode muncul di dua baris. Jumlah transaksi
   // di baris Jumlah dihitung tanpa ganda.
   const unik = await db.$queryRaw<{ n: bigint }[]>`

@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation'
 import type { HasilAksi } from '@/lib/aksi'
 import { db } from '@/lib/db'
 import { jalankanAksi } from '@/lib/izin'
-import { tambahMetode, ubahMetode, ubahStatusMetode } from '@/lib/metode-bayar'
+import { tambahMetode, tambahTarif, ubahMetode, ubahStatusMetode } from '@/lib/metode-bayar'
 import { konteksPermintaan } from '@/lib/sesi'
 
 const data = (fd: FormData) => Object.fromEntries([...fd.entries()].filter(([k]) => !k.startsWith('$')))
@@ -30,5 +30,14 @@ export async function statusMetodeAksi(id: number, aktif: boolean, sebelum: Hasi
     await ubahStatusMetode(db, await konteksPermintaan(p), p, id, aktif)
     revalidatePath('/metode-bayar')
     redirect(`/metode-bayar/${id}?pesan=${aktif ? 'aktif' : 'nonaktif'}`)
+  })
+}
+
+// tahap 6C: tarif MDR baru bertanggal (Owner, izin Tambah).
+export async function tambahTarifAksi(id: number, sebelum: HasilAksi, fd: FormData) {
+  return jalankanAksi(sebelum, fd, 'akun.metode_bayar', 'T', async (p) => {
+    await tambahTarif(db, await konteksPermintaan(p), p, id, data(fd))
+    revalidatePath('/metode-bayar')
+    redirect(`/metode-bayar/${id}?pesan=tarif`)
   })
 }

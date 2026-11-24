@@ -64,6 +64,11 @@ async function main() {
   for (const m of METODE) {
     await db.paymentMethod.upsert({ where: { name: m.name }, update: { kind: m.kind, active: true }, create: { name: m.name, kind: m.kind, mdrPct: m.mdrPct ?? 0, openDrawer: m.openDrawer ?? false } })
   }
+  // tahap 6C: metode yang dibuat di sini (tanpa seed) mendapat satu tarif MDR dari persennya. Tarif yang sudah ada,
+  // misalnya bawaan seed, tidak diubah.
+  for (const m of await db.paymentMethod.findMany({ where: { tarifMdr: { none: {} } } })) {
+    await db.paymentMethodMdr.create({ data: { paymentMethodId: m.id, mdrPct: m.mdrPct, effectiveFrom: new Date('2026-10-01T00:00:00Z'), note: 'Tarif uji.' } })
+  }
 
   // Tingkat "Greenbox Key" bawaan bila belum ada, dengan aturan lewati yang sama dengan impor:menu.
   for (const t of TINGKAT_BAWAAN) {

@@ -9,6 +9,7 @@ import { rupiah } from '@/lib/hitung-kasir'
 import { wajibIzin } from '@/lib/izin'
 import { punyaIzin, saklarNyala } from '@/lib/izin-inti'
 import { namaRekening } from '@/lib/rekening'
+import { tarifPada, teksTarif } from '@/lib/mdr'
 import { alasanButuhOwner, ambilSetoran, calonBaris, dariKolomTanggal, NAMA_STATUS_SETORAN, syaratShiftTanggal } from '@/lib/setoran'
 import { STATUS_SHIFT } from '@/lib/shift'
 import { formatWaktu } from '@/lib/waktu'
@@ -34,6 +35,8 @@ export default async function RincianSetoran({ params, searchParams }: { params:
     terbuka && tunai ? db.shift.findMany({ where: { ...syaratShiftTanggal(iso), status: 'Buka' }, select: { id: true } }) : [],
     st.status === 'Draft' ? calonBaris(db, iso, st.paymentMethod, st.id) : [],
   ])
+  // tahap 6C: tarif yang berlaku pada tanggal shift, untuk keterangan saja (hitungan memakai tanggal tiap penjualan).
+  const tarif = tunai ? null : await tarifPada(db, st.paymentMethodId, iso)
   const shiftBaru = calon.filter((c) => !st.posSettlementLines.some((l) => l.shiftId === c.shiftId))
   const alasan = terbuka ? alasanButuhOwner(st) : []
   const bisa = (a: 'U' | 'H' | 'S' | 'P') => punyaIzin(p.izin, 'kasir.setoran', a)
@@ -77,7 +80,7 @@ export default async function RincianSetoran({ params, searchParams }: { params:
             <dd>{iso}</dd>
             <dt>Metode</dt>
             <dd>
-              {st.paymentMethod.name} <small className="redup">(MDR {st.paymentMethod.mdrPct.toString().replace('.', ',')}%)</small>
+              {st.paymentMethod.name} {tunai ? null : <small className="redup">(MDR {teksTarif(tarif?.tarif ?? null)})</small>}
             </dd>
             <dt>Rekening tujuan</dt>
             <dd>{st.bankAccount ? namaRekening(st.bankAccount) : tunai ? 'Kas Besar' : 'Belum dipilih'}</dd>
@@ -107,7 +110,10 @@ export default async function RincianSetoran({ params, searchParams }: { params:
             <dt className="tebal">Selisih</dt>
             <dd className={st.diff ? 'lap-merah' : 'tebal'}>{nilaiTampil(Number(st.diff), 'selisih')}</dd>
           </dl>
-          <p className="redup kecil">Selisih = disetor + MDR - nilai sistem. Jurnal setoran dibentuk dari dokumen Diposting saat modul akuntansi tersedia.</p>
+          <p className="redup kecil">
+            {tunai ? '' : 'Biaya MDR bawaan dihitung per transaksi dengan tarif yang berlaku pada tanggal penjualan, dan boleh diubah selama Draft. '}Selisih = disetor + MDR - nilai sistem. Jurnal
+            dibentuk saat Diposting.
+          </p>
         </section>
         <section className="kartu" aria-labelledby="j-jejak">
           <h2 id="j-jejak">Jejak status</h2>

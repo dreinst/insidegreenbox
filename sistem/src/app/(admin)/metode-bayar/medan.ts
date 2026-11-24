@@ -1,11 +1,30 @@
 import type { Medan } from '@/components/form-master'
 import { JENIS_METODE } from '@/lib/metode-bayar'
+import { tanggalIso } from '@/lib/waktu'
 
-export function medanMetode(awal: { name?: string; kind?: string; mdrPct?: string; openDrawer?: boolean } = {}): Medan[] {
+type Awal = { name?: string; kind?: string; openDrawer?: boolean }
+
+const medanDasar = (awal: Awal): Medan[] => [
+  { jenis: 'teks', nama: 'name', label: 'Nama metode', awal: awal.name, wajib: true, maxLength: 40 },
+  { jenis: 'pilih', nama: 'kind', label: 'Jenis', awal: awal.kind ?? 'tunai', pilihan: Object.entries(JENIS_METODE).map(([nilai, label]) => ({ nilai, label })), wajib: true },
+]
+const medanLaci = (awal: Awal): Medan => ({ jenis: 'centang', nama: 'openDrawer', label: 'Buka laci kasir saat dipakai', awal: awal.openDrawer ?? false })
+
+// Tarif MDR (tahap 6C): dipakai saat menambah metode dan saat Owner menambah tarif baru.
+export function medanTarif(): Medan[] {
   return [
-    { jenis: 'teks', nama: 'name', label: 'Nama metode', awal: awal.name, wajib: true, maxLength: 40 },
-    { jenis: 'pilih', nama: 'kind', label: 'Jenis', awal: awal.kind ?? 'tunai', pilihan: Object.entries(JENIS_METODE).map(([nilai, label]) => ({ nilai, label })), wajib: true },
-    { jenis: 'angka', nama: 'mdrPct', label: 'MDR (%)', awal: awal.mdrPct ?? '0', inputMode: 'decimal', wajib: true, bantuan: 'Biaya yang dipotong penyedia, misalnya 0,7. Tunai selalu 0.' },
-    { jenis: 'centang', nama: 'openDrawer', label: 'Buka laci kasir saat dipakai', awal: awal.openDrawer ?? false },
+    { jenis: 'angka', nama: 'mdrPct', label: 'MDR (%)', awal: '0', inputMode: 'decimal', wajib: true, bantuan: 'Persen yang dipotong penyedia, misalnya 0,3. Tunai selalu 0.' },
+    {
+      jenis: 'angka',
+      nama: 'freeLimit',
+      label: 'Batas bebas MDR (Rp)',
+      placeholder: 'Kosong',
+      bantuan: 'Transaksi sampai nominal ini tidak kena MDR, di atasnya kena MDR dari seluruh nominal. Kosongkan bila semua transaksi kena MDR.',
+    },
+    { jenis: 'tanggal', nama: 'effectiveFrom', label: 'Berlaku mulai', awal: tanggalIso(new Date()), wajib: true, bantuan: 'Dipakai untuk penjualan sejak tanggal ini (WIB).' },
+    { jenis: 'teks', nama: 'note', label: 'Keterangan (boleh kosong)', maxLength: 200, lebar: true, bantuan: 'Misalnya sumber aturan atau nomor surat penyedia.' },
   ]
 }
+
+export const medanMetodeBaru = (): Medan[] => [...medanDasar({}), ...medanTarif(), medanLaci({})]
+export const medanUbahMetode = (awal: Awal): Medan[] => [...medanDasar(awal), medanLaci(awal)]

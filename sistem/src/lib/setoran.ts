@@ -9,8 +9,9 @@ import { balikJurnalSetoran, jurnalSetoran } from './akuntansi/dokumen'
 import { tanggalJurnal } from './akuntansi/jurnal'
 import { catatAudit, type Konteks } from './audit'
 import type { Db, DbAtauTx, Tx } from './db'
-import { persen, rupiah } from './hitung-kasir'
+import { rupiah } from './hitung-kasir'
 import { pastikanIzin, punyaIzin, saklarNyala, type Pengguna } from './izin-inti'
+import { mdrPerShift } from './mdr'
 import { PER_HALAMAN, sesuaiHalaman } from './master'
 import { ambilNomor } from './nomor'
 import { transisiSah, type StatusDokumen } from './status'
@@ -51,33 +52,22 @@ export const syaratShiftTanggal = (iso: string): Prisma.ShiftWhereInput => ({ op
 
 type ShiftNilai = { id: number; openCash: bigint; countedCash: bigint | null; status: string }
 
-// Nilai menurut sistem per shift untuk satu metode. Tunai: kas dihitung dikurangi modal yang ditinggal di laci untuk
-// shift berikutnya (RANCANGAN 6.2 dan 11.2 butir 4). Non tunai: jumlah sale_payment metode itu dari penjualan
-// yang tidak void.
+// Nilai menurut sistem dan MDR bawaan per shift untuk satu metode. Tunai: kas dihitung dikurangi modal yang ditinggal
+// di laci untuk shift berikutnya (RANCANGAN 6.2 dan 11.2 butir 4), tanpa MDR. Non tunai: jumlah sale_payment metode
+// itu dari penjualan yang tidak void, dan MDR dihitung per transaksi memakai tarif yang berlaku pada tanggal
+// penjualan (tahap 6C, KONTRAK 11 butir 124).
+export async function nilaiDanMdr(db: DbAtauTx, shifts: ShiftNilai[], metode: { id: number; kind: string }) {
+  if (metode.kind !== 'tunai') return mdrPerShift(db, metode.id, shifts.map((s) => s.id))
+  return new Map(shifts.map((s) => [s.id, { nilai: Number(s.countedCash ?? 0) - Number(s.openCash), mdr: 0 }]))
+}
+
 export async function nilaiSistem(db: DbAtauTx, shifts: ShiftNilai[], metode: { id: number; kind: string }) {
-  const hasil = new Map<number, number>()
-  if (!shifts.length) return hasil
-  if (metode.kind === 'tunai') {
-    for (const s of shifts) hasil.set(s.id, Number(s.countedCash ?? 0) - Number(s.openCash))
-    return hasil
-  }
-  const per = await db.salePayment.groupBy({
-    by: ['saleId'],
-    _sum: { amount: true },
-    where: { paymentMethodId: metode.id, sale: { status: 'Selesai', shiftId: { in: shifts.map((s) => s.id) } } },
-  })
-  // groupBy per saleId lalu dijumlah per shift, karena groupBy Prisma tidak bisa mengelompokkan lewat relasi.
-  const jual = await db.sale.findMany({ where: { id: { in: per.map((p) => p.saleId) } }, select: { id: true, shiftId: true } })
-  const shiftDari = new Map(jual.map((j) => [j.id, j.shiftId]))
-  for (const p of per) {
-    const sid = shiftDari.get(p.saleId)!
-    hasil.set(sid, (hasil.get(sid) ?? 0) + Number(p._sum.amount ?? 0))
-  }
-  return hasil
+  const per = await nilaiDanMdr(db, shifts, metode)
+  return new Map([...per].map(([id, v]) => [id, v.nilai]))
 }
 
 // Shift tanggal itu yang sudah ditutup, belum masuk setoran aktif untuk metode itu (selain setoran kecuali), beserta
-// nilainya. Non tunai hanya shift yang punya penjualan metode itu.
+// nilai dan MDR bawaannya. Non tunai hanya shift yang punya penjualan metode itu.
 export async function calonBaris(db: DbAtauTx, iso: string, metode: { id: number; kind: string }, kecuali?: number) {
   const shifts = await db.shift.findMany({
     where: {
@@ -88,12 +78,11 @@ export async function calonBaris(db: DbAtauTx, iso: string, metode: { id: number
     orderBy: { id: 'asc' },
     select: { id: true, openCash: true, countedCash: true, status: true },
   })
-  const nilai = await nilaiSistem(db, shifts, metode)
-  return shifts.filter((s) => metode.kind === 'tunai' || (nilai.get(s.id) ?? 0) !== 0).map((s) => ({ shiftId: s.id, expected: nilai.get(s.id) ?? 0 }))
+  const per = await nilaiDanMdr(db, shifts, metode)
+  return shifts
+    .map((s) => ({ shiftId: s.id, expected: per.get(s.id)?.nilai ?? 0, mdr: per.get(s.id)?.mdr ?? 0 }))
+    .filter((c) => metode.kind === 'tunai' || c.expected !== 0)
 }
-
-// MDR bawaan per baris: persen MDR metode dikali nilai sistem, dibulatkan ke rupiah. Tunai selalu 0.
-const mdrBaris = (expected: number, mdrPct: number) => (expected > 0 ? persen(expected, mdrPct) : 0)
 
 type Kepala = { id: number; mdrFee: bigint }
 
@@ -106,10 +95,9 @@ async function hitungUlang(tx: Tx, setoranId: number, mdrFee: bigint) {
 }
 
 // Menambah baris shift yang belum ada dan memperbarui nilai sistem baris yang sudah ada (nilai disetor tidak diubah).
-// MDR kepala ikut ditambah sebesar MDR bawaan baris baru.
-async function segarkanBaris(tx: Tx, st: Kepala & { date: Date; paymentMethod: { id: number; kind: string; mdrPct: Prisma.Decimal } }) {
+// MDR kepala ikut ditambah sebesar MDR bawaan baris baru (jumlah MDR per transaksi shift itu).
+async function segarkanBaris(tx: Tx, st: Kepala & { date: Date; paymentMethod: { id: number; kind: string } }) {
   const iso = dariKolomTanggal(st.date)
-  const pct = Number(st.paymentMethod.mdrPct)
   const calon = await calonBaris(tx, iso, st.paymentMethod, st.id)
   const lama = await tx.posSettlementLine.findMany({ where: { posSettlementId: st.id } })
   const perShift = new Map(lama.map((l) => [l.shiftId, l]))
@@ -125,9 +113,8 @@ async function segarkanBaris(tx: Tx, st: Kepala & { date: Date; paymentMethod: {
       }
       continue
     }
-    const mdr = mdrBaris(c.expected, pct)
-    tambahMdr += mdr
-    const actual = c.expected - mdr
+    tambahMdr += c.mdr
+    const actual = c.expected - c.mdr
     await tx.posSettlementLine.create({ data: { posSettlementId: st.id, shiftId: c.shiftId, paymentMethodId: st.paymentMethod.id, expected: BigInt(c.expected), actual: BigInt(actual), diff: BigInt(actual - c.expected) } })
     baru.push(c.shiftId)
   }

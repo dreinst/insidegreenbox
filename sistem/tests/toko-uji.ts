@@ -1,5 +1,5 @@
 // Data toko uji bersama untuk tes laporan dan setoran: pajak 10%, service 5%, dua kategori, empat menu, satu paket
-// set, metode Tunai dan QRIS (MDR 0,7%), dan satu member berpotongan 10%. Juga pembantu untuk memindah waktu
+// set, metode Tunai dan QRIS (tarif MDR 0,7% tanpa batas bebas), dan satu member berpotongan 10%. Juga pembantu untuk memindah waktu
 // penjualan dan shift ke jam WIB tertentu.
 import type { Db } from '../src/lib/db'
 import { tanggalIso } from '../src/lib/waktu'
@@ -18,9 +18,11 @@ export async function siapkanToko(db: Db) {
     menu[n] = (await db.menuItem.create({ data: { name: n, category: c, price: p } })).id
   }
   const paket = (await db.menuSet.create({ data: { name: 'Sarapan', mainItemId: menu['Nasi Goreng'], drinkItemId: menu.Americano, normalPrice: 57000n, price: 45000n } })).id
+  // tahap 6C: MDR dibaca dari riwayat tarif. QRIS uji 0,7% tanpa batas bebas sejak awal 2026.
+  const mulai = new Date('2026-01-01T00:00:00Z')
   const metode = {
-    Tunai: (await db.paymentMethod.create({ data: { name: 'Tunai', kind: 'tunai' } })).id,
-    QRIS: (await db.paymentMethod.create({ data: { name: 'QRIS', kind: 'qris', mdrPct: 0.7 } })).id,
+    Tunai: (await db.paymentMethod.create({ data: { name: 'Tunai', kind: 'tunai', tarifMdr: { create: { mdrPct: 0, effectiveFrom: mulai } } } })).id,
+    QRIS: (await db.paymentMethod.create({ data: { name: 'QRIS', kind: 'qris', mdrPct: 0.7, tarifMdr: { create: { mdrPct: 0.7, effectiveFrom: mulai } } } })).id,
   }
   await db.memberTier.create({ data: { name: 'Sahabat', minVisits: 0, discountPct: 10 } })
   const member = (await db.member.create({ data: { name: 'Budi', wa: '6281234567890', visits: 3, discountOn: true } })).id

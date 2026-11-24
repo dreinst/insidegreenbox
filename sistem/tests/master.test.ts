@@ -80,7 +80,7 @@ describe('impor menu', () => {
     assert.equal(a.menu.baru, total)
     assert.equal(a.tingkat.baru, 3)
     assert.equal(a.paket.baru, 3)
-    assert.equal(a.metode.baru, 3)
+    assert.equal(a.metode.baru, 4)
     const audit = await jumlahAudit('impor.menu')
     const b = await imporMenu(db, data)
     assert.deepEqual(Object.values(b).map((x) => x.baru), [0, 0, 0, 0, 0])
@@ -102,7 +102,7 @@ describe('impor menu', () => {
     }
   })
   test('seed metode bayar idempoten', async () => {
-    assert.deepEqual(await isiMetodeBayar(db), { baru: 0, dilewati: 3 })
+    assert.deepEqual(await isiMetodeBayar(db), { baru: 0, dilewati: 4 })
   })
 })
 
@@ -243,14 +243,18 @@ describe('promo', () => {
 
 describe('metode bayar', () => {
   test('aturan MDR, nama unik, dan minimal satu metode aktif', async () => {
-    await galat(() => tambahMetode(db, k(owner), owner, { name: 'Tunai Dua', kind: 'tunai', mdrPct: '1' }), 'mdrPct')
-    await assert.rejects(() => tambahMetode(db, k(owner), owner, { name: 'Dompet', kind: 'ewallet', mdrPct: '1' }))
-    await assert.rejects(() => tambahMetode(db, k(owner), owner, { name: 'Dompet', kind: 'qris', mdrPct: '25' }))
-    await galat(() => tambahMetode(db, k(owner), owner, { name: 'qris', kind: 'qris', mdrPct: '0,7' }), 'name')
-    const m = await tambahMetode(db, k(owner), owner, { name: 'Dompet Digital', kind: 'lainnya', mdrPct: '1,25', openDrawer: 'on' })
-    assert.equal(m.mdrPct.toString(), '1.25')
+    await galat(() => tambahMetode(db, k(owner), owner, { name: 'Tunai Dua', kind: 'tunai', mdrPct: '1', effectiveFrom: '2026-10-01' }), 'mdrPct')
+    await assert.rejects(() => tambahMetode(db, k(owner), owner, { name: 'Dompet', kind: 'ewallet', mdrPct: '1', effectiveFrom: '2026-10-01' }))
+    await assert.rejects(() => tambahMetode(db, k(owner), owner, { name: 'Dompet', kind: 'qris', mdrPct: '25', effectiveFrom: '2026-10-01' }))
+    await galat(() => tambahMetode(db, k(owner), owner, { name: 'qris', kind: 'qris', mdrPct: '0,7', effectiveFrom: '2026-10-01' }), 'name')
+    await assert.rejects(() => tambahMetode(db, k(owner), owner, { name: 'Dompet', kind: 'qris', mdrPct: '1' }), 'tanggal mulai berlaku wajib')
+    const m = await tambahMetode(db, k(owner), owner, { name: 'Dompet Digital', kind: 'lainnya', mdrPct: '1,25', freeLimit: '', effectiveFrom: '2026-10-01', openDrawer: 'on' })
     assert.equal(m.openDrawer, true)
+    const t = await db.paymentMethodMdr.findMany({ where: { paymentMethodId: m.id } })
+    assert.deepEqual(t.map((x) => [x.mdrPct.toString(), x.freeLimit, x.effectiveFrom.toISOString().slice(0, 10)]), [['1.25', null, '2026-10-01']])
+    // tahap 6C: ubah metode tidak lagi mengubah MDR; isian mdrPct diabaikan.
     await ubahMetode(db, k(admin), admin, m.id, { name: 'Dompet Digital', kind: 'lainnya', mdrPct: '1,5' })
+    assert.equal(await db.paymentMethodMdr.count({ where: { paymentMethodId: m.id } }), 1)
     const semua = await db.paymentMethod.findMany({ where: { active: true } })
     for (const x of semua.slice(0, -1)) await ubahStatusMetode(db, k(owner), owner, x.id, false)
     await galat(() => ubahStatusMetode(db, k(owner), owner, semua.at(-1)!.id, false), undefined, /satu-satunya/)
@@ -294,7 +298,7 @@ describe('izin dan audit', () => {
     await assert.rejects(() => tambahMenu(db, k(admin), admin, { name: 'Ilegal', category: 'espresso', price: '1000' }, TANPA_FOTO), GalatIzin, 'Admin tidak boleh menambah menu')
     await assert.rejects(() => terapkanHargaMassal(db, k(kasir), kasir, { kategori: '', mode: 'persen', arah: 'naik', nilai: '5', bulat: '500', label: 'Ilegal' }), GalatIzin)
     await assert.rejects(() => tambahPromo(db, k(admin), admin, { name: 'Ilegal', kind: 'persen', percent: '5' }), GalatIzin, 'Admin hanya melihat promo')
-    await assert.rejects(() => tambahMetode(db, k(admin), admin, { name: 'Ilegal', kind: 'qris', mdrPct: '0' }), GalatIzin, 'Admin tidak menambah metode bayar')
+    await assert.rejects(() => tambahMetode(db, k(admin), admin, { name: 'Ilegal', kind: 'qris', mdrPct: '0', effectiveFrom: '2026-10-01' }), GalatIzin, 'Admin tidak menambah metode bayar')
     await assert.rejects(() => tambahTingkat(db, k(kasir), kasir, { name: 'Ilegal', minVisits: '99', discountPct: '50', perk: '' }), GalatIzin, 'Kasir tidak mengatur tingkat')
     await assert.rejects(() => ubahStatusTingkat(db, k(kasir), kasir, 1, false), GalatIzin)
     await assert.rejects(() => ubahMember(db, k(kasir), kasir, 1, { name: 'x', wa: '081200000000' }), GalatIzin, 'Kasir menambah tapi tidak mengubah member')

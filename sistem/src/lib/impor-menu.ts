@@ -53,10 +53,14 @@ export const PAKET_BAWAAN: { name: string; main: string; drink: string; image: s
   { name: 'Beef-Sando', main: 'Beef-Sando', drink: 'Iced Shaken Mixed Berries Tea', image: 'c-set-beef', normal: 80000, price: 60000 },
 ]
 
+// tahap 6C: tarif MDR bawaan (KONTRAK 11 butir 125). QRIS usaha mikro mengikuti aturan BI yang berlaku 1 Oktober 2026;
+// Debit memakai tarif kartu bank lain di EDC Mandiri sebagai bawaan aman, dan Debit Mandiri tarif kartu Mandiri (on-us).
+export const TANGGAL_TARIF_BAWAAN = '2026-10-01'
 export const METODE_BAWAAN = [
-  { name: 'Tunai', kind: 'tunai', mdrPct: '0', openDrawer: true },
-  { name: 'QRIS', kind: 'qris', mdrPct: '0', openDrawer: false },
-  { name: 'Debit', kind: 'debit', mdrPct: '0', openDrawer: false },
+  { name: 'Tunai', kind: 'tunai', openDrawer: true, tarif: { mdrPct: '0', freeLimit: null, note: 'Tunai tanpa MDR.' } },
+  { name: 'QRIS', kind: 'qris', openDrawer: false, tarif: { mdrPct: '0.3', freeLimit: 500000n, note: 'Aturan BI MDR QRIS usaha mikro, siaran pers 28/159/DKom.' } },
+  { name: 'Debit', kind: 'debit', openDrawer: false, tarif: { mdrPct: '1', freeLimit: null, note: 'Bawaan kartu bank lain di EDC Mandiri, bankmandiri.co.id/edc.' } },
+  { name: 'Debit Mandiri', kind: 'debit', openDrawer: false, tarif: { mdrPct: '0.15', freeLimit: null, note: 'Bawaan kartu Mandiri di EDC Mandiri (on-us), bankmandiri.co.id/edc.' } },
 ] as const
 
 // "38 K" jadi 38000 dan "35,5 K" jadi 35500.
@@ -95,15 +99,23 @@ export function bangunDataImpor(minuman: Kelompok<ItemMinuman>[], makanan: Kelom
   return { kategori, menu, tingkat: TINGKAT_BAWAAN, paket }
 }
 
-// Metode bayar bawaan Tunai, QRIS, dan Debit. Yang sudah ada (menurut nama) dilewati.
+// Metode bayar bawaan Tunai, QRIS, Debit, dan Debit Mandiri beserta tarif MDR-nya. Metode yang sudah ada (menurut nama)
+// dilewati dan tarifnya tidak disentuh. Metode yang belum punya tarif sama sekali (misalnya dibuat skrip lama) mendapat
+// satu tarif dari persen di payment_method.mdr_pct, supaya MDR-nya tetap terhitung.
 export async function isiMetodeBayar(db: DbAtauTx) {
   const hasil = { baru: 0, dilewati: 0 }
+  const mulai = new Date(`${TANGGAL_TARIF_BAWAAN}T00:00:00Z`)
   for (const m of METODE_BAWAAN) {
     if (await db.paymentMethod.findFirst({ where: { name: { equals: m.name, mode: 'insensitive' } } })) hasil.dilewati++
     else {
-      await db.paymentMethod.create({ data: m })
+      const { tarif, ...data } = m
+      const baru = await db.paymentMethod.create({ data: { ...data, mdrPct: tarif.mdrPct } })
+      await db.paymentMethodMdr.create({ data: { paymentMethodId: baru.id, mdrPct: tarif.mdrPct, freeLimit: tarif.freeLimit, effectiveFrom: mulai, note: tarif.note } })
       hasil.baru++
     }
+  }
+  for (const m of await db.paymentMethod.findMany({ where: { tarifMdr: { none: {} } } })) {
+    await db.paymentMethodMdr.create({ data: { paymentMethodId: m.id, mdrPct: m.kind === 'tunai' ? 0 : m.mdrPct, effectiveFrom: mulai, note: 'Tarif dari pengaturan metode sebelum ada riwayat tarif.' } })
   }
   return hasil
 }
