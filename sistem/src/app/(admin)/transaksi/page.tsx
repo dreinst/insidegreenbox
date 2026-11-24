@@ -5,6 +5,7 @@ import { Halaman, KepalaHalaman } from '@/components/umum'
 import { db } from '@/lib/db'
 import { rupiah } from '@/lib/hitung-kasir'
 import { wajibIzin } from '@/lib/izin'
+import { punyaIzin } from '@/lib/izin-inti'
 import { daftarPenjualan, MODE, type SaringJual } from '@/lib/penjualan'
 import { lihatSemuaKasir } from '@/lib/shift'
 import { formatWaktu } from '@/lib/waktu'
@@ -22,19 +23,24 @@ export default async function DaftarTransaksi({ searchParams }: { searchParams: 
     db.shift.findMany({ where: semua ? {} : { userId: p.id }, orderBy: { id: 'desc' }, take: 60, select: { id: true, openedAt: true, user: { select: { name: true } } } }),
   ])
   const disaring = !!(s.dari || s.sampai || s.shift || s.metode || s.status || s.q)
+  // Hitung buta (KONTRAK 11 butir 17 dan 134, temuan audit A-4): jumlah penjualan per saringan hanya untuk pemegang Lihat
+  // laporan.penjualan, supaya kasir tidak bisa menghitung kas seharusnya sebelum mengisi kas dihitung.
+  const lihatJumlah = punyaIzin(p.izin, 'laporan.penjualan', 'L')
   return (
     <>
       <KepalaHalaman judul="Transaksi" keterangan={semua ? 'Penjualan semua kasir, struk, dan void.' : 'Penjualan di shift milikmu, struk, dan void.'} />
-      <div className="ringkas-angka" role="status">
-        <div>
-          <small>Transaksi selesai</small>
-          <b>{hasil.selesai}</b>
+      {lihatJumlah ? (
+        <div className="ringkas-angka" role="status">
+          <div>
+            <small>Transaksi selesai</small>
+            <b>{hasil.selesai}</b>
+          </div>
+          <div>
+            <small>Penjualan</small>
+            <b>{rupiah(hasil.omzet)}</b>
+          </div>
         </div>
-        <div>
-          <small>Penjualan</small>
-          <b>{rupiah(hasil.omzet)}</b>
-        </div>
-      </div>
+      ) : null}
       <form className="saring" method="get" role="search" aria-label="Saring transaksi">
         <div className="kolom">
           <label htmlFor="s-dari">Dari tanggal</label>
