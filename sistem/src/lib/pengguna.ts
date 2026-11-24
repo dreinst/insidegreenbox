@@ -3,12 +3,46 @@ import bcrypt from 'bcryptjs'
 import { z } from 'zod'
 import { GalatAturan } from './aksi'
 import { catatAudit, selisih, type Konteks } from './audit'
-import type { Db, Tx } from './db'
-import { isOwner, pastikanIzin, type Pengguna } from './izin-inti'
+import type { Db, DbAtauTx, Tx } from './db'
+import { isOwner, muatIzin, muatSaklar, pastikanIzin, punyaIzin, type PetaIzin, type PetaSaklar, type Pengguna } from './izin-inti'
+import type { Aksi } from './katalog'
 import { cabutSemuaSesi } from './masuk'
 import { BIAYA_BCRYPT } from './seed-inti'
 
-type Aktor = Pick<Pengguna, 'id' | 'izin' | 'peran' | 'sesiId'>
+type Aktor = Pick<Pengguna, 'id' | 'izin' | 'peran' | 'sesiId' | 'saklar'>
+
+// Temuan audit A-2 (KONTRAK 4.6 dan 11 butir 130): bukan Owner hanya boleh memberi peran, mengubah, menonaktifkan, atau
+// mengatur ulang sandi pengguna yang perannya tercakup izinnya sendiri. Tercakup berarti setiap izin peran itu juga
+// dipegang aktor, setiap saklar yang nyala di peran itu juga nyala untuk aktor, dan batas saklarnya tidak lebih longgar
+// (kosong berarti tanpa batas). Pemeriksaan yang sama dengan salin izin saat membuat peran.
+export function izinTercakup(aktor: Pick<Pengguna, 'izin' | 'saklar'>, izin: PetaIzin, saklar: PetaSaklar) {
+  for (const [menu, huruf] of Object.entries(izin)) for (const h of huruf) if (!punyaIzin(aktor.izin, menu, h as Aksi)) return false
+  for (const [kode, s] of Object.entries(saklar)) {
+    if (!s.nyala) continue
+    const a = aktor.saklar[kode]
+    if (!a?.nyala) return false
+    if (a.batas !== null && (s.batas === null || s.batas > a.batas)) return false
+  }
+  return true
+}
+
+export async function peranTercakup(db: DbAtauTx, aktor: Pick<Pengguna, 'izin' | 'saklar' | 'peran'>, peran: { id: number; code: string }) {
+  if (isOwner(aktor)) return true
+  if (peran.code === 'owner') return false
+  if (peran.id === aktor.peran.id) return true
+  const [izin, saklar] = await Promise.all([muatIzin(db, peran.id), muatSaklar(db, peran.id)])
+  return izinTercakup(aktor, izin, saklar)
+}
+
+// Peran yang boleh dipilih aktor di formulir pengguna (urut id). Peran nonaktif disertakan hanya bila disebut di sertakan.
+export async function peranBolehDiberi(db: DbAtauTx, aktor: Pick<Pengguna, 'izin' | 'saklar' | 'peran'>, sertakan?: number) {
+  const semua = await db.role.findMany({ where: { OR: [{ active: true }, ...(sertakan ? [{ id: sertakan }] : [])] }, orderBy: { id: 'asc' } })
+  const hasil = []
+  for (const r of semua) if (await peranTercakup(db, aktor, r)) hasil.push(r)
+  return hasil
+}
+
+const PESAN_LEBIH_KUAT = 'Peran ini punya izin atau saklar yang tidak kamu miliki, jadi tidak bisa kamu berikan.'
 
 const nama = z.string().trim().min(2, 'Nama minimal 2 huruf.').max(80, 'Nama paling panjang 80 huruf.')
 const namaPengguna = z
@@ -46,6 +80,7 @@ export async function tambahPengguna(db: Db, k: Konteks, aktor: Aktor, masukan: 
   const peran = await db.role.findUnique({ where: { id: d.roleId } })
   if (!peran || !peran.active) throw new GalatAturan('Peran tidak ditemukan atau sedang nonaktif.', 'roleId')
   if (peran.code === 'owner' && !isOwner(aktor)) throw new GalatAturan('Hanya Owner yang bisa memberi peran Owner.', 'roleId')
+  if (!(await peranTercakup(db, aktor, peran))) throw new GalatAturan(PESAN_LEBIH_KUAT, 'roleId')
   if (await db.appUser.findUnique({ where: { username: d.username } })) throw new GalatAturan('Nama pengguna sudah dipakai.', 'username')
   const passwordHash = await bcrypt.hash(d.sandi, BIAYA_BCRYPT)
   try {
@@ -70,6 +105,7 @@ async function ambilTarget(tx: Db | Tx, aktor: Aktor, id: number) {
   const u = await tx.appUser.findUnique({ where: { id }, include: { role: true } })
   if (!u) throw new GalatAturan('Pengguna tidak ditemukan.')
   if (u.role.code === 'owner' && !isOwner(aktor)) throw new GalatAturan('Hanya Owner yang bisa mengubah pengguna berperan Owner.')
+  if (!(await peranTercakup(tx, aktor, u.role))) throw new GalatAturan(`Peran ${u.role.name} punya izin atau saklar yang tidak kamu miliki, jadi pengguna ini hanya bisa diubah Owner.`)
   return u
 }
 
@@ -84,6 +120,7 @@ export async function ubahPengguna(db: Db, k: Konteks, aktor: Aktor, id: number,
       if (peranBaru.id !== u.roleId) {
         if (u.id === aktor.id) throw new GalatAturan('Kamu tidak bisa mengganti peranmu sendiri.', 'roleId')
         if (peranBaru.code === 'owner' && !isOwner(aktor)) throw new GalatAturan('Hanya Owner yang bisa memberi peran Owner.', 'roleId')
+        if (!(await peranTercakup(tx, aktor, peranBaru))) throw new GalatAturan(PESAN_LEBIH_KUAT, 'roleId')
         if (u.role.code === 'owner' && u.active && (await jumlahOwnerAktif(tx)) <= 1) {
           throw new GalatAturan('Ini Owner aktif terakhir, jadi perannya tidak bisa diganti.', 'roleId')
         }

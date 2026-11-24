@@ -5,7 +5,7 @@ import { GalatAturan, GalatIzin } from '../src/lib/aksi'
 import type { Db } from '../src/lib/db'
 import { muatIzin, muatSaklar, punyaIzin, type Pengguna } from '../src/lib/izin-inti'
 import { MENU_IZIN, SAKLAR } from '../src/lib/katalog'
-import { tambahPengguna, ubahPengguna, ubahStatusPengguna } from '../src/lib/pengguna'
+import { aturUlangSandi, izinTercakup, peranBolehDiberi, tambahPengguna, ubahPengguna, ubahStatusPengguna } from '../src/lib/pengguna'
 import { simpanIzinPeran, simpanSaklarPeran, tambahPeran, ubahStatusPeran } from '../src/lib/peran'
 import { buatAktor, k, muatAktor, siapkanDbUji } from './db-uji'
 
@@ -131,6 +131,35 @@ describe('pengaman peran dan izin', () => {
     await assert.rejects(tambahPengguna(db, k(spv), spv, { name: 'Calon', username: 'calon1', roleId: owner.peran.id, sandi: '12345678', ulangiSandi: '12345678' }), /Hanya Owner/)
     await assert.rejects(tambahPeran(db, k(spv), spv, { code: 'tiruan', name: 'Tiruan', salinDari: owner.peran.id }), /tidak kamu miliki|tidak bisa kamu salin/)
     await assert.rejects(ubahStatusPengguna(db, k(spv), spv, owner.id, false), /Hanya Owner/)
+  })
+  // Temuan audit A-2: peran tambahan yang hanya memegang atur.pengguna tidak bisa membuat atau mengambil alih akun
+  // berperan lebih kuat.
+  test('bukan Owner hanya bisa memberi dan mengelola peran yang izinnya tercakup izinnya sendiri', async () => {
+    await tambahPeran(db, k(owner), owner, { code: 'spv_pengguna', name: 'Supervisor' })
+    const supId = await idPeran('spv_pengguna')
+    await simpanIzinPeran(db, k(owner), owner, supId, { ...(await matriksSaatIni(supId)), 'atur.pengguna': 'LTU' })
+    const sup = await buatAktor(db, 'spv_pengguna', 'spv_a2')
+    const adminId = await idPeran('admin')
+    const baru = (roleId: number, username: string) => tambahPengguna(db, k(sup), sup, { name: 'Bayangan', username, roleId, sandi: '12345678', ulangiSandi: '12345678' })
+    await assert.rejects(baru(adminId, 'bayangan'), /tidak kamu miliki/)
+    await assert.rejects(baru(await idPeran('kasir'), 'bayangan2'), /tidak kamu miliki/)
+    assert.equal(await db.appUser.count({ where: { username: { in: ['bayangan', 'bayangan2'] } } }), 0)
+    // Peran yang sama dengan miliknya sendiri boleh.
+    const rekan = await baru(supId, 'rekan_spv')
+    assert.deepEqual((await peranBolehDiberi(db, sup)).map((r) => r.code), ['spv_pengguna'])
+    // Admin tidak bisa diubah, dinonaktifkan, atau diatur ulang sandinya, dan tidak bisa diberi ke rekan.
+    await assert.rejects(ubahPengguna(db, k(sup), sup, admin.id, { name: 'Diubah', username: admin.username, roleId: adminId }), /hanya bisa diubah Owner/)
+    await assert.rejects(ubahStatusPengguna(db, k(sup), sup, admin.id, false), /hanya bisa diubah Owner/)
+    await assert.rejects(aturUlangSandi(db, k(sup), sup, admin.id, { sandi: 'sandibaru123', ulangiSandi: 'sandibaru123' }), /hanya bisa diubah Owner/)
+    await assert.rejects(ubahPengguna(db, k(sup), sup, rekan.id, { name: 'Bayangan', username: 'rekan_spv', roleId: adminId }), /tidak kamu miliki/)
+    assert.equal((await db.appUser.findUniqueOrThrow({ where: { id: rekan.id } })).roleId, supId)
+    // Owner tetap bebas, dan saklar dengan batas lebih longgar dihitung lebih kuat.
+    assert.ok((await peranBolehDiberi(db, owner)).some((r) => r.code === 'admin'))
+    const aktorBatas = { izin: {}, saklar: { 'dok.tanggal_mundur': { nyala: true, batas: 1 } } }
+    assert.equal(izinTercakup(aktorBatas, {}, { 'dok.tanggal_mundur': { nyala: true, batas: 1 } }), true)
+    assert.equal(izinTercakup(aktorBatas, {}, { 'dok.tanggal_mundur': { nyala: true, batas: 7 } }), false)
+    assert.equal(izinTercakup(aktorBatas, {}, { 'dok.tanggal_mundur': { nyala: true, batas: null } }), false)
+    assert.equal(izinTercakup(aktorBatas, {}, { 'stok.lihat_nilai': { nyala: true, batas: null } }), false)
   })
   test('peran sistem tidak bisa dinonaktifkan; peran tambahan bisa', async () => {
     await assert.rejects(ubahStatusPeran(db, k(owner), owner, await idPeran('kasir'), false), /Peran sistem/)

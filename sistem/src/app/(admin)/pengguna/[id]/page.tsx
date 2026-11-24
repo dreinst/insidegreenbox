@@ -5,6 +5,7 @@ import { KepalaHalaman, Lencana, PesanFlash } from '@/components/umum'
 import { db } from '@/lib/db'
 import { wajibIzin } from '@/lib/izin'
 import { isOwner, punyaIzin } from '@/lib/izin-inti'
+import { peranBolehDiberi, peranTercakup } from '@/lib/pengguna'
 import { formatWaktu } from '@/lib/waktu'
 import { sandiPenggunaAksi, statusPenggunaAksi, ubahPenggunaAksi } from '../aksi'
 import { FormSandi, FormStatus, FormUbahPengguna } from '../form'
@@ -17,11 +18,13 @@ export default async function RincianPengguna({ params, searchParams }: { params
   if (!Number.isInteger(id) || id <= 0) notFound()
   const [u, { pesan }] = await Promise.all([db.appUser.findUnique({ where: { id }, include: { role: true } }), searchParams])
   if (!u) notFound()
-  const [peran, sesiAktif] = await Promise.all([
-    db.role.findMany({ where: { OR: [{ active: true }, { id: u.roleId }], ...(isOwner(p) || u.role.code === 'owner' ? {} : { NOT: { code: 'owner' } }) }, orderBy: { id: 'asc' } }),
+  const [peran, sesiAktif, tercakup] = await Promise.all([
+    peranBolehDiberi(db, p, u.roleId),
     db.userSession.count({ where: { userId: id, revokedAt: null, expiresAt: { gt: new Date() } } }),
+    peranTercakup(db, p, u.role),
   ])
-  const bolehUbah = punyaIzin(p.izin, 'atur.pengguna', 'U') && (u.role.code !== 'owner' || isOwner(p))
+  // Pengguna berperan lebih kuat dari kamu (Owner, atau peran dengan izin yang tidak kamu miliki) hanya dibaca (temuan audit A-2).
+  const bolehUbah = punyaIzin(p.izin, 'atur.pengguna', 'U') && (u.role.code !== 'owner' || isOwner(p)) && tercakup
   const diriSendiri = u.id === p.id
   const pilihan = peran.map((r) => ({ nilai: String(r.id), label: r.active ? r.name : `${r.name} (nonaktif)` }))
 
@@ -44,6 +47,12 @@ export default async function RincianPengguna({ params, searchParams }: { params
             />
           ) : (
             <dl className="rincian">
+              {punyaIzin(p.izin, 'atur.pengguna', 'U') && !tercakup ? (
+                <>
+                  <dt>Ubah</dt>
+                  <dd className="redup">Peran {u.role.name} punya izin atau saklar yang tidak kamu miliki, jadi pengguna ini hanya bisa diubah Owner.</dd>
+                </>
+              ) : null}
               <dt>Nama</dt>
               <dd>{u.name}</dd>
               <dt>Nama pengguna</dt>
