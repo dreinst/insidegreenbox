@@ -86,6 +86,8 @@ export async function PanelTindakan({ p, jenis, d, butuhSetuju, aksi, catatan }:
       </div>
       {catatan ? <p className="catatan">{catatan}</p> : null}
       <JejakStatus d={d} />
+      {/* Temuan audit B-7: pengaju tanpa Posting diberi tahu bahwa Owner yang memposting. */}
+      {t.ajukan && !t.posting && !butuhSetuju ? <p className="redup kecil">Kamu tidak memegang Posting untuk dokumen ini. Sesudah diajukan, Owner yang memposting.</p> : null}
       {adaTombol ? (
         <div className="deret-tombol">
           {t.posting ? (
@@ -95,7 +97,7 @@ export async function PanelTindakan({ p, jenis, d, butuhSetuju, aksi, catatan }:
               konfirmasi={`Posting ${d.no}? Stok langsung bergerak dan dokumen tidak bisa diubah lagi.`}
             />
           ) : null}
-          {t.ajukan ? <TombolAksi aksi={aksi.ajukan} label={butuhSetuju ? 'Ajukan untuk disetujui' : 'Ajukan'} kelas={t.posting ? 'btn sekunder' : 'btn'} /> : null}
+          {t.ajukan ? <TombolAksi aksi={aksi.ajukan} label={butuhSetuju ? 'Ajukan untuk disetujui' : t.posting ? 'Ajukan' : 'Ajukan ke Owner'} kelas={t.posting ? 'btn sekunder' : 'btn'} /> : null}
           {t.kembalikan ? <TombolAksi aksi={aksi.kembalikan} label="Kembalikan ke draf" kelas="btn sekunder" /> : null}
           {t.hapus ? <TombolAksi aksi={aksi.hapus} label="Hapus draf" kelas="btn bahaya" konfirmasi={`Hapus draf ${d.no}? Nomornya tidak dipakai ulang.`} /> : null}
         </div>

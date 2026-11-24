@@ -88,11 +88,13 @@ export async function PanelKas({ p, menu, d, butuhSetuju, aksi, catatan, peringa
           ))}
         </p>
       ) : null}
+      {/* Temuan audit B-7: pengaju tanpa Posting diberi tahu bahwa Owner yang memposting. */}
+      {t.ajukan && !t.posting && !butuhSetuju ? <p className="redup kecil">Kamu tidak memegang Posting untuk dokumen ini. Sesudah diajukan, Owner yang memposting.</p> : null}
       {adaTombol ? (
         <div className="deret-tombol">
           {t.setujui ? <TombolAksi aksi={aksi.setujui} label="Setujui" konfirmasi={`Setujui ${d.no}? Sesudah uang benar-benar bergerak, tekan Posting.`} /> : null}
           {t.posting ? <TombolAksi aksi={aksi.posting} label="Posting" konfirmasi={`${konfirmasiPosting}${peringatan ? ` ${peringatan}` : ''}`} /> : null}
-          {t.ajukan ? <TombolAksi aksi={aksi.ajukan} label={butuhSetuju ? 'Ajukan untuk disetujui' : 'Ajukan'} kelas={t.posting || t.setujui ? 'btn sekunder' : 'btn'} /> : null}
+          {t.ajukan ? <TombolAksi aksi={aksi.ajukan} label={butuhSetuju ? 'Ajukan untuk disetujui' : t.posting ? 'Ajukan' : 'Ajukan ke Owner'} kelas={t.posting || t.setujui ? 'btn sekunder' : 'btn'} /> : null}
           {t.kembalikan ? <TombolAksi aksi={aksi.kembalikan} label="Kembalikan ke draf" kelas="btn sekunder" /> : null}
           {t.hapus ? <TombolAksi aksi={aksi.hapus} label="Hapus draf" kelas="btn bahaya" konfirmasi={`Hapus draf ${d.no}? Nomornya tidak dipakai ulang.`} /> : null}
         </div>

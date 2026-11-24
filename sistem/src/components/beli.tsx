@@ -191,6 +191,8 @@ export async function PanelBeli({ p, jenis, d, butuhSetuju, aksi, catatan, perin
           Selesai {selesai.at ? formatWaktu(selesai.at) : ''}: {selesai.alasan ? `sisa ditutup. Alasan: ${selesai.alasan}` : 'semua baris terpenuhi.'}
         </p>
       ) : null}
+      {/* Temuan audit B-7: pengaju tanpa Posting diberi tahu bahwa Owner yang memposting. */}
+      {t.ajukan && !t.posting && !butuhSetuju ? <p className="redup kecil">Kamu tidak memegang Posting untuk dokumen ini. Sesudah diajukan, Owner yang memposting.</p> : null}
       {adaTombol ? (
         <div className="deret-tombol">
           {t.setujui ? (
@@ -207,7 +209,7 @@ export async function PanelBeli({ p, jenis, d, butuhSetuju, aksi, catatan, perin
               konfirmasi={`${konfirmasiPosting ?? `Posting ${d.no}? Dokumen tidak bisa diubah lagi.`}${peringatan ? ` ${peringatan}` : ''}`}
             />
           ) : null}
-          {t.ajukan ? <TombolAksi aksi={aksi.ajukan} label={butuhSetuju ? 'Ajukan untuk disetujui' : 'Ajukan'} kelas={t.posting || t.setujui ? 'btn sekunder' : 'btn'} /> : null}
+          {t.ajukan ? <TombolAksi aksi={aksi.ajukan} label={butuhSetuju ? 'Ajukan untuk disetujui' : t.posting ? 'Ajukan' : 'Ajukan ke Owner'} kelas={t.posting || t.setujui ? 'btn sekunder' : 'btn'} /> : null}
           {t.kembalikan ? <TombolAksi aksi={aksi.kembalikan} label="Kembalikan ke draf" kelas="btn sekunder" /> : null}
           {t.hapus ? <TombolAksi aksi={aksi.hapus} label="Hapus draf" kelas="btn bahaya" konfirmasi={`Hapus draf ${d.no}? Nomornya tidak dipakai ulang.`} /> : null}
         </div>
