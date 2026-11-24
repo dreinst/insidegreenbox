@@ -32,7 +32,8 @@ async function shiftLengkap(aktor: Pengguna, tanggal: string, selisih = 0) {
   const s = await bukaShift(db, k(aktor), aktor, { modal: '150000' })
   await pindahShift(db, s.id, tanggal, '09:00')
   const a = await simpanPenjualan(db, k(aktor), aktor, { mode: 'takeaway', baris: [{ menuItemId: toko.menu['Kopi Susu'], qty: 1 }], bayar: [{ metodeId: toko.metode.Tunai, jumlah: 50000 }] })
-  const total = Number(a.total)
+  // Uang tunai yang masuk laci sudah dibulatkan ke Rp 500 (KONTRAK 11 butir 142): 32.340 menjadi 32.500.
+  const total = Number(a.total) + a.pembulatan
   const b = await simpanPenjualan(db, k(aktor), aktor, { mode: 'takeaway', baris: [{ menuItemId: toko.menu.Croissant, qty: 2 }], bayar: [{ metodeId: toko.metode.QRIS, jumlah: 57750 }] })
   await pindahJual(db, a.id, tanggal, '10:00')
   await pindahJual(db, b.id, tanggal, '11:00')

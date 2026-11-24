@@ -1509,6 +1509,9 @@ model Sale {
   svcPct         Decimal       @default(0) @map("svc_pct") @db.Decimal(6, 3)
   taxPct         Decimal       @default(0) @map("tax_pct") @db.Decimal(6, 3)
   voidApprovedBy Int?          @map("void_approved_by")
+  // Keputusan pemilik 24 November 2026: selisih pembulatan bagian tunai ke Rp 500 (KONTRAK 11 butir 142).
+  // Uang diterima = total + rounding.
+  rounding       BigInt        @default(0)
   saleLines      SaleLine[]
   salePayments   SalePayment[]
 

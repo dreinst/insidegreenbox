@@ -283,7 +283,7 @@ export async function ambilShift(db: Db, aktor: Aktor, id: number) {
 export async function rekapMetode(db: DbAtauTx, shiftId: number) {
   const [per, jumlah] = await Promise.all([
     db.salePayment.groupBy({ by: ['paymentMethodId'], _sum: { amount: true }, _count: { _all: true }, where: { sale: { shiftId, status: 'Selesai' } } }),
-    db.sale.groupBy({ by: ['status'], _count: { _all: true }, _sum: { total: true }, where: { shiftId } }),
+    db.sale.groupBy({ by: ['status'], _count: { _all: true }, _sum: { total: true, rounding: true }, where: { shiftId } }),
   ])
   const metode = await db.paymentMethod.findMany({ where: { id: { in: per.map((p) => p.paymentMethodId) } } })
   return {
@@ -291,5 +291,7 @@ export async function rekapMetode(db: DbAtauTx, shiftId: number) {
     selesai: jumlah.find((j) => j.status === 'Selesai')?._count._all ?? 0,
     void: jumlah.find((j) => j.status === 'Void')?._count._all ?? 0,
     omzet: Number(jumlah.find((j) => j.status === 'Selesai')?._sum.total ?? 0),
+    // Pembulatan tunai (KONTRAK 11 butir 142): jumlah per metode = omzet + pembulatan.
+    pembulatan: Number(jumlah.find((j) => j.status === 'Selesai')?._sum.rounding ?? 0),
   }
 }

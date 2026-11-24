@@ -29,6 +29,8 @@ export function tabelRekap(d: Awaited<ReturnType<typeof rekapPenjualan>>, opsi: 
     { h: 'Penjualan bersih', v: (b) => b.bersih, jenis: 'uang' },
     { h: 'Service', v: (b) => b.service, jenis: 'uang' },
     { h: 'Pajak PB1', v: (b) => b.pajak, jenis: 'uang' },
+    // Pembulatan tunai ke Rp 500 (KONTRAK 11 butir 142); Total diterima sudah termasuk pembulatan.
+    { h: 'Pembulatan', v: (b) => b.pembulatan, jenis: 'uang' },
     { h: 'Total diterima', v: (b) => b.total, jenis: 'uang' },
   ]
   if (opsi.nilai) kolom.push({ h: 'HPP', v: (b) => b.hpp, jenis: 'uang' }, { h: 'Laba kotor', v: (b) => b.laba, jenis: 'uang' }, { h: 'Persen laba', v: (b) => b.persenLaba, jenis: 'persen' })

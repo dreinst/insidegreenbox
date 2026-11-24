@@ -146,6 +146,14 @@ export default async function RincianShift({ params, searchParams }: { params: P
                     <b>{rupiah(m.total)}</b>
                   </li>
                 ))}
+                {rekap.pembulatan ? (
+                  <li>
+                    <span>
+                      Pembulatan tunai <small className="redup">(sudah termasuk di tunai)</small>
+                    </span>
+                    <b>{rupiah(rekap.pembulatan)}</b>
+                  </li>
+                ) : null}
                 <li>
                   <span className="tebal">Omzet ({rekap.selesai} transaksi)</span>
                   <b>{rupiah(rekap.omzet)}</b>

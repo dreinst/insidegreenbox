@@ -151,6 +151,8 @@ export async function simpanPenjualan(db: Db, k: Konteks, aktor: Aktor, masukan:
         svc: BigInt(t.svc),
         tax: BigInt(t.tax),
         total: BigInt(t.total),
+        // Pembulatan bagian tunai ke Rp 500 (KONTRAK 11 butir 142); uang diterima = total + rounding.
+        rounding: BigInt(bagi.pembulatan),
         hpp: 0n,
         memberPct: pctMember,
         svcPct: biaya.service,
@@ -170,7 +172,7 @@ export async function simpanPenjualan(db: Db, k: Konteks, aktor: Aktor, masukan:
       action: 'penjualan.simpan',
       docType: 'sale',
       docId: jual.id,
-      summary: `Penjualan ${no} ${rupiah(t.total)} di shift #${s.id}${namaBayar ? `, ${namaBayar}` : ''}`,
+      summary: `Penjualan ${no} ${rupiah(t.total)}${bagi.pembulatan ? `, pembulatan ${bagi.pembulatan > 0 ? '+' : ''}${rupiah(bagi.pembulatan)}` : ''} di shift #${s.id}${namaBayar ? `, ${namaBayar}` : ''}`,
       after: {
         no,
         shiftId: s.id,
@@ -179,6 +181,7 @@ export async function simpanPenjualan(db: Db, k: Konteks, aktor: Aktor, masukan:
         member: member?.name ?? null,
         memberPct: pctMember,
         ...t,
+        pembulatan: bagi.pembulatan,
         hpp: stok.hpp,
         jurnal: jurnal?.no ?? null,
         ...(stok.tanpaResep.length ? { tanpaResep: stok.tanpaResep } : {}),
@@ -187,7 +190,7 @@ export async function simpanPenjualan(db: Db, k: Konteks, aktor: Aktor, masukan:
         bayar: bagi.baris.map((b) => ({ metode: perMetode.get(b.metodeId)!.name, amount: b.amount, paid: b.paid, change: b.change })),
       },
     })
-    return { id: jual.id, no, total: t.total, kembalian: bagi.kembalian, hpp: stok.hpp }
+    return { id: jual.id, no, total: t.total, pembulatan: bagi.pembulatan, kembalian: bagi.kembalian, hpp: stok.hpp }
   })
 }
 
@@ -263,7 +266,7 @@ export async function voidPenjualan(db: Db, k: Konteks, aktor: Aktor, saleId: nu
       docId: saleId,
       summary: `Void ${jual.no} ${rupiah(jual.total)}${penyetuju ? `, disetujui ${penyetuju.name} dengan PIN` : ''}${s?.status !== 'Buka' ? ' sesudah shift ditutup' : ''}. Alasan: ${d.alasan}`,
       before: { status: jual.status },
-      after: { status: 'Void', voidReason: d.alasan, voidApprovedBy: penyetuju?.id ?? null, shiftStatus: s?.status, gerakBalik: balik.length, nilaiKembali: balik.reduce((n, g) => n + g.nilai, 0n), jurnalBalik: jurnal?.no ?? null },
+      after: { status: 'Void', voidReason: d.alasan, voidApprovedBy: penyetuju?.id ?? null, shiftStatus: s?.status, pembulatan: jual.rounding, gerakBalik: balik.length, nilaiKembali: balik.reduce((n, g) => n + g.nilai, 0n), jurnalBalik: jurnal?.no ?? null },
     })
     return baru
   })

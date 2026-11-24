@@ -67,7 +67,8 @@ const laba = (bersih: number, hpp: number) => ({ hpp, laba: bersih - hpp, persen
 // 1. Rekap Penjualan per hari, kasir, atau shift.
 export const KELOMPOK_REKAP = { hari: 'Per hari', kasir: 'Per kasir', shift: 'Per shift' } as const
 // tahap 5B: hpp dari sale.hpp (nilai bahan resep saat dijual), laba kotor = penjualan bersih - HPP (KONTRAK 11 butir 47).
-export type BarisRekap = { kunci: string; label: string; n: number; kotor: number; potongan: number; bersih: number; service: number; pajak: number; total: number; nVoid: number; nilaiVoid: number; hpp: number; laba: number; persenLaba: number | null }
+// total = uang diterima (total pas + pembulatan tunai, KONTRAK 11 butir 142).
+export type BarisRekap = { kunci: string; label: string; n: number; kotor: number; potongan: number; bersih: number; service: number; pajak: number; pembulatan: number; total: number; nVoid: number; nilaiVoid: number; hpp: number; laba: number; persenLaba: number | null }
 
 export async function rekapPenjualan(db: Db, s: SaringLaporan) {
   const r = rentang(s)
@@ -89,10 +90,11 @@ export async function rekapPenjualan(db: Db, s: SaringLaporan) {
       COALESCE(SUM(s.disc) FILTER (WHERE s.status = 'Selesai'), 0)::bigint AS potongan,
       COALESCE(SUM(s.svc) FILTER (WHERE s.status = 'Selesai'), 0)::bigint AS service,
       COALESCE(SUM(s.tax) FILTER (WHERE s.status = 'Selesai'), 0)::bigint AS pajak,
-      COALESCE(SUM(s.total) FILTER (WHERE s.status = 'Selesai'), 0)::bigint AS total,
+      COALESCE(SUM(s.rounding) FILTER (WHERE s.status = 'Selesai'), 0)::bigint AS pembulatan,
+      COALESCE(SUM(s.total + s.rounding) FILTER (WHERE s.status = 'Selesai'), 0)::bigint AS total,
       COALESCE(SUM(s.hpp) FILTER (WHERE s.status = 'Selesai'), 0)::bigint AS hpp,
       COUNT(*) FILTER (WHERE s.status = 'Void')::bigint AS nvoid,
-      COALESCE(SUM(s.total) FILTER (WHERE s.status = 'Void'), 0)::bigint AS nilaivoid
+      COALESCE(SUM(s.total + s.rounding) FILTER (WHERE s.status = 'Void'), 0)::bigint AS nilaivoid
     FROM sale s JOIN shift sh ON sh.id = s.shift_id JOIN app_user u ON u.id = sh.user_id
     WHERE ${syaratJual(r, s)}
     GROUP BY 1, 2 ORDER BY 1`
@@ -105,14 +107,15 @@ export async function rekapPenjualan(db: Db, s: SaringLaporan) {
     bersih: N(b.kotor) - N(b.potongan),
     service: N(b.service),
     pajak: N(b.pajak),
+    pembulatan: N(b.pembulatan),
     total: N(b.total),
     nVoid: N(b.nvoid),
     nilaiVoid: N(b.nilaivoid),
     ...laba(N(b.kotor) - N(b.potongan), N(b.hpp)),
   }))
   const jumlah = hasil.reduce(
-    (a, b) => ({ ...a, n: a.n + b.n, kotor: a.kotor + b.kotor, potongan: a.potongan + b.potongan, bersih: a.bersih + b.bersih, service: a.service + b.service, pajak: a.pajak + b.pajak, total: a.total + b.total, nVoid: a.nVoid + b.nVoid, nilaiVoid: a.nilaiVoid + b.nilaiVoid, hpp: a.hpp + b.hpp }),
-    { kunci: '', label: 'Jumlah', n: 0, kotor: 0, potongan: 0, bersih: 0, service: 0, pajak: 0, total: 0, nVoid: 0, nilaiVoid: 0, hpp: 0, laba: 0, persenLaba: null } as BarisRekap,
+    (a, b) => ({ ...a, n: a.n + b.n, kotor: a.kotor + b.kotor, potongan: a.potongan + b.potongan, bersih: a.bersih + b.bersih, service: a.service + b.service, pajak: a.pajak + b.pajak, pembulatan: a.pembulatan + b.pembulatan, total: a.total + b.total, nVoid: a.nVoid + b.nVoid, nilaiVoid: a.nilaiVoid + b.nilaiVoid, hpp: a.hpp + b.hpp }),
+    { kunci: '', label: 'Jumlah', n: 0, kotor: 0, potongan: 0, bersih: 0, service: 0, pajak: 0, pembulatan: 0, total: 0, nVoid: 0, nilaiVoid: 0, hpp: 0, laba: 0, persenLaba: null } as BarisRekap,
   )
   Object.assign(jumlah, laba(jumlah.bersih, jumlah.hpp))
   return { rentang: r, kelompok, baris: hasil, jumlah }
@@ -236,7 +239,7 @@ export async function tutupHarian(db: Db, s: SaringLaporan) {
   const ids = shifts.map((x) => x.id)
   const [bayar, jual, metode, tunaiUtama, setoranHari] = await Promise.all([
     db.salePayment.findMany({ where: { sale: { shiftId: { in: ids }, status: 'Selesai' } }, select: { amount: true, paymentMethodId: true, sale: { select: { shiftId: true } } } }),
-    db.sale.groupBy({ by: ['shiftId', 'status'], where: { shiftId: { in: ids } }, _count: { _all: true }, _sum: { total: true } }),
+    db.sale.groupBy({ by: ['shiftId', 'status'], where: { shiftId: { in: ids } }, _count: { _all: true }, _sum: { total: true, rounding: true } }),
     db.paymentMethod.findMany({ orderBy: { id: 'asc' }, select: { id: true, name: true, kind: true } }),
     metodeTunaiUtama(db),
     db.posSettlement.findMany({ where: { date: keKolomTanggal(tanggal), status: { not: 'Batal' } }, include: { paymentMethod: { select: { name: true } } }, orderBy: { id: 'asc' } }),
@@ -275,9 +278,10 @@ export async function tutupHarian(db: Db, s: SaringLaporan) {
       selisih: sh.cashDiff === null ? null : Number(sh.cashDiff),
       perMetode,
       nTransaksi: selesai?._count._all ?? 0,
-      penjualan: Number(selesai?._sum.total ?? 0),
+      // Uang diterima: total pas + pembulatan tunai (KONTRAK 11 butir 142), sama dengan jumlah tunai dan non tunai.
+      penjualan: Number(selesai?._sum.total ?? 0) + Number(selesai?._sum.rounding ?? 0),
       nVoid: batal?._count._all ?? 0,
-      nilaiVoid: Number(batal?._sum.total ?? 0),
+      nilaiVoid: Number(batal?._sum.total ?? 0) + Number(batal?._sum.rounding ?? 0),
       setoran,
     }
   })

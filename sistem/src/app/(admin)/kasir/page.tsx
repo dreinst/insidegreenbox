@@ -71,6 +71,7 @@ export default async function HalamanKasir({ searchParams }: { searchParams: Pro
         <section className="pesan sukses lk-selesai" role="status">
           <span>
             Transaksi <b>{baru.no}</b> tersimpan. Total {rupiah(baru.total)}
+            {baru.rounding !== 0n ? `, dibulatkan menjadi ${rupiah(baru.total + baru.rounding)}` : ''}
             {baru.salePayments.some((b) => b.change > 0n) ? `, kembalian ${rupiah(baru.salePayments.reduce((a, b) => a + b.change, 0n))}` : ''}.
           </span>
           <Link href={`/struk/${baru.id}`} className="btn kecil">

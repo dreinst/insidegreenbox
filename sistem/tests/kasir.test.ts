@@ -4,7 +4,7 @@ import { after, before, describe, test } from 'node:test'
 import bcrypt from 'bcryptjs'
 import { GalatAturan, GalatIzin } from '../src/lib/aksi'
 import type { Db } from '../src/lib/db'
-import { bagiBayar, hitungKeranjang, hitungTotal, kasSeharusnya, kembalian, totalPecahan } from '../src/lib/hitung-kasir'
+import { bagiBayar, bulatTunai, hitungKeranjang, hitungTotal, kasSeharusnya, kembalian, sisaTunaiBulat, totalPecahan } from '../src/lib/hitung-kasir'
 import type { Pengguna } from '../src/lib/izin-inti'
 import { BATAS_GAGAL_NAMA } from '../src/lib/masuk'
 import { potonganMember, ubahStatusMember, ubahStatusTingkat } from '../src/lib/member'
@@ -76,16 +76,64 @@ describe('hitungan (sama dengan admin lama)', () => {
     assert.equal(kembalian(50000, 100000), 50000)
     assert.equal(kembalian(50000, 20000), 0)
   })
-  test('bagi bayar: tunai menutup sisa sesudah non tunai dan menghasilkan kembalian', () => {
+  test('bagi bayar: tunai menutup sisa sesudah non tunai (dibulatkan ke Rp 500) dan menghasilkan kembalian', () => {
     const r = bagiBayar(81312, [
       { metodeId: 2, tunai: false, jumlah: 50000 },
       { metodeId: 1, tunai: true, jumlah: 50000 },
     ])
     assert.ok(r.ok)
     if (r.ok) {
-      assert.equal(r.kembalian, 18688)
-      assert.deepEqual(r.baris.find((b) => b.tunai), { metodeId: 1, tunai: true, amount: 31312, paid: 50000, change: 18688 })
+      // Sisa tunai 31.312 dibulatkan menjadi 31.500; QRIS tetap pas.
+      assert.equal(r.pembulatan, 188)
+      assert.equal(r.kembalian, 18500)
+      assert.deepEqual(r.baris.find((b) => b.tunai), { metodeId: 1, tunai: true, amount: 31500, paid: 50000, change: 18500 })
+      assert.deepEqual(r.baris.find((b) => !b.tunai), { metodeId: 2, tunai: false, amount: 50000, paid: 50000, change: 0 })
+      assert.equal(r.baris.reduce((a, b) => a + b.amount, 0), 81312 + r.pembulatan)
     }
+  })
+  test('pembulatan tunai ke Rp 500 terdekat, setengah ke atas (keputusan pemilik 24 November 2026)', () => {
+    assert.equal(bulatTunai(32240), 32000)
+    assert.equal(bulatTunai(32250), 32500)
+    assert.equal(bulatTunai(32340), 32500)
+    assert.equal(bulatTunai(32500), 32500)
+    assert.equal(bulatTunai(32749), 32500)
+    assert.equal(bulatTunai(32750), 33000)
+    assert.equal(bulatTunai(249), 0)
+    for (const [total, harus, bulat] of [
+      [32240, 32000, -240],
+      [32250, 32500, 250],
+      [32340, 32500, 160],
+    ]) {
+      const r = bagiBayar(total, [{ metodeId: 1, tunai: true, jumlah: 50000 }])
+      assert.ok(r.ok)
+      if (r.ok) {
+        assert.equal(r.pembulatan, bulat, `pembulatan ${total}`)
+        assert.equal(r.baris[0].amount, harus)
+        assert.equal(r.kembalian, 50000 - harus)
+      }
+      // Uang pas sesudah pembulatan cukup, kurang satu rupiah ditolak.
+      assert.equal(bagiBayar(total, [{ metodeId: 1, tunai: true, jumlah: harus }]).ok, true)
+      assert.equal(bagiBayar(total, [{ metodeId: 1, tunai: true, jumlah: harus - 1 }]).ok, false)
+    }
+    // Non tunai saja tetap pas, tanpa pembulatan.
+    const q = bagiBayar(32340, [{ metodeId: 2, tunai: false, jumlah: 32340 }])
+    assert.ok(q.ok && q.pembulatan === 0 && q.baris[0].amount === 32340)
+    // Campuran: hanya bagian tunai terakhir yang dibulatkan. 32.340 - QRIS 20.000 = 12.340, tunai 12.500.
+    const c = bagiBayar(32340, [
+      { metodeId: 2, tunai: false, jumlah: 20000 },
+      { metodeId: 1, tunai: true, jumlah: 12500 },
+    ])
+    assert.ok(c.ok)
+    if (c.ok) assert.deepEqual([c.pembulatan, c.kembalian, c.baris.map((b) => b.amount)], [160, 0, [20000, 12500]])
+    // Sisa tunai di bawah Rp 250 menjadi Rp 0, jadi pembayaran tunai ditolak dengan pesan yang jelas.
+    const kecil = bagiBayar(32100, [
+      { metodeId: 2, tunai: false, jumlah: 32000 },
+      { metodeId: 1, tunai: true, jumlah: 1000 },
+    ])
+    assert.ok(!kecil.ok && /dibulatkan menjadi Rp 0/.test(kecil.pesan))
+    // Pratinjau layar kasir memakai aturan yang sama.
+    assert.deepEqual(sisaTunaiBulat(32340, 20000, true), { sisa: 12340, bulat: 12500, pembulatan: 160 })
+    assert.deepEqual(sisaTunaiBulat(32340, 0, false), { sisa: 32340, bulat: 32340, pembulatan: 0 })
   })
   test('bagi bayar menolak kurang bayar, non tunai berlebih, dan metode ganda', () => {
     assert.equal(bagiBayar(10000, [{ metodeId: 1, tunai: true, jumlah: 9000 }]).ok, false)
@@ -167,14 +215,20 @@ describe('shift', () => {
       10,
       { pajak: 10, service: 5 },
     )
+    // Pembulatan tunai ke Rp 500 (KONTRAK 11 butir 142): 76.923 dibayar 77.000.
+    const tunaiJ1 = bulatTunai(harap.total)
+    assert.equal(harap.total, 76923)
+    assert.equal(tunaiJ1, 77000)
     assert.equal(j1.total, harap.total)
-    assert.equal(j1.kembalian, 100000 - harap.total)
+    assert.equal(j1.pembulatan, 77)
+    assert.equal(j1.kembalian, 100000 - tunaiJ1)
     assert.match(j1.no, /^GB-\d{4}-0001$/)
     const r1 = await ambilPenjualan(db, kasir, j1.id)
     assert.equal(r1?.hpp, 0n)
     assert.equal(r1?.saleLines[0].name, 'Kopi')
-    assert.equal(r1?.salePayments[0].amount, BigInt(harap.total))
-    assert.equal(r1?.salePayments[0].change, BigInt(100000 - harap.total))
+    assert.equal(r1?.salePayments[0].amount, BigInt(tunaiJ1))
+    assert.equal(r1?.salePayments[0].change, BigInt(100000 - tunaiJ1))
+    assert.equal(r1?.rounding, 77n)
     assert.equal((await db.member.findUniqueOrThrow({ where: { id: memberId } })).visits, 6)
 
     const j2 = await simpanPenjualan(db, k(kasir), kasir, { mode: 'takeaway', baris: [{ menuItemId: menu.Teh, qty: 1 }], bayar: [{ metodeId: metode.QRIS, jumlah: 0 }] }).catch((e) => e)
@@ -201,8 +255,8 @@ describe('shift', () => {
     assert.equal(await ambilPenjualan(db, kasir2, j1.id), null)
     await assert.rejects(voidPenjualan(db, k(kasir2), kasir2, j1.id, { alasan: 'coba', penyetujuId: admin.id, pinPenyetuju: '246810' }), tolakAturan(/tidak ditemukan/))
 
-    // Tutup buta: seharusnya = 200000 + tunai j1 + 20000 - 5000. Dihitung lewat pecahan 2 x 100.000.
-    const harus = 200000 + harap.total + 20000 - 5000
+    // Tutup buta: seharusnya = 200000 + tunai j1 sesudah pembulatan + 20000 - 5000. Dihitung lewat pecahan 2 x 100.000.
+    const harus = 200000 + tunaiJ1 + 20000 - 5000
     // tahap 6C: tutup selalu berhasil dengan kas dihitung pertama, tanpa persetujuan. Alasan yang diisi saat tutup
     // tidak boleh terlalu pendek, aturan yang sama untuk angka cocok maupun tidak.
     await assert.rejects(tutupShift(db, k(kasir), kasir, s.id, { kasDihitung: '', catatan: ' ab ', pecahan_100000: '2' }))
@@ -435,5 +489,64 @@ describe('PIN kasir', () => {
     assert.ok(sesi >= 1)
     await aturPin(db, k(owner), owner, kasir.id, { pin: '5555', ulangiPin: '5555' })
     assert.equal(await db.userSession.count({ where: { userId: kasir.id, revokedAt: null } }), 0)
+  })
+})
+
+// Keputusan pemilik 24 November 2026 (KONTRAK 11 butir 142): bagian tunai dibulatkan ke Rp 500.
+describe('pembulatan tunai di basis data', () => {
+  test('campuran QRIS dan tunai, tunai saja, void, kas seharusnya, dan jurnal seimbang', async () => {
+    const kasir3 = await buatAktor(db, 'kasir', 'kasir3')
+    const s = await bukaShift(db, k(kasir3), kasir3, { modal: '0' })
+    // Teh 18.000 + service 900 + pajak 1.890 = 20.790. QRIS 10.000 pas, sisa tunai 10.790 menjadi 11.000.
+    const c = await simpanPenjualan(db, k(kasir3), kasir3, {
+      mode: 'takeaway',
+      baris: [{ menuItemId: menu.Teh, qty: 1 }],
+      bayar: [
+        { metodeId: metode.QRIS, jumlah: 10000 },
+        { metodeId: metode.Tunai, jumlah: 20000 },
+      ],
+      totalLayar: 20790,
+    })
+    assert.deepEqual([c.total, c.pembulatan, c.kembalian], [20790, 210, 9000])
+    const rc = await db.sale.findUniqueOrThrow({ where: { id: c.id }, include: { salePayments: { orderBy: { id: 'asc' } } } })
+    assert.equal(rc.total, 20790n)
+    assert.equal(rc.rounding, 210n)
+    assert.deepEqual(
+      rc.salePayments.map((p) => [p.paymentMethodId, p.amount, p.paid, p.change]),
+      [
+        [metode.QRIS, 10000n, 10000n, 0n],
+        [metode.Tunai, 11000n, 20000n, 9000n],
+      ],
+    )
+    // Jurnal: debit kliring 10.000 dan kas laci 11.000, kredit pendapatan 20.790 dan pembulatan 210.
+    const jurnal = async (id: number, balik = false) => {
+      const j = await db.journal.findFirstOrThrow({ where: { sourceType: 'sale', sourceId: id, reversalOfId: balik ? { not: null } : null }, include: { journalLines: { include: { account: true } } } })
+      const d = j.journalLines.reduce((n, l) => n + l.debit, 0n)
+      assert.equal(d, j.journalLines.reduce((n, l) => n + l.credit, 0n), `jurnal ${j.no} seimbang`)
+      const peta: Record<string, bigint> = {}
+      for (const l of j.journalLines) peta[l.account.code] = (peta[l.account.code] ?? 0n) + l.debit - l.credit
+      return peta
+    }
+    const pc = await jurnal(c.id)
+    assert.equal(pc['1-1100'], 11000n)
+    assert.equal(pc['4-9200'], -210n)
+
+    // 2 Teh = 41.580, tunai 41.500: pembulatan turun 80 didebit.
+    const t = await simpanPenjualan(db, k(kasir3), kasir3, { mode: 'takeaway', baris: [{ menuItemId: menu.Teh, qty: 2 }], bayar: [{ metodeId: metode.Tunai, jumlah: 41500 }] })
+    assert.deepEqual([t.total, t.pembulatan, t.kembalian], [41580, -80, 0])
+    assert.equal((await jurnal(t.id))['4-9200'], 80n)
+    const audit = await db.auditLog.findFirstOrThrow({ where: { action: 'penjualan.simpan', docId: String(t.id) } })
+    assert.equal((audit.afterJson as { pembulatan: number }).pembulatan, -80)
+
+    // Void membalik pembulatan juga, dan penjualan void tidak masuk kas seharusnya.
+    await voidPenjualan(db, k(owner), owner, t.id, { alasan: 'Salah input' })
+    const balik = await jurnal(t.id, true)
+    assert.equal(balik['4-9200'], -80n)
+    assert.equal(balik['1-1100'], -41500n)
+
+    // Kas seharusnya = modal 0 + tunai sesudah pembulatan (11.000), jadi hitung pecahan pas tanpa selisih.
+    const tutup = await tutupShift(db, k(kasir3), kasir3, s.id, { kasDihitung: '', pecahan_10000: '1', pecahan_1000: '1' })
+    assert.equal(tutup.expectedCash, 11000n)
+    assert.equal(tutup.cashDiff, 0n)
   })
 })
