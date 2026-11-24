@@ -6,6 +6,7 @@
 import assert from 'node:assert/strict'
 import { after, before, describe, test } from 'node:test'
 import { GalatAturan } from '../src/lib/aksi'
+import { simpanPemetaan, tambahAkun } from '../src/lib/akuntansi/akun'
 import { bentukUlangJurnal } from '../src/lib/akuntansi/bentuk-ulang'
 import { cocokkanPersediaan } from '../src/lib/akuntansi/laporan'
 import { bukaPeriode, bulanIni, geserBulan, tutupPeriode } from '../src/lib/akuntansi/periode'
@@ -220,6 +221,36 @@ describe('jurnal pembelian', () => {
     await cocokSemua('sesudah batal penerimaan')
     assert.equal(await saldoKunci('grni'), 0n, 'BDBF kembali 0')
     assert.equal(await saldoKunci('hutang_usaha'), 0n, 'Hutang kembali 0')
+  })
+})
+
+describe('C-2: pemetaan bersaldo dan jurnal balik', () => {
+  test('pemetaan Hutang Usaha dan persediaan yang masih bersaldo ditolak; jurnal balik memakai akun jurnal maju', async () => {
+    const c = await buatLangsung(db, k(admin), admin, { supplierId: String(pemasok), locationId: String(outlet), date: tgl(), payMode: 'kredit', sumber: 'kas' })
+    await tambahBarisLangsung(db, k(admin), admin, c.id, { jenis: 'barang', item: `${kopi}:${gram}`, qty: '90', price: '200' })
+    await ubahStatusLangsung(db, k(admin), admin, c.id, 'posting')
+    await cocokSemua('C-2 sesudah pembelian kredit')
+    const kode = async (code: string) => (await db.account.findUniqueOrThrow({ where: { code } })).id
+    const lain = await kode('2-1900')
+    await galat(() => simpanPemetaan(db, k(owner), owner, { hutang_usaha: String(lain) }), /Hutang usaha.*masih membawa saldo -Rp 18\.000.*jurnal memorial/)
+    const persediaanBaru = await tambahAkun(db, k(owner), owner, { code: '1-1510', name: 'Persediaan Outlet', kind: 'Aset', parentId: String(await kode('1-1000')), isPostable: 'on' })
+    await galat(() => simpanPemetaan(db, k(owner), owner, { [`persediaan.${outlet}`]: String(persediaanBaru.id) }), /Persediaan Outlet.*masih punya stok/)
+    await galat(() => simpanPemetaan(db, k(owner), owner, { persediaan: String(persediaanBaru.id) }), /Persediaan Outlet/)
+    assert.equal((await db.accountMapping.findUniqueOrThrow({ where: { key: 'hutang_usaha' } })).accountId, await kode('2-1100'), 'pemetaan tidak berubah')
+
+    // Pemetaan lama yang terlanjur diganti (sebelum penjaga ini ada): jurnal balik tetap ke akun jurnal maju.
+    await db.accountMapping.update({ where: { key: 'hutang_usaha' }, data: { accountId: lain } })
+    await db.accountMapping.create({ data: { key: `persediaan.${outlet}`, accountId: persediaanBaru.id } })
+    await ubahStatusLangsung(db, k(owner), owner, c.id, 'batal', { alasan: 'Uji pemetaan berganti' })
+    const b = await isiJurnal('direct_purchase', c.id, true)
+    assert.deepEqual(b.peta, { '2-1100': 18_000n, '1-1500': -18_000n }, 'jurnal balik ke Hutang Usaha dan Persediaan lama')
+    await db.accountMapping.update({ where: { key: 'hutang_usaha' }, data: { accountId: await kode('2-1100') } })
+    await db.accountMapping.delete({ where: { key: `persediaan.${outlet}` } })
+    await cocokSemua('C-2 sesudah batal dengan pemetaan berganti')
+
+    // Kunci tanpa saldo boleh diganti, dan memindah saldo lewat memorial lebih dulu membuat simpan diterima.
+    await simpanPemetaan(db, k(owner), owner, { grni: String(await kode('2-1900')) })
+    await simpanPemetaan(db, k(owner), owner, { grni: String(await kode('2-1200')) })
   })
 })
 

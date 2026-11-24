@@ -218,6 +218,83 @@ export async function daftarPemetaan(db: DbAtauTx) {
   }
 }
 
+// --- Penjaga pemetaan bersaldo (KONTRAK 11 butir C-2) ---
+
+// Kunci yang saldonya dibawa dari dokumen ke dokumen (buku pembantu, kas, kliring). Dokumen pelunasan (pembayaran,
+// setoran, faktur atas penerimaan) selalu memakai pemetaan saat ini, jadi saldo yang tertinggal di akun lama tidak
+// pernah bisa dilunasi lagi. Kunci lain (pendapatan, beban, aset per kategori yang disalin saat aktivasi) bebas diganti.
+export const KUNCI_BERSALDO = ['kas_laci', 'kas_besar', 'bdp', 'ppn_masukan', 'uang_muka_beli', 'hutang_usaha', 'grni', 'pajak_pb1', 'piutang_usaha']
+
+async function saldoAkun(tx: DbAtauTx, id: number) {
+  const [r] = await tx.$queryRaw<{ n: bigint }[]>`
+    SELECT COALESCE(SUM(l.debit - l.credit), 0)::bigint AS n FROM journal_line l JOIN journal j ON j.id = l.journal_id WHERE l.account_id = ${id} AND j.posted_at IS NOT NULL`
+  return BigInt(r.n)
+}
+
+// Menolak simpan bila akun efektif sebuah kunci bersaldo berpindah sementara akun lamanya masih membawa saldo kunci itu.
+// Persediaan dihitung per lokasi dari nilai stok, rekening dari baris jurnal yang menyebut rekening itu, kunci lain dari
+// saldo akun lama. Bila saldo sudah dipindah ke akun baru lewat jurnal memorial, akun lama tidak lagi membawa saldo
+// kunci itu dan simpan diterima.
+async function periksaPindahSaldo(tx: DbAtauTx, lama: Map<string, number>, baru: Map<string, number>, akun: Map<number, { code: string; name: string }>) {
+  const label = (id: number) => `${akun.get(id)?.code} ${akun.get(id)?.name}`
+  const efektif = (peta: Map<string, number>, kunci: string[]) => kunci.map((x) => peta.get(x)).find((x) => x !== undefined) ?? null
+  const tolak = (nama: string, dari: number, n: bigint, saran: string) => {
+    throw new GalatAturan(
+      `Pemetaan "${nama}" tidak bisa dipindah dari ${label(dari)} karena akun itu masih membawa saldo ${n < 0n ? '-' : ''}Rp ${(n < 0n ? -n : n).toLocaleString('id-ID')} dari dokumen yang sudah diposting. Pelunasan dan pembatalan dokumen itu akan jatuh ke akun yang berbeda, dan buku pembantunya tidak akan cocok lagi. ${saran}`,
+    )
+  }
+  const memorial = 'Pindahkan saldonya ke akun baru lewat jurnal memorial dulu, lalu simpan lagi.'
+  const saldo = new Map<number, bigint>()
+  const saldoDari = async (id: number) => {
+    if (!saldo.has(id)) saldo.set(id, await saldoAkun(tx, id))
+    return saldo.get(id)!
+  }
+
+  for (const kunci of KUNCI_BERSALDO) {
+    const a = lama.get(kunci) ?? null
+    if (a === null || a === (baru.get(kunci) ?? null)) continue
+    const n = await saldoDari(a)
+    if (n !== 0n) tolak(KUNCI_PER_KODE.get(kunci)?.nama ?? kunci, a, n, kunci === 'kas_laci' || kunci === 'kliring' ? 'Setor dulu sampai saldonya 0, atau pindahkan saldonya lewat jurnal memorial.' : memorial)
+  }
+
+  // Kliring per metode bayar: tidak ada penanda metode di baris jurnal, jadi yang dipakai saldo akun lamanya.
+  const metode = await tx.paymentMethod.findMany({ where: { kind: { not: 'tunai' } }, select: { id: true, name: true } })
+  for (const m of metode) {
+    const kunci = [`kliring.${m.id}`, 'kliring']
+    const a = efektif(lama, kunci)
+    if (a === null || a === efektif(baru, kunci)) continue
+    const n = await saldoDari(a)
+    if (n !== 0n) tolak(`Piutang kliring ${m.name}`, a, n, 'Setor dulu sampai saldo kliringnya 0, atau pindahkan saldonya lewat jurnal memorial.')
+  }
+
+  // Persediaan per lokasi: bagian akun lama milik lokasi yang pindah = saldo akun lama dikurangi nilai stok lokasi yang
+  // tetap di akun itu.
+  const lokasi = await tx.location.findMany({ select: { id: true, name: true } })
+  const nilai = new Map((await tx.stockBalance.groupBy({ by: ['locationId'], _sum: { value: true } })).map((g) => [g.locationId, g._sum.value ?? 0n]))
+  const pindahLokasi = lokasi.filter((l) => {
+    const a = efektif(lama, [`persediaan.${l.id}`, 'persediaan'])
+    return a !== null && a !== efektif(baru, [`persediaan.${l.id}`, 'persediaan']) && (nilai.get(l.id) ?? 0n) !== 0n
+  })
+  for (const l of pindahLokasi) {
+    const a = efektif(lama, [`persediaan.${l.id}`, 'persediaan'])!
+    const tetap = lokasi.filter((x) => efektif(baru, [`persediaan.${x.id}`, 'persediaan']) === a).reduce((n, x) => n + (nilai.get(x.id) ?? 0n), 0n)
+    const n = (await saldoDari(a)) - tetap
+    if (n !== 0n) tolak(`Persediaan ${l.name}`, a, n, `Lokasi ini masih punya stok senilai Rp ${(nilai.get(l.id) ?? 0n).toLocaleString('id-ID')}. ${memorial}`)
+  }
+
+  // Rekening bank: saldo baris jurnal akun lama yang menyebut rekening itu.
+  const rekening = await tx.bankAccount.findMany({ select: { id: true, bankName: true, accountNo: true } })
+  for (const r of rekening) {
+    const kunci = [`bank.${r.id}`, 'bank']
+    const a = efektif(lama, kunci)
+    if (a === null || a === efektif(baru, kunci)) continue
+    const [x] = await tx.$queryRaw<{ n: bigint }[]>`
+      SELECT COALESCE(SUM(l.debit - l.credit), 0)::bigint AS n FROM journal_line l JOIN journal j ON j.id = l.journal_id
+      WHERE l.account_id = ${a} AND l.bank_account_id = ${r.id} AND j.posted_at IS NOT NULL`
+    if (BigInt(x.n) !== 0n && (await saldoDari(a)) !== 0n) tolak(`Rekening ${r.bankName} ${r.accountNo}`, a, BigInt(x.n), 'Saldo rekening di buku harus pindah bersama pemetaannya. Pindahkan saldonya lewat jurnal memorial dulu, lalu simpan lagi.')
+  }
+}
+
 // Menyimpan pemetaan dari formulir: nama isian = kunci, nilai = id akun (kosong = hapus, hanya untuk kunci turunan).
 // Hanya kunci yang berubah yang ditulis; satu baris audit pemetaan.ubah berisi semua perubahan.
 export async function simpanPemetaan(db: Db, k: Konteks, aktor: Aktor, isian: Record<string, unknown>) {
@@ -250,6 +327,7 @@ export async function simpanPemetaan(db: Db, k: Konteks, aktor: Aktor, isian: Re
       sesudah[kunci] = label(baru)
     }
     const n = Object.keys(sesudah).length
+    if (n) await periksaPindahSaldo(tx, lama, new Map((await tx.accountMapping.findMany()).map((m) => [m.key, m.accountId])), akun)
     if (n) await catatAudit(tx, k, { action: 'pemetaan.ubah', docType: 'account_mapping', summary: `Mengubah ${n} pemetaan akun: ${Object.keys(sesudah).join(', ')}`, before: sebelum, after: sesudah })
     return { berubah: n }
   })

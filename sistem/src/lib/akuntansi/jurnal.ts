@@ -59,9 +59,15 @@ export async function pastikanPeriodeTerbuka(tx: DbAtauTx, tanggal: Date, untuk 
 
 type BarisSiap = { accountId: number; debit: bigint; credit: bigint; memo: string; supplierId: number | null; customerId: number | null; bankAccountId: number | null }
 
+// Potret pemetaan: kunci (atau beberapa kunci yang dicoba berurutan, digabung dengan "|") ke id akun yang dipakai.
+export type PotretPemetaan = Record<string, number>
+export const namaKunci = (akun: string | string[]) => (Array.isArray(akun) ? akun.join('|') : akun)
+
 // Menerjemahkan akun, memeriksa angka, membuang baris nol, dan menggabung baris dengan akun dan sisi yang sama.
-async function susunBaris(tx: DbAtauTx, baris: BarisJurnal[]) {
+// tetap: potret pemetaan jurnal maju; kunci yang ada di sana memakai akun itu, bukan pemetaan saat ini (KONTRAK 11 C-2).
+async function susunBaris(tx: DbAtauTx, baris: BarisJurnal[], tetap?: PotretPemetaan | null) {
   const akun = pembacaAkun(tx)
+  const potret: PotretPemetaan = {}
   const gabung = new Map<string, BarisSiap>()
   for (const [i, b] of baris.entries()) {
     const debit = b.debit ?? 0n
@@ -70,7 +76,10 @@ async function susunBaris(tx: DbAtauTx, baris: BarisJurnal[]) {
     if (debit < 0n || kredit < 0n) throw new GalatAturan(`Baris jurnal ke-${i + 1}: debit dan kredit tidak boleh minus.`)
     if (debit > 0n && kredit > 0n) throw new GalatAturan(`Baris jurnal ke-${i + 1}: isi debit atau kredit saja.`)
     if (debit === 0n && kredit === 0n) continue
-    const a = await akun(b.akun)
+    const nama = typeof b.akun === 'number' ? null : namaKunci(b.akun)
+    const lama = nama !== null ? tetap?.[nama] : undefined
+    const a = await akun(typeof lama === 'number' ? lama : b.akun)
+    if (nama !== null) potret[nama] = a.id
     const sisi = debit > 0n ? 'D' : 'K'
     const kunci = `${a.id}:${sisi}:${b.supplierId ?? ''}:${b.customerId ?? ''}:${b.bankAccountId ?? ''}`
     const ada = gabung.get(kunci)
@@ -82,7 +91,7 @@ async function susunBaris(tx: DbAtauTx, baris: BarisJurnal[]) {
   const hasil = [...gabung.values()].sort((x, y) => Number(y.debit > 0n) - Number(x.debit > 0n))
   const debit = hasil.reduce((n, b) => n + b.debit, 0n)
   const kredit = hasil.reduce((n, b) => n + b.credit, 0n)
-  return { baris: hasil, debit, kredit }
+  return { baris: hasil, debit, kredit, potret }
 }
 
 const rp = (n: bigint) => `Rp ${n.toLocaleString('id-ID')}`
@@ -92,7 +101,7 @@ export function periksaKepala(k: KepalaJurnal) {
   if (!(k.tanggal instanceof Date) || Number.isNaN(k.tanggal.getTime())) throw new GalatAturan('Tanggal jurnal tidak sah.')
 }
 
-async function tulis(tx: Tx, k: KepalaJurnal, baris: BarisSiap[], total: bigint, balikDari: number | null): Promise<HasilJurnal> {
+async function tulis(tx: Tx, k: KepalaJurnal, baris: BarisSiap[], total: bigint, balikDari: number | null, potret: PotretPemetaan): Promise<HasilJurnal> {
   const periodId = await pastikanPeriodeTerbuka(tx, k.tanggal)
   const no = await ambilNomor(tx, 'journal', 'JU', k.tanggal)
   const sekarang = new Date()
@@ -107,6 +116,7 @@ async function tulis(tx: Tx, k: KepalaJurnal, baris: BarisSiap[], total: bigint,
       memo: k.memo.slice(0, 300),
       reversalOfId: balikDari,
       status: 'Diposting',
+      mappingSnapshot: Object.keys(potret).length ? potret : undefined,
       postedBy: k.oleh,
       postedAt: sekarang,
       createdBy: k.oleh,
@@ -126,7 +136,7 @@ export async function buatJurnal(tx: Tx, k: KepalaJurnal, baris: BarisJurnal[]):
   if (!s.baris.length) return null
   const ada = await tx.journal.findFirst({ where: { sourceType: k.docType, sourceId: k.docId, reversalOfId: null }, select: { no: true } })
   if (ada) throw new GalatAturan(`Dokumen ${k.docNo || k.docType} sudah punya jurnal ${ada.no}.`)
-  return tulis(tx, k, s.baris, s.debit, null)
+  return tulis(tx, k, s.baris, s.debit, null, s.potret)
 }
 
 // tahap 5C: baris jurnal yang sudah dicocokkan ke mutasi bank terkunci dari pembatalan dokumen sumbernya (RANCANGAN 7).
@@ -148,7 +158,8 @@ export const jurnalMaju = (db: DbAtauTx, docType: string, docId: number) =>
 
 // Membentuk jurnal balik untuk pembatalan dokumen yang sudah berlaku. k.tanggal = hari pembatalan. Tanpa baris,
 // jurnal maju dibalik persis (debit jadi kredit). Dengan baris (misalnya dari gerak balik stok yang nilainya bisa
-// sedikit berbeda, KONTRAK 11 butir 32), baris itu yang dipakai. Mengembalikan null bila dokumen tidak punya jurnal maju.
+// sedikit berbeda, KONTRAK 11 butir 32), baris itu yang dipakai, dan kuncinya diterjemahkan lewat potret pemetaan
+// jurnal maju supaya akunnya sama dengan akun jurnal maju (KONTRAK 11 butir C-2). Mengembalikan null bila dokumen tidak punya jurnal maju.
 // Ditolak bila jurnal maju ada di periode tertutup (RANCANGAN 2.3 butir 5) atau sudah pernah dibalik.
 export async function buatJurnalBalik(tx: Tx, k: KepalaJurnal, baris?: BarisJurnal[]): Promise<HasilJurnal | null> {
   periksaKepala(k)
@@ -159,8 +170,8 @@ export async function buatJurnalBalik(tx: Tx, k: KepalaJurnal, baris?: BarisJurn
   await pastikanBelumDicocokkan(tx, asal.id, k.docNo || k.docType)
   const isi: BarisJurnal[] =
     baris ?? asal.journalLines.map((l) => ({ akun: l.accountId, debit: l.credit, kredit: l.debit, memo: l.memo, supplierId: l.supplierId, customerId: l.customerId, bankAccountId: l.bankAccountId }))
-  const s = await susunBaris(tx, isi)
+  const s = await susunBaris(tx, isi, asal.mappingSnapshot as PotretPemetaan | null)
   if (s.debit !== s.kredit) throw new GalatAturan(`Jurnal balik ${k.docNo || k.docType} tidak seimbang: debit ${rp(s.debit)}, kredit ${rp(s.kredit)}.`)
   if (!s.baris.length) return null
-  return tulis(tx, { ...k, memo: k.memo || `Balik ${asal.no}` }, s.baris, s.debit, asal.id)
+  return tulis(tx, { ...k, memo: k.memo || `Balik ${asal.no}` }, s.baris, s.debit, asal.id, s.potret)
 }

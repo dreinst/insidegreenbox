@@ -40,7 +40,9 @@ export default async function PemetaanAkun({ searchParams }: { searchParams: Pro
       <section className="kartu">
         {bolehUbah ? (
           <>
-            <p className="catatan">Mengganti akun persediaan saat lokasi masih punya stok membuat saldo lama tertinggal di akun sebelumnya. Pindahkan saldonya lewat jurnal memorial bila perlu.</p>
+            <p className="catatan">
+              Kas, bank, kliring, persediaan, piutang, hutang, BDBF, dan akun bersaldo sejenis hanya bisa dipindah ke akun lain bila akun lamanya tidak lagi membawa saldo dari dokumen. Kalau masih bersaldo, simpan ditolak; pindahkan saldonya ke akun baru lewat jurnal memorial dulu. Pembatalan dokumen lama selalu kembali ke akun jurnal aslinya.
+            </p>
             <FormPemetaan aksi={simpanPemetaanAksi} kelompok={kelompok} />
           </>
         ) : (
