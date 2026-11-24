@@ -5,6 +5,7 @@ import { FormIsianBaris } from '@/components/beli-form'
 import { FormMaster } from '@/components/form-master'
 import { LencanaStatus, formatTanggal } from '@/components/stok'
 import { KepalaHalaman } from '@/components/umum'
+import { peringatanKasMinus } from '@/lib/akuntansi/kas-minus'
 import { tombolBeli } from '@/lib/beli/dokumen'
 import { pilihanPemasok } from '@/lib/beli/pemasok'
 import { muatPembayaran, tagihanTerbuka } from '@/lib/beli/pembayaran'
@@ -88,6 +89,7 @@ export default async function RincianPembayaran({ params, searchParams }: { para
           d={jejak(d)}
           butuhSetuju
           aksi={aksiPanel('purchase_payment', d.id)}
+          peringatan={['Draft', 'Diajukan', 'Disetujui'].includes(d.status) ? await peringatanKasMinus(db, d.bankAccountId, d.amount) : null}
           catatan={d.status === 'Disetujui' ? 'Sudah disetujui. Tekan Posting sesudah uang benar-benar keluar.' : d.status === 'Draft' ? 'Semua pembayaran pembelian diajukan dulu lalu disetujui Owner sebelum diposting.' : undefined}
           konfirmasiPosting={`Posting ${d.no}? Uang ${formatRupiah(d.amount)} dicatat keluar dan status bayar tagihan diperbarui.`}
         />

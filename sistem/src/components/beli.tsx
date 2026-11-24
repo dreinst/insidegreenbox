@@ -157,6 +157,8 @@ type PropPanel = {
   butuhSetuju: boolean
   aksi: { ajukan: Aksi; kembalikan: Aksi; setujui: Aksi; posting: Aksi; batal: Aksi; tutup: Aksi; hapus: Aksi }
   catatan?: string
+  // Peringatan yang tidak memblokir, misalnya saldo kas menjadi minus (KONTRAK 11 butir 133).
+  peringatan?: string | null
   bolehTutup?: boolean
   konfirmasiPosting?: string
   // Dokumen rencana yang Selesai: waktu dan alasan tutup sisa (kosong bila selesai otomatis).
@@ -164,7 +166,7 @@ type PropPanel = {
 }
 
 // Panel status dan tindakan dokumen pembelian. Tombol mengikuti tombolBeli; server tetap memeriksa ulang.
-export async function PanelBeli({ p, jenis, d, butuhSetuju, aksi, catatan, bolehTutup, konfirmasiPosting, selesai }: PropPanel) {
+export async function PanelBeli({ p, jenis, d, butuhSetuju, aksi, catatan, peringatan, bolehTutup, konfirmasiPosting, selesai }: PropPanel) {
   const t = tombolBeli(p, jenis, d.status, butuhSetuju, d.submittedBy, { bolehTutup })
   const info = DOK_BELI[jenis]
   const nama = info.nama.toLowerCase()
@@ -176,6 +178,11 @@ export async function PanelBeli({ p, jenis, d, butuhSetuju, aksi, catatan, boleh
         <h2 id="j-tindakan">Status dan tindakan</h2>
         <LencanaStatus status={d.status} />
       </div>
+      {peringatan ? (
+        <p className="pesan awas" role="status">
+          {peringatan}
+        </p>
+      ) : null}
       {catatan ? <p className="catatan">{catatan}</p> : null}
       <JejakStatus d={d} />
       {(d.status === 'Diposting' || d.status === 'Batal') && punyaIzin(p.izin, 'akun.jurnal', 'L') ? <TautanJurnal jenis={jenis} id={d.id} /> : null}
@@ -197,7 +204,7 @@ export async function PanelBeli({ p, jenis, d, butuhSetuju, aksi, catatan, boleh
             <TombolAksi
               aksi={aksi.posting}
               label={t.setujuiPosting ? 'Setujui dan posting' : 'Posting'}
-              konfirmasi={konfirmasiPosting ?? `Posting ${d.no}? Dokumen tidak bisa diubah lagi.`}
+              konfirmasi={`${konfirmasiPosting ?? `Posting ${d.no}? Dokumen tidak bisa diubah lagi.`}${peringatan ? ` ${peringatan}` : ''}`}
             />
           ) : null}
           {t.ajukan ? <TombolAksi aksi={aksi.ajukan} label={butuhSetuju ? 'Ajukan untuk disetujui' : 'Ajukan'} kelas={t.posting || t.setujui ? 'btn sekunder' : 'btn'} /> : null}

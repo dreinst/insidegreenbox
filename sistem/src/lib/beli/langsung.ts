@@ -5,7 +5,7 @@
 import { z } from 'zod'
 import { GalatAturan } from '../aksi'
 import { catatAudit, type Konteks } from '../audit'
-import type { Db, Tx } from '../db'
+import type { Db, DbAtauTx, Tx } from '../db'
 import { batasSaklar, pastikanIzin, saklarNyala } from '../izin-inti'
 import { formatRupiah, skemaTanggal } from '../master'
 import { ambilNomor } from '../nomor'
@@ -14,6 +14,7 @@ import { catatGerak } from '../stok/mesin'
 import {
   BATAS_BARIS_BELI,
   DOK_BELI,
+  aturanBeli,
   uangOpsional,
   dataPelaksana,
   bagiBiaya,
@@ -221,13 +222,29 @@ export async function hapusBarisLangsung(db: Db, k: Konteks, aktor: Aktor, id: n
   })
 }
 
+// Total dokumen dari barisnya tanpa menulis apa pun (dipakai aturan persetujuan dan tampilan).
+export async function totalLangsung(db: DbAtauTx, id: number) {
+  const bl = await db.directPurchase.findUniqueOrThrow({ where: { id }, include: { directPurchaseLines: true } })
+  return bl.directPurchaseLines.reduce((n, b) => n + (b.productId ? nilaiBaris(b.qty, b.price) : b.price), 0n) + bl.extraCost
+}
+
+// Temuan audit B-2, keputusan pemilik (KONTRAK 11 butir 132): Pembelian Langsung tunai dengan total di atas batas
+// approval_rule direct_purchase (bawaan Rp 1.000.000) wajib diajukan dan disetujui Owner. Kredit tidak, karena
+// pembayarannya sudah wajib Owner. Di bawah atau sama dengan batas, Admin memposting sendiri.
+export async function butuhSetujuLangsung(db: DbAtauTx, d: { id: number; payMode: string }) {
+  if (d.payMode !== 'tunai') return false
+  const r = await aturanBeli(db, JENIS)
+  if (!r) return false
+  return r.minAmount === null || (await totalLangsung(db, d.id)) > r.minAmount
+}
+
 type KepalaLangsung = KepalaBeli & { supplierId: number; locationId: number; payMode: string; bankAccountId: number | null; extraCost: bigint; paidAmount: bigint }
 
 export const KAIT_LANGSUNG: KaitBeli<KepalaLangsung> = {
   jenis: JENIS,
   muat: (tx, id) => tx.directPurchase.findUnique({ where: { id } }),
   simpan: (tx, id, data) => tx.directPurchase.update({ where: { id }, data: dataPelaksana(data) }),
-  butuhSetuju: async () => false,
+  butuhSetuju: (tx, d) => butuhSetujuLangsung(tx, d),
   periksaIsi: async (tx, d, aktor) => {
     const baris = await tx.directPurchaseLine.findMany({ where: { directPurchaseId: d.id }, include: { product: true } })
     if (!baris.length) throw new GalatAturan('Tambahkan minimal satu baris dulu.')

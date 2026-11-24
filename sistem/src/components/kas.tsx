@@ -50,11 +50,13 @@ type PropPanel = {
   butuhSetuju: boolean
   aksi: { ajukan: Aksi; kembalikan: Aksi; setujui: Aksi; posting: Aksi; batal: Aksi; hapus: Aksi }
   catatan?: string
+  // Peringatan yang tidak memblokir, misalnya saldo kas menjadi minus (KONTRAK 11 butir 133).
+  peringatan?: string | null
   konfirmasiPosting: string
 }
 
 // Panel status dan tindakan dokumen kas. Tombol mengikuti tombolKas; server tetap memeriksa ulang.
-export async function PanelKas({ p, menu, d, butuhSetuju, aksi, catatan, konfirmasiPosting }: PropPanel) {
+export async function PanelKas({ p, menu, d, butuhSetuju, aksi, catatan, peringatan, konfirmasiPosting }: PropPanel) {
   const t = tombolKas(p, menu, d.status as DocStatus, butuhSetuju, d.submittedBy)
   const adaTombol = t.ajukan || t.kembalikan || t.setujui || t.posting || t.hapus
   const jurnal =
@@ -67,6 +69,11 @@ export async function PanelKas({ p, menu, d, butuhSetuju, aksi, catatan, konfirm
         <h2 id="j-tindakan">Status dan tindakan</h2>
         <LencanaStatus status={d.status} />
       </div>
+      {peringatan ? (
+        <p className="pesan awas" role="status">
+          {peringatan}
+        </p>
+      ) : null}
       {catatan ? <p className="catatan">{catatan}</p> : null}
       <JejakStatus d={d} />
       {jurnal.length ? (
@@ -84,7 +91,7 @@ export async function PanelKas({ p, menu, d, butuhSetuju, aksi, catatan, konfirm
       {adaTombol ? (
         <div className="deret-tombol">
           {t.setujui ? <TombolAksi aksi={aksi.setujui} label="Setujui" konfirmasi={`Setujui ${d.no}? Sesudah uang benar-benar bergerak, tekan Posting.`} /> : null}
-          {t.posting ? <TombolAksi aksi={aksi.posting} label="Posting" konfirmasi={konfirmasiPosting} /> : null}
+          {t.posting ? <TombolAksi aksi={aksi.posting} label="Posting" konfirmasi={`${konfirmasiPosting}${peringatan ? ` ${peringatan}` : ''}`} /> : null}
           {t.ajukan ? <TombolAksi aksi={aksi.ajukan} label={butuhSetuju ? 'Ajukan untuk disetujui' : 'Ajukan'} kelas={t.posting || t.setujui ? 'btn sekunder' : 'btn'} /> : null}
           {t.kembalikan ? <TombolAksi aksi={aksi.kembalikan} label="Kembalikan ke draf" kelas="btn sekunder" /> : null}
           {t.hapus ? <TombolAksi aksi={aksi.hapus} label="Hapus draf" kelas="btn bahaya" konfirmasi={`Hapus draf ${d.no}? Nomornya tidak dipakai ulang.`} /> : null}

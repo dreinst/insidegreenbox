@@ -7,10 +7,12 @@ import { GalatAturan, GalatIzin } from '../src/lib/aksi'
 import type { Db } from '../src/lib/db'
 import type { Pengguna } from '../src/lib/izin-inti'
 import { bagiBiaya, hitungProgres } from '../src/lib/beli/dokumen'
-import { buatFaktur, simpanBarisFaktur, tambahBiayaFaktur, tarikPenerimaan, ubahStatusFaktur, butuhSetujuFaktur } from '../src/lib/beli/faktur'
+import { alasanSetujuFaktur, buatFaktur, simpanBarisFaktur, tambahBiayaFaktur, tarikPenerimaan, ubahStatusFaktur, butuhSetujuFaktur } from '../src/lib/beli/faktur'
 import { csvHutang, hutangPemasok } from '../src/lib/beli/hutang'
 import { PO_LAMA, imporBeli } from '../src/lib/beli/impor'
-import { buatLangsung, tambahBarisLangsung, ubahStatusLangsung } from '../src/lib/beli/langsung'
+import { buatLangsung, butuhSetujuLangsung, tambahBarisLangsung, ubahStatusLangsung } from '../src/lib/beli/langsung'
+import { peringatanKasMinus } from '../src/lib/akuntansi/kas-minus'
+import { pasangBawaanAkuntansi } from '../src/lib/akuntansi/pemetaan'
 import { tambahPemasok, ubahPemasok, ubahStatusPemasok } from '../src/lib/beli/pemasok'
 import { buatPembayaran, simpanAlokasi, tagihanTerbuka, ubahStatusPembayaran } from '../src/lib/beli/pembayaran'
 import { buatPenerimaan, simpanBarisPenerimaan, ubahStatusPenerimaan } from '../src/lib/beli/penerimaan'
@@ -445,6 +447,75 @@ describe('pembatalan dengan gerak balik', () => {
     for (const a of ['pesanan.setujui', 'penerimaan.posting', 'faktur.posting', 'retur_beli.posting', 'beli_langsung.posting', 'pembayaran.setujui', 'pembayaran.posting', 'pembayaran.batal', 'penerimaan.batal']) {
       assert.ok((await db.auditLog.count({ where: { action: a } })) > 0, a)
     }
+  })
+})
+
+// Temuan audit B-2, keputusan pemilik 24 November 2026: Pembelian Langsung tunai dan faktur berisi baris jasa di atas
+// batas approval_rule (bawaan Rp 1.000.000) wajib disetujui Owner; saldo kas minus hanya diperingatkan.
+describe('persetujuan pembelian tunai dan baris jasa (B-2)', () => {
+  test('aturan bawaan dari migrasi: Rp 1.000.000 untuk direct_purchase dan purchase_invoice.jasa', async () => {
+    const r = await db.approvalRule.findMany({ where: { docType: { in: ['direct_purchase', 'purchase_invoice.jasa'] } }, orderBy: { docType: 'asc' } })
+    assert.deepEqual(r.map((x) => [x.docType, x.requiresApproval, x.minAmount]), [['direct_purchase', true, 1_000_000n], ['purchase_invoice.jasa', true, 1_000_000n]])
+  })
+
+  test('pembelian langsung tunai di atas batas wajib Owner, sama dengan batas dan kredit boleh Admin', async () => {
+    const buat = async (payMode: string, biaya: string) => {
+      const t = await buatLangsung(db, k(admin), admin, { supplierId: String(pemasok2), locationId: String(outlet), date: tgl(), payMode, sumber: 'kas' })
+      await tambahBarisLangsung(db, k(admin), admin, t.id, { jenis: 'biaya', description: 'Sewa peralatan', price: biaya })
+      return t
+    }
+    const pas = await buat('tunai', '1000000')
+    assert.equal(await butuhSetujuLangsung(db, pas), false)
+    await ubahStatusLangsung(db, k(admin), admin, pas.id, 'posting')
+
+    const besar = await buat('tunai', '1000001')
+    assert.equal(await butuhSetujuLangsung(db, besar), true)
+    await galat(() => ubahStatusLangsung(db, k(admin), admin, besar.id, 'posting'), /perlu disetujui Owner/)
+    await ubahStatusLangsung(db, k(admin), admin, besar.id, 'ajukan')
+    await ditolak(() => ubahStatusLangsung(db, k(admin), admin, besar.id, 'posting'))
+    await ubahStatusLangsung(db, k(owner), owner, besar.id, 'posting')
+    const b = await db.directPurchase.findUniqueOrThrow({ where: { id: besar.id } })
+    assert.deepEqual([b.status, b.approvedBy, b.postedBy], ['Diposting', owner.id, owner.id])
+
+    const kredit = await buat('kredit', '5000000')
+    assert.equal(await butuhSetujuLangsung(db, kredit), false)
+    await ubahStatusLangsung(db, k(admin), admin, kredit.id, 'posting')
+
+    // Batas bisa diubah di approval_rule.
+    await db.approvalRule.update({ where: { docType: 'direct_purchase' }, data: { minAmount: 5_000_000n } })
+    const lagi = await buat('tunai', '2000000')
+    assert.equal(await butuhSetujuLangsung(db, lagi), false)
+    await db.approvalRule.update({ where: { docType: 'direct_purchase' }, data: { minAmount: 1_000_000n } })
+    assert.equal(await butuhSetujuLangsung(db, lagi), true)
+  })
+
+  test('faktur berisi baris jasa dengan total di atas batas wajib Owner', async () => {
+    const f = await buatFaktur(db, k(admin), admin, { supplierId: String(pemasok2), date: tgl(), supplierInvoiceNo: 'JASA-1' })
+    await tambahBiayaFaktur(db, k(admin), admin, f.id, { description: 'Servis mesin kopi', amount: '1000000' })
+    assert.equal(await butuhSetujuFaktur(db, f.id), false)
+    await tambahBiayaFaktur(db, k(admin), admin, f.id, { description: 'Suku cadang', amount: '1' })
+    assert.match((await alasanSetujuFaktur(db, f.id)).join(), /baris jasa atau biaya dengan total Rp 1\.000\.001, di atas batas Rp 1\.000\.000/)
+    await galat(() => ubahStatusFaktur(db, k(admin), admin, f.id, 'posting'), /perlu disetujui Owner/)
+    await ubahStatusFaktur(db, k(admin), admin, f.id, 'ajukan')
+    await ditolak(() => ubahStatusFaktur(db, k(admin), admin, f.id, 'posting'))
+    await ubahStatusFaktur(db, k(owner), owner, f.id, 'posting')
+    assert.equal((await db.purchaseInvoice.findUniqueOrThrow({ where: { id: f.id } })).approvedBy, owner.id)
+  })
+
+  test('saldo kas yang akan minus hanya diperingatkan, posting tetap jalan', async () => {
+    await pasangBawaanAkuntansi(db)
+    const t = await buatLangsung(db, k(admin), admin, { supplierId: String(pemasok2), locationId: String(outlet), date: tgl(), payMode: 'tunai', sumber: 'kas' })
+    await tambahBarisLangsung(db, k(admin), admin, t.id, { jenis: 'biaya', description: 'Gas elpiji', price: '50000' })
+    const [r] = await db.$queryRaw<{ n: bigint }[]>`SELECT COALESCE(SUM(l.debit - l.credit), 0)::bigint AS n FROM journal_line l JOIN journal j ON j.id = l.journal_id JOIN account_mapping m ON m.account_id = l.account_id AND m.key = 'kas_besar' WHERE j.posted_at IS NOT NULL`
+    // Keluar 1 rupiah lebih besar dari saldo buku (yang mungkin sudah minus karena pembelian tunai sebelumnya).
+    const saldoBuku = BigInt(r.n)
+    const keluar = saldoBuku > 0n ? saldoBuku + 1n : 50_000n
+    const pesan = await peringatanKasMinus(db, null, keluar)
+    const sesudah = saldoBuku - keluar
+    assert.match(pesan ?? '', new RegExp(`menjadi -Rp ${(-sesudah).toLocaleString('id-ID').replace(/\./g, '\\.')} sesudah posting ini\\. Posting tetap bisa`))
+    assert.equal(await peringatanKasMinus(db, null, 0n), null)
+    await ubahStatusLangsung(db, k(admin), admin, t.id, 'posting')
+    assert.equal((await db.directPurchase.findUniqueOrThrow({ where: { id: t.id } })).status, 'Diposting')
   })
 })
 

@@ -306,8 +306,9 @@ export async function hapusDrafBeli(db: Db, k: Konteks, aktor: Aktor, jenis: Jen
   })
 }
 
-// Aturan persetujuan per jenis dokumen (approval_rule). null berarti tidak ada aturan.
-export async function aturanBeli(db: DbAtauTx, docType: JenisDok) {
+// Aturan persetujuan per jenis dokumen (approval_rule). null berarti tidak ada aturan. Selain jenis dokumen, kunci
+// turunan seperti purchase_invoice.jasa (KONTRAK 11 butir 132) juga dibaca di sini.
+export async function aturanBeli(db: DbAtauTx, docType: JenisDok | 'purchase_invoice.jasa') {
   const r = await db.approvalRule.findUnique({ where: { docType } })
   if (!r || !r.requiresApproval) return null
   return { minAmount: r.minAmount, minPct: r.minPct === null ? null : des(r.minPct) }

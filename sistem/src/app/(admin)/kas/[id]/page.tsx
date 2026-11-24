@@ -6,6 +6,7 @@ import { NAMA_JENIS_KAS, PanelKas, PesanKas } from '@/components/kas'
 import { formatTanggal } from '@/components/stok'
 import { TombolAksi } from '@/components/stok-form'
 import { KepalaHalaman } from '@/components/umum'
+import { peringatanKasMinus } from '@/lib/akuntansi/kas-minus'
 import { db } from '@/lib/db'
 import { wajibIzin } from '@/lib/izin'
 import { akunLawan, butuhSetujuKas, muatKas, namaDana, pilihanDana, tombolKas } from '@/lib/kas'
@@ -71,6 +72,7 @@ export default async function RincianKas({ params, searchParams }: { params: Pro
           d={d}
           butuhSetuju={setuju}
           aksi={{ ajukan: aksi('ajukan'), kembalikan: aksi('kembalikan'), setujui: aksi('setujui'), posting: aksi('posting'), batal: aksi('batal'), hapus: hapusKasAksi.bind(null, false, d.id) }}
+          peringatan={d.kind === 'keluar' && ['Draft', 'Diajukan', 'Disetujui'].includes(d.status) ? await peringatanKasMinus(db, d.bankAccountId, d.amount) : null}
           catatan={setuju ? (d.status === 'Disetujui' ? 'Sudah disetujui. Tekan Posting sesudah uang benar-benar keluar.' : d.status === 'Draft' ? 'Kas keluar diajukan dulu lalu disetujui Owner sebelum diposting.' : undefined) : undefined}
           konfirmasiPosting={`Posting ${d.no}? ${formatRupiah(d.amount)} dicatat ${masuk ? 'masuk ke' : 'keluar dari'} ${namaSumber} dan jurnalnya dibuat.`}
         />

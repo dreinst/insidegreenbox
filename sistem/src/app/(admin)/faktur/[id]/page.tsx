@@ -6,8 +6,8 @@ import { FormMaster } from '@/components/form-master'
 import { LencanaStatus, formatTanggal } from '@/components/stok'
 import { TombolAksi } from '@/components/stok-form'
 import { KepalaHalaman } from '@/components/umum'
-import { aturanBeli, tombolBeli } from '@/lib/beli/dokumen'
-import { JENIS_BARIS_FAKTUR, butuhSetujuFaktur, muatFaktur, penerimaanBelumDifakturkan, persenSelisih, sisaFaktur } from '@/lib/beli/faktur'
+import { tombolBeli } from '@/lib/beli/dokumen'
+import { JENIS_BARIS_FAKTUR, alasanSetujuFaktur, muatFaktur, penerimaanBelumDifakturkan, persenSelisih, sisaFaktur } from '@/lib/beli/faktur'
 import { pilihanPemasok } from '@/lib/beli/pemasok'
 import { db } from '@/lib/db'
 import { wajibIzin } from '@/lib/izin'
@@ -23,9 +23,10 @@ export default async function RincianFaktur({ params, searchParams }: { params: 
   const p = await wajibIzin('beli.faktur', 'L')
   const id = Number((await params).id)
   if (!Number.isInteger(id) || id <= 0) notFound()
-  const [d, { pesan }, aturan] = await Promise.all([muatFaktur(db, id), searchParams, aturanBeli(db, 'purchase_invoice')])
+  const [d, { pesan }] = await Promise.all([muatFaktur(db, id), searchParams])
   if (!d) notFound()
-  const [butuhSetuju, sel] = await Promise.all([butuhSetujuFaktur(db, d.id), persenSelisih(db, d.id)])
+  const [alasan, sel] = await Promise.all([alasanSetujuFaktur(db, d.id), persenSelisih(db, d.id)])
+  const butuhSetuju = alasan.length > 0
   const t = tombolBeli(p, 'purchase_invoice', d.status, butuhSetuju, d.submittedBy)
   const [pemasok, terbuka] = t.ubah ? await Promise.all([pilihanPemasok(db), penerimaanBelumDifakturkan(db, d.supplierId)]) : [[], []]
   const bolehUbahHarga = saklarNyala(p, 'beli.ubah_harga_faktur')
@@ -33,7 +34,7 @@ export default async function RincianFaktur({ params, searchParams }: { params: 
   const catatan =
     d.status === 'Draft' || d.status === 'Diajukan'
       ? butuhSetuju
-        ? `Selisih harga ${persen} dari nilai penerimaan, di atas batas ${aturan?.minPct?.toString() ?? '-'}%. Faktur ini perlu diajukan dan disetujui Owner.`
+        ? `Faktur ini perlu diajukan dan disetujui Owner karena ${alasan.join(' dan ')}.`
         : sel.beda
           ? `Selisih harga ${persen} dari nilai penerimaan, masih di bawah batas persetujuan.`
           : undefined

@@ -255,13 +255,29 @@ export async function persenSelisih(tx: Tx | Db, id: number) {
   return { terima, beda, persen: terima > 0n ? new Desimal((beda < 0n ? -beda : beda).toString()).times(100).div(terima.toString()) : new Desimal(0) }
 }
 
-async function aturanFaktur(tx: Tx, id: number) {
+// Alasan faktur wajib disetujui Owner. Kosong berarti Admin boleh memposting sendiri.
+// 1. Selisih harga terhadap nilai penerimaan di atas batas persen approval_rule purchase_invoice (RANCANGAN 2.2).
+// 2. Temuan audit B-2, keputusan pemilik (KONTRAK 11 butir 132): faktur yang berisi baris jasa atau biaya dengan total
+//    faktur di atas batas approval_rule purchase_invoice.jasa (bawaan Rp 1.000.000).
+export async function alasanSetujuFaktur(tx: Tx | Db, id: number) {
+  const alasan: string[] = []
   const r = await aturanBeli(tx, JENIS)
-  if (!r) return false
-  const s = await persenSelisih(tx, id)
-  if (r.minPct === null) return true
-  return s.beda !== 0n && (s.terima === 0n || s.persen.gt(r.minPct))
+  if (r) {
+    const s = await persenSelisih(tx, id)
+    if (r.minPct === null || (s.beda !== 0n && (s.terima === 0n || s.persen.gt(r.minPct)))) {
+      alasan.push(`selisih harga ${s.persen.toFixed(1).replace('.', ',')}% dari nilai penerimaan, di atas batas ${r.minPct?.toString().replace('.', ',') ?? '0'}%`)
+    }
+  }
+  const j = await aturanBeli(tx, 'purchase_invoice.jasa')
+  if (j && (await tx.purchaseInvoiceLine.count({ where: { purchaseInvoiceId: id, kind: 'jasa' } }))) {
+    const t = await tx.purchaseInvoiceLine.findMany({ where: { purchaseInvoiceId: id }, select: { kind: true, qty: true, price: true } })
+    const total = t.reduce((n, b) => n + (b.kind === 'barang' ? nilaiBaris(b.qty, b.price) : b.price), 0n)
+    if (j.minAmount === null || total > j.minAmount) alasan.push(`berisi baris jasa atau biaya dengan total ${formatRupiah(total)}${j.minAmount === null ? '' : `, di atas batas ${formatRupiah(j.minAmount)}`}`)
+  }
+  return alasan
 }
+
+const aturanFaktur = async (tx: Tx | Db, id: number) => (await alasanSetujuFaktur(tx, id)).length > 0
 
 export const KAIT_FAKTUR: KaitBeli<KepalaFaktur> = {
   jenis: JENIS,
@@ -319,7 +335,7 @@ export const KAIT_FAKTUR: KaitBeli<KepalaFaktur> = {
 
 export const ubahStatusFaktur = (db: Db, k: Konteks, aktor: Aktor, id: number, aksi: AksiBeli, opsi: { alasan?: string } = {}) => ubahStatusBeli(db, k, aktor, KAIT_FAKTUR, id, aksi, opsi)
 
-export const butuhSetujuFaktur = (db: Db, id: number) => db.$transaction((tx) => aturanFaktur(tx, id))
+export const butuhSetujuFaktur = (db: Db, id: number) => aturanFaktur(db, id)
 
 export const hapusFaktur = (db: Db, k: Konteks, aktor: Aktor, id: number) =>
   hapusDrafBeli(db, k, aktor, JENIS, id, async (tx) => {

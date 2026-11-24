@@ -6,8 +6,9 @@ import { FormMaster } from '@/components/form-master'
 import { LencanaStatus, formatTanggal } from '@/components/stok'
 import { TombolAksi } from '@/components/stok-form'
 import { KepalaHalaman } from '@/components/umum'
-import { pilihanBarang, sisaQty, tombolBeli } from '@/lib/beli/dokumen'
-import { CARA_BAYAR, muatLangsung } from '@/lib/beli/langsung'
+import { peringatanKasMinus } from '@/lib/akuntansi/kas-minus'
+import { aturanBeli, pilihanBarang, sisaQty, tombolBeli } from '@/lib/beli/dokumen'
+import { CARA_BAYAR, butuhSetujuLangsung, muatLangsung, totalLangsung } from '@/lib/beli/langsung'
 import { pilihanPemasok } from '@/lib/beli/pemasok'
 import { db } from '@/lib/db'
 import { wajibIzin } from '@/lib/izin'
@@ -28,7 +29,15 @@ export default async function RincianLangsung({ params, searchParams }: { params
   if (!Number.isInteger(id) || id <= 0) notFound()
   const [d, { pesan }] = await Promise.all([muatLangsung(db, id), searchParams])
   if (!d) notFound()
-  const t = tombolBeli(p, 'direct_purchase', d.status, false, d.submittedBy)
+  const belumPosting = d.status === 'Draft' || d.status === 'Diajukan'
+  const [butuhSetuju, aturan, total] = await Promise.all([butuhSetujuLangsung(db, d), aturanBeli(db, 'direct_purchase'), totalLangsung(db, d.id)])
+  const t = tombolBeli(p, 'direct_purchase', d.status, butuhSetuju, d.submittedBy)
+  // Saldo kas atau bank yang akan minus hanya diperingatkan (KONTRAK 11 butir 133).
+  const peringatan = belumPosting && d.payMode === 'tunai' ? await peringatanKasMinus(db, d.bankAccountId, total) : null
+  const catatan =
+    belumPosting && butuhSetuju
+      ? `Pembelian tunai ${formatRupiah(total)} di atas batas ${aturan?.minAmount !== null && aturan?.minAmount !== undefined ? formatRupiah(aturan.minAmount) : 'persetujuan'}, jadi wajib diajukan dan disetujui Owner sebelum diposting.`
+      : undefined
   const [lokasi, pemasok, rekening, barang] = t.ubah
     ? await Promise.all([pilihanLokasi(db), pilihanPemasok(db), db.bankAccount.findMany({ where: { active: true }, orderBy: { id: 'asc' } }), pilihanBarang(db)])
     : [[], [], [], []]
@@ -102,8 +111,10 @@ export default async function RincianLangsung({ params, searchParams }: { params
           p={p}
           jenis="direct_purchase"
           d={jejak(d)}
-          butuhSetuju={false}
+          butuhSetuju={butuhSetuju}
           aksi={aksiPanel('direct_purchase', d.id)}
+          catatan={catatan}
+          peringatan={peringatan}
           konfirmasiPosting={`Posting ${d.no}? Stok bertambah${kredit ? ' dan hutang tercatat' : ' dan pembayaran tunai tercatat'}.`}
         />
       </div>

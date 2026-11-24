@@ -5,6 +5,7 @@ import { FormMaster } from '@/components/form-master'
 import { PanelKas, PesanKas } from '@/components/kas'
 import { formatTanggal } from '@/components/stok'
 import { KepalaHalaman } from '@/components/umum'
+import { peringatanKasMinus } from '@/lib/akuntansi/kas-minus'
 import { db } from '@/lib/db'
 import { wajibIzin } from '@/lib/izin'
 import { butuhSetujuKas, muatKas, namaDana, pilihanDana, tombolKas } from '@/lib/kas'
@@ -65,6 +66,7 @@ export default async function RincianPindah({ params, searchParams }: { params: 
           d={d}
           butuhSetuju={setuju}
           aksi={{ ajukan: aksi('ajukan'), kembalikan: aksi('kembalikan'), setujui: aksi('setujui'), posting: aksi('posting'), batal: aksi('batal'), hapus: hapusKasAksi.bind(null, true, d.id) }}
+          peringatan={['Draft', 'Diajukan', 'Disetujui'].includes(d.status) ? await peringatanKasMinus(db, d.bankAccountId, d.amount) : null}
           catatan={setuju && d.status === 'Disetujui' ? 'Sudah disetujui. Tekan Posting sesudah uang benar-benar dipindah.' : undefined}
           konfirmasiPosting={`Posting ${d.no}? ${formatRupiah(d.amount)} dicatat pindah dari ${dari} ke ${ke}.`}
         />
