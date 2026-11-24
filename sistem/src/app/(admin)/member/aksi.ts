@@ -17,9 +17,11 @@ export async function tambahMemberAksi(sebelum: HasilAksi, fd: FormData) {
   })
 }
 
-export async function ubahMemberAksi(id: number, sebelum: HasilAksi, fd: FormData) {
+// kunjunganAwal: jumlah kunjungan saat formulir dibuka, untuk membedakan ubah kunjungan dari penjualan kasir yang terjadi
+// selama formulir terbuka (KONTRAK 11 butir 144).
+export async function ubahMemberAksi(id: number, kunjunganAwal: number, sebelum: HasilAksi, fd: FormData) {
   return jalankanAksi(sebelum, fd, 'menu.member', 'U', async (p) => {
-    const { berubah } = await ubahMember(db, await konteksPermintaan(p), p, id, data(fd))
+    const { berubah } = await ubahMember(db, await konteksPermintaan(p), p, id, { ...data(fd), kunjunganAwal: String(kunjunganAwal) })
     revalidatePath('/member')
     redirect(`/member/${id}?pesan=${berubah ? 'tersimpan' : 'tetap'}`)
   })

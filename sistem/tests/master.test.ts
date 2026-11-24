@@ -272,7 +272,7 @@ describe('member dan tingkat', () => {
   })
   test('tingkat mengikuti kunjungan dan dihitung ulang saat tingkat berubah', async () => {
     const m = await db.member.findFirstOrThrow({ where: { name: 'Budi Uji' } })
-    await ubahMember(db, k(admin), admin, m.id, { name: 'Budi Uji', wa: '081299990001', visits: '12', discountOn: 'on', note: '' })
+    await ubahMember(db, k(admin), admin, m.id, { name: 'Budi Uji', wa: '081299990001', visits: '12', discountOn: 'on', note: '', alasanKunjungan: 'Pindahan kartu stempel' })
     const tier = async () => (await db.member.findUniqueOrThrow({ where: { id: m.id }, include: { tier: true } })).tier?.name
     assert.equal(await tier(), 'House Key')
     const house = await db.memberTier.findFirstOrThrow({ where: { name: 'House Key' } })
@@ -298,8 +298,34 @@ describe('member dan tingkat', () => {
     await ubahMember(db, k(plus), plus, m.id, { name: 'Teman Kasir', wa: '085711112222', visits: '500', discountOn: '', note: 'teman' })
     const ubah = await db.member.findUniqueOrThrow({ where: { id: m.id } })
     assert.deepEqual([ubah.visits, ubah.discountOn, ubah.note], [0, true, 'teman'])
-    await ubahMember(db, k(admin), admin, m.id, { name: 'Teman Kasir', wa: '085711112222', visits: '12', discountOn: 'on', note: 'teman' })
+    await ubahMember(db, k(admin), admin, m.id, { name: 'Teman Kasir', wa: '085711112222', visits: '12', discountOn: 'on', note: 'teman', alasanKunjungan: 'Koreksi kunjungan' })
     assert.equal((await db.member.findUniqueOrThrow({ where: { id: m.id } })).visits, 12)
+  })
+  // Keputusan pemilik 24 November 2026 (KONTRAK 11 butir 144): perubahan kunjungan wajib beralasan minimal 5 huruf.
+  test('ubah kunjungan wajib beralasan dan tercatat di audit; ubah data lain tidak', async () => {
+    const m = await tambahMember(db, k(admin), admin, { name: 'Sari Uji', wa: '081277770001', visits: '', discountOn: 'on', note: '' })
+    const isi = { name: 'Sari Uji', wa: '081277770001', discountOn: 'on', note: '' }
+    await galat(() => ubahMember(db, k(admin), admin, m.id, { ...isi, visits: '7' }), 'alasanKunjungan', /alasan perubahan jumlah kunjungan, minimal 5 huruf/)
+    await galat(() => ubahMember(db, k(admin), admin, m.id, { ...isi, visits: '7', alasanKunjungan: ' abcd ' }), 'alasanKunjungan')
+    assert.equal((await db.member.findUniqueOrThrow({ where: { id: m.id } })).visits, 0, 'ditolak tanpa mengubah data')
+    await ubahMember(db, k(admin), admin, m.id, { ...isi, visits: '7', alasanKunjungan: 'Kartu stempel kertas', kunjunganAwal: '0' })
+    const a = await db.auditLog.findFirstOrThrow({ where: { action: 'member.ubah', docId: String(m.id) }, orderBy: { id: 'desc' } })
+    assert.deepEqual([a.beforeJson, a.afterJson], [{ visits: 0 }, { visits: 7, alasanKunjungan: 'Kartu stempel kertas' }])
+    assert.match(a.summary, /kunjungan 0 menjadi 7\)\. Alasan: Kartu stempel kertas/)
+    // Nama dan catatan berubah tanpa alasan.
+    await ubahMember(db, k(admin), admin, m.id, { ...isi, name: 'Sari Uji Dua', note: 'langganan', visits: '7' })
+    const b = await db.auditLog.findFirstOrThrow({ where: { action: 'member.ubah', docId: String(m.id) }, orderBy: { id: 'desc' } })
+    assert.deepEqual(b.afterJson, { name: 'Sari Uji Dua', note: 'langganan' })
+    // Kasir menambah kunjungan selama formulir terbuka (7 menjadi 8): formulir yang tetap berisi 7 tidak dianggap mengubah
+    // kunjungan, jadi tidak butuh alasan dan tidak menimpa 8.
+    await db.member.update({ where: { id: m.id }, data: { visits: 8 } })
+    await ubahMember(db, k(admin), admin, m.id, { ...isi, name: 'Sari Uji Dua', note: 'langganan tetap', visits: '7', kunjunganAwal: '7' })
+    assert.equal((await db.member.findUniqueOrThrow({ where: { id: m.id } })).visits, 8)
+    // Member baru dengan kunjungan awal di atas 0 juga wajib beralasan; 0 tidak.
+    await galat(() => tambahMember(db, k(admin), admin, { name: 'Rudi Uji', wa: '081277770002', visits: '3', discountOn: 'on', note: '' }), 'alasanKunjungan')
+    const r = await tambahMember(db, k(admin), admin, { name: 'Rudi Uji', wa: '081277770002', visits: '3', discountOn: 'on', note: '', alasanKunjungan: 'Pindahan admin lama' })
+    const t = await db.auditLog.findFirstOrThrow({ where: { action: 'member.tambah', docId: String(r.id) } })
+    assert.equal((t.afterJson as { alasanKunjungan?: string }).alasanKunjungan, 'Pindahan admin lama')
   })
   test('tingkat tidak boleh bernama atau bersyarat sama', async () => {
     await galat(() => tambahTingkat(db, k(owner), owner, { name: 'guest key', minVisits: '3', discountPct: '5', perk: '' }), 'name')
