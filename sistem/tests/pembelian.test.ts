@@ -569,17 +569,24 @@ describe('pembantu dan impor', () => {
 // Keputusan pemilik 24 November 2026 (KONTRAK 11 butir 143): halaman Aturan Persetujuan hanya untuk Owner.
 describe('aturan persetujuan dari layar', () => {
   // Isi formulir dari keadaan sekarang, seperti halaman mengirimnya, lalu timpa isian tertentu.
+  // Kunci timpa ditulis dengan jenis dokumen (wajib:purchase_order) supaya tes mudah dibaca, lalu diterjemahkan ke nomor
+  // urut baris seperti nama isian di halaman.
   const isiForm = async (timpa: Record<string, string | null> = {}) => {
     const f: Record<string, string> = {}
-    for (const b of await daftarAturan(db)) {
-      if (!b.info || b.info.tetap) continue
-      if (b.wajib) f[`wajib:${b.docType}`] = '1'
-      if (b.info.batas === 'nominal') f[`nominal:${b.docType}`] = b.nominal === null ? '' : String(b.nominal)
-      if (b.info.batas === 'persen') f[`persen:${b.docType}`] = b.persen ?? ''
-    }
+    const nomor = new Map<string, number>()
+    ;(await daftarAturan(db)).forEach((b, i) => {
+      nomor.set(b.docType, i)
+      f[`jenis:${i}`] = b.docType
+      if (!b.info || b.info.tetap) return
+      if (b.wajib) f[`wajib:${i}`] = '1'
+      if (b.info.batas === 'nominal') f[`nominal:${i}`] = b.nominal === null ? '' : String(b.nominal)
+      if (b.info.batas === 'persen') f[`persen:${i}`] = b.persen ?? ''
+    })
     for (const [kunci, v] of Object.entries(timpa)) {
-      if (v === null) delete f[kunci]
-      else f[kunci] = v
+      const [jenis, dok] = kunci.split(/:(.*)/)
+      const k = `${jenis}:${nomor.get(dok)}`
+      if (v === null) delete f[k]
+      else f[k] = v
     }
     return f
   }
@@ -625,7 +632,7 @@ describe('aturan persetujuan dari layar', () => {
   })
 
   test('validasi batas dan baris yang tidak bisa diubah', async () => {
-    await assert.rejects(simpanAturan(db, k(owner), owner, await isiForm({ 'nominal:direct_purchase': 'satu juta' })), (e: unknown) => e instanceof ZodError && e.issues[0].path[0] === 'nominal:direct_purchase')
+    await assert.rejects(simpanAturan(db, k(owner), owner, await isiForm({ 'nominal:direct_purchase': 'satu juta' })), (e: unknown) => e instanceof ZodError && String(e.issues[0].path[0]).startsWith('nominal:'))
     await assert.rejects(simpanAturan(db, k(owner), owner, await isiForm({ 'nominal:direct_purchase': '0' })), ZodError)
     await assert.rejects(simpanAturan(db, k(owner), owner, await isiForm({ 'persen:purchase_invoice': '150' })), ZodError)
     await simpanAturan(db, k(owner), owner, await isiForm({ 'persen:purchase_invoice': '2,5' }))
@@ -634,6 +641,13 @@ describe('aturan persetujuan dari layar', () => {
     await simpanAturan(db, k(owner), owner, await isiForm({ 'wajib:purchase_payment': '' }))
     assert.equal((await db.approvalRule.findUniqueOrThrow({ where: { docType: 'purchase_payment' } })).requiresApproval, true)
     await simpanAturan(db, k(owner), owner, await isiForm({ 'persen:purchase_invoice': '5' }))
+    // Nama isian yang memuat "pin" (cash_transaction.pindah) dulu dibuang dari isian terjaga; kini nama memakai nomor urut.
+    const form = await isiForm()
+    assert.ok(Object.keys(form).every((x) => !/pin/i.test(x)), 'nama isian tidak memuat pin')
+    // Baris yang tidak ada di formulir (halaman basi) tidak disentuh.
+    const tanpaPindah = Object.fromEntries(Object.entries(form).filter(([, v]) => v !== 'cash_transaction.pindah'))
+    await simpanAturan(db, k(owner), owner, tanpaPindah)
+    assert.equal((await db.approvalRule.findUniqueOrThrow({ where: { docType: 'cash_transaction.pindah' } })).requiresApproval, true)
     // Tidak ada aksi hapus: jumlah baris tetap.
     assert.equal((await daftarAturan(db)).length, await db.approvalRule.count())
   })

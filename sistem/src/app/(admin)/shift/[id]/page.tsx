@@ -149,9 +149,9 @@ export default async function RincianShift({ params, searchParams }: { params: P
                 {rekap.pembulatan ? (
                   <li>
                     <span>
-                      Pembulatan tunai <small className="redup">(sudah termasuk di tunai)</small>
+                      Pembulatan tunai <small className="redup">(termasuk di tunai)</small>
                     </span>
-                    <b>{rupiah(rekap.pembulatan)}</b>
+                    <b className="nowrap">{`${rekap.pembulatan > 0 ? '+' : '-'}${rupiah(Math.abs(rekap.pembulatan))}`}</b>
                   </li>
                 ) : null}
                 <li>

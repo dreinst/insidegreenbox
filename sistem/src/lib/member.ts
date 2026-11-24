@@ -117,7 +117,7 @@ export const skemaMember = z.object({
   alasanKunjungan: z.string().trim().max(200, 'Alasan paling panjang 200 huruf.').default(''),
   // Kunjungan yang tampil saat formulir dibuka. Bila isian kunjungan sama dengannya, kunjungan dianggap tidak diubah
   // (penjualan di kasir bisa menambahnya selama formulir terbuka).
-  kunjunganAwal: z.coerce.number().int().min(0).optional(),
+  kunjunganAwal: z.preprocess((v) => (v === '' || v === null ? undefined : v), z.coerce.number().int().min(0).optional()),
 })
 
 export const ALASAN_KUNJUNGAN_MIN = 5
@@ -146,9 +146,9 @@ export async function tambahMember(db: Db, k: Konteks, aktor: Aktor, masukan: un
   pastikanIzin(aktor, MENU, 'T')
   const isi = skemaMember.parse(masukan)
   const d = bolehAturTingkat(aktor) ? isi : { ...isi, visits: 0, discountOn: true }
+  const wa = bacaWa(d.wa)
   // Member baru mulai 0 kunjungan; kunjungan awal di atas 0 sama dengan mengubah kunjungan, jadi wajib beralasan.
   if (d.visits > 0) wajibAlasanKunjungan(d.alasanKunjungan)
-  const wa = bacaWa(d.wa)
   try {
     return await db.$transaction(async (tx) => {
       await waDipakai(tx, wa)

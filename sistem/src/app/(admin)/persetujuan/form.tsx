@@ -25,15 +25,18 @@ export function FormAturan({ aksi, baris, bisaUbah }: { aksi: Aksi; baris: Baris
     <form action={kirim} key={hasil.n} className="form" noValidate>
       <PesanHasil hasil={hasil} />
       <ul className="daftar-saklar">
-        {baris.map((b) => {
-          const namaBatas = b.batas === 'nominal' ? `nominal:${b.docType}` : `persen:${b.docType}`
+        {baris.map((b, i) => {
+          // Nama isian memakai nomor urut, bukan jenis dokumen (lihat namaIsian di lib/persetujuan.ts).
+          const namaBatas = b.batas === 'nominal' ? `nominal:${i}` : `persen:${i}`
+          const namaWajib = `wajib:${i}`
           const galat = !hasil.ok ? hasil.galat?.[namaBatas] : undefined
           const kunci = !bisaUbah || !!b.tetap || !b.dikenal
           const id = `a-${b.docType.replace(/\W/g, '-')}`
           return (
             <li key={b.docType} className={galat ? 'salah' : undefined}>
+              <input type="hidden" name={`jenis:${i}`} value={b.docType} />
               <label className="saklar">
-                <input type="checkbox" name={`wajib:${b.docType}`} value="1" defaultChecked={isian ? `wajib:${b.docType}` in isian : b.wajib} disabled={kunci} aria-describedby={`${id}-k`} />
+                <input type="checkbox" name={namaWajib} value="1" defaultChecked={isian ? namaWajib in isian : b.wajib} disabled={kunci} aria-describedby={`${id}-k`} />
                 <span className="saklar-tuas" aria-hidden="true" />
                 <span className="saklar-teks">
                   <b>{b.nama}</b>

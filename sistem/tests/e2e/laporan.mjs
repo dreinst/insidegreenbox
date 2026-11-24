@@ -126,7 +126,8 @@ let idShift = 0
   await page.click(ubin('Matcha Susu'))
   await page.selectOption('#k-metode-0', { label: 'QRIS' })
   await Promise.all([page.waitForURL((u) => Number(u.searchParams.get('selesai')) > j1, { timeout: 20000 }), page.click('button.lk-tombol-bayar')])
-  const tunai = await satu('select total from sale where id=$1', [j1])
+  // Uang tunai di laci sudah dibulatkan ke Rp 500 (KONTRAK 11 butir 142).
+  const tunai = await satu('select total + rounding as total from sale where id=$1', [j1])
   await page.goto(`${BASE}/shift/${idShift}`)
   await page.fill('#k-kasDihitung', String(100000 + Number(tunai.total)))
   await Promise.all([page.waitForURL(/\?pesan=shift-tutup/), page.click('button:text-is("Tutup shift")')])
@@ -264,10 +265,12 @@ const setoran = {}
 {
   const { ctx, page, galat } = await konteks(1440, 900)
   await masuk(page, AKUN.admin)
-  const j = await satu(`select count(*)::int n, coalesce(sum(total),0)::bigint total, coalesce(sum(sub),0)::bigint sub, coalesce(sum(disc),0)::bigint disc from sale s where status='Selesai' and ${syaratHari}`, [hariIni])
-  const v = await satu(`select count(*)::int n, coalesce(sum(total),0)::bigint total from sale s where status='Void' and ${syaratHari}`, [hariIni])
+  const j = await satu(`select count(*)::int n, coalesce(sum(total + rounding),0)::bigint total, coalesce(sum(rounding),0)::bigint bulat, coalesce(sum(sub),0)::bigint sub, coalesce(sum(disc),0)::bigint disc from sale s where status='Selesai' and ${syaratHari}`, [hariIni])
+  const v = await satu(`select count(*)::int n, coalesce(sum(total + rounding),0)::bigint total from sale s where status='Void' and ${syaratHari}`, [hariIni])
   await page.goto(`${BASE}/laporan?dari=${hariIni}&sampai=${hariIni}`)
   cek('laporan: rekap total diterima sama dengan basis data', (await sel(page, 'Total diterima')) === rp(j.total), `${await sel(page, 'Total diterima')} lawan ${rp(j.total)}`)
+  const rpBulat = Number(j.bulat) === 0 ? 'Rp 0' : `${Number(j.bulat) < 0 ? '-' : '+'}Rp ${Math.abs(Number(j.bulat)).toLocaleString('id-ID')}`
+  cek('laporan: rekap pembulatan sama dengan basis data', (await sel(page, 'Pembulatan')) === rpBulat, `${await sel(page, 'Pembulatan')} lawan ${rpBulat}`)
   cek('laporan: rekap jumlah transaksi dan void dipisah', (await sel(page, 'Transaksi')) === String(j.n) && (await sel(page, 'Nilai void')) === rp(v.total), `${await sel(page, 'Transaksi')} / ${await sel(page, 'Nilai void')}`)
   await potret(page, '1440-admin-laporan-rekap')
   const csv = await unduhCsv(page)

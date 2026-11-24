@@ -38,7 +38,7 @@ const SIDEBAR_HARAP = {
   // tahap 5A: Setoran POS di grup Kasir, Rekening Bank di grup Keuangan, Laporan di grup Laporan (Owner dan Admin).
   // tahap 5B: grup Akuntansi sesudah Keuangan; Admin hanya Akun dan Pemetaan.
   // tahap 5C: Kas Masuk/Keluar, Pindah Dana, dan Rekonsiliasi Bank di awal grup Keuangan; Admin hanya Kas Masuk/Keluar.
-  owner: ['Beranda', ...KASIR_3B, 'PIN Kasir', 'Setoran POS', 'Metode Bayar', 'Menu dan Harga', 'Promo', 'Member', ...STOK_4A, ...PRODUKSI_4B, ...BELI_4C, ...B2B_6A, 'Kas Masuk/Keluar', 'Pindah Dana', 'Rekonsiliasi Bank', 'Rekening Bank', 'Hutang Pemasok', 'Piutang Pelanggan', ...AKUNTANSI_5B, ...ASET_6B, 'Laporan', 'Lokasi', 'Profil Usaha', 'Pengguna', 'Peran dan Izin', 'Saklar Fitur', 'Jejak Audit'],
+  owner: ['Beranda', ...KASIR_3B, 'PIN Kasir', 'Setoran POS', 'Metode Bayar', 'Menu dan Harga', 'Promo', 'Member', ...STOK_4A, ...PRODUKSI_4B, ...BELI_4C, ...B2B_6A, 'Kas Masuk/Keluar', 'Pindah Dana', 'Rekonsiliasi Bank', 'Rekening Bank', 'Hutang Pemasok', 'Piutang Pelanggan', ...AKUNTANSI_5B, ...ASET_6B, 'Laporan', 'Lokasi', 'Profil Usaha', 'Pengguna', 'Peran dan Izin', 'Saklar Fitur', 'Aturan Persetujuan', 'Jejak Audit'],
   admin: ['Beranda', ...KASIR_3B, 'PIN Kasir', 'Setoran POS', 'Metode Bayar', 'Menu dan Harga', 'Promo', 'Member', ...STOK_4A, ...PRODUKSI_4B, ...BELI_4C, ...B2B_6A, 'Kas Masuk/Keluar', 'Rekening Bank', 'Hutang Pemasok', 'Piutang Pelanggan', 'Akun dan Pemetaan', ...ASET_6B_ADMIN, 'Laporan', 'Lokasi', 'Profil Usaha', 'Jejak Audit'],
   kasir: ['Beranda', ...KASIR_3B, 'Menu dan Harga', 'Member'],
 }

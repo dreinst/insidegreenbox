@@ -96,14 +96,30 @@ const skemaWajib = z
   .optional()
   .transform((v) => v === '1' || v === 'on')
 
-// Skema satu formulir untuk baris yang bisa diubah. Nama isian: wajib:<jenis>, nominal:<jenis>, persen:<jenis>.
-export function skemaAturan(baris: Pick<BarisAturan, 'docType' | 'info'>[]) {
+// Nama isian memakai nomor urut baris di formulir, bukan jenis dokumen: jenis:<i> (tersembunyi, berisi jenis dokumen),
+// wajib:<i>, nominal:<i>, persen:<i>. Jenis dokumen seperti cash_transaction.pindah mengandung "pin", dan isian
+// bernama begitu dibuang dari isian terjaga (RAHASIA di aksi.ts), sehingga sesudah galat saklarnya tampil mati.
+export const namaIsian = (jenis: 'jenis' | 'wajib' | 'nominal' | 'persen', i: number) => `${jenis}:${i}`
+
+// Nomor urut tiap jenis dokumen yang dikirim formulir. Baris yang tidak ada di formulir (halaman basi) tidak disentuh.
+export function urutanForm(masukan: Record<string, unknown>) {
+  const urut = new Map<string, number>()
+  for (const [k, v] of Object.entries(masukan)) {
+    const m = /^jenis:(\d{1,3})$/.exec(k)
+    if (m && typeof v === 'string' && !urut.has(v)) urut.set(v, Number(m[1]))
+  }
+  return urut
+}
+
+// Skema satu formulir untuk baris yang bisa diubah dan ada di formulir.
+export function skemaAturan(baris: Pick<BarisAturan, 'docType' | 'info'>[], urut: Map<string, number>) {
   const bentuk: Record<string, z.ZodType> = {}
   for (const b of baris) {
-    if (!b.info || b.info.tetap) continue
-    bentuk[`wajib:${b.docType}`] = skemaWajib
-    if (b.info.batas === 'nominal') bentuk[`nominal:${b.docType}`] = skemaNominal
-    if (b.info.batas === 'persen') bentuk[`persen:${b.docType}`] = skemaPersenBatas
+    const i = urut.get(b.docType)
+    if (!b.info || b.info.tetap || i === undefined) continue
+    bentuk[namaIsian('wajib', i)] = skemaWajib
+    if (b.info.batas === 'nominal') bentuk[namaIsian('nominal', i)] = skemaNominal
+    if (b.info.batas === 'persen') bentuk[namaIsian('persen', i)] = skemaPersenBatas
   }
   return z.object(bentuk)
 }
@@ -124,16 +140,18 @@ export async function simpanAturan(db: Db, k: Konteks, aktor: Aktor, masukan: Re
   return db.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT doc_type FROM approval_rule FOR UPDATE`
     const baris = await daftarAturan(tx)
-    const d = skemaAturan(baris).parse(masukan) as Record<string, boolean | bigint | string | null>
+    const urut = urutanForm(masukan)
+    const d = skemaAturan(baris, urut).parse(masukan) as Record<string, boolean | bigint | string | null>
     let berubah = 0
     for (const b of baris) {
       const info = b.info
-      if (!info || info.tetap) continue
+      const i = urut.get(b.docType)
+      if (!info || info.tetap || i === undefined) continue
       const lama = { wajib: b.wajib, nominal: b.nominal, persen: b.persen === null ? null : String(Number(b.persen)) }
       const baru = {
-        wajib: d[`wajib:${b.docType}`] as boolean,
-        nominal: info.batas === 'nominal' ? (d[`nominal:${b.docType}`] as bigint | null) : lama.nominal,
-        persen: info.batas === 'persen' ? (d[`persen:${b.docType}`] as string | null) : lama.persen,
+        wajib: d[namaIsian('wajib', i)] as boolean,
+        nominal: info.batas === 'nominal' ? (d[namaIsian('nominal', i)] as bigint | null) : lama.nominal,
+        persen: info.batas === 'persen' ? (d[namaIsian('persen', i)] as string | null) : lama.persen,
       }
       const s = selisih(lama, baru)
       if (!s.berubah.length) continue
