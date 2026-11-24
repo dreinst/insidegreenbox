@@ -8,6 +8,7 @@ import type { Db } from '../src/lib/db'
 import type { Pengguna } from '../src/lib/izin-inti'
 import { ringkasanPembayaran, tutupHarian } from '../src/lib/laporan'
 import { simpanPenjualan, voidPenjualan } from '../src/lib/penjualan'
+import { ubahMetode } from '../src/lib/metode-bayar'
 import { tambahRekening, ubahStatusRekening } from '../src/lib/rekening'
 import { ajukanSetoran, batalSetoran, buatSetoranHarian, hapusSetoran, kembalikanSetoran, muatUlangSetoran, postingSetoran, ubahSetoran } from '../src/lib/setoran'
 import { bukaShift, setujuiShift, tutupShift } from '../src/lib/shift'
@@ -254,5 +255,17 @@ describe('muat ulang sesudah void (A-3)', () => {
     assert.deepEqual([l.expected, l.mdr], [0n, 0n])
     st = await kepala()
     assert.deepEqual([st.expectedTotal, st.mdrFee], [0n, 0n])
+  })
+})
+
+// Temuan audit A-6: jenis metode yang sudah dipakai tidak bisa diganti, supaya angka shift lama dan kas seharusnya
+// shift terbuka tidak ikut berubah.
+describe('jenis metode bayar yang sudah dipakai (A-6)', () => {
+  test('jenis Tunai dan QRIS yang punya pembayaran ditolak diganti, nama tetap bisa', async () => {
+    await assert.rejects(ubahMetode(db, k(admin), admin, toko.metode.Tunai, { name: 'Tunai', kind: 'lainnya' }), tolak(/sudah dipakai di \d+ pembayaran/))
+    await assert.rejects(ubahMetode(db, k(owner), owner, toko.metode.QRIS, { name: 'QRIS', kind: 'debit' }), tolak(/tidak bisa diganti/))
+    assert.equal((await db.paymentMethod.findUniqueOrThrow({ where: { id: toko.metode.Tunai } })).kind, 'tunai')
+    const h = await ubahMetode(db, k(owner), owner, toko.metode.QRIS, { name: 'QRIS Toko', kind: 'qris' })
+    assert.equal(h.berubah, 1)
   })
 })

@@ -8,7 +8,7 @@ import { db } from '@/lib/db'
 import { wajibIzin } from '@/lib/izin'
 import { punyaIzin } from '@/lib/izin-inti'
 import { formatWaktu } from '@/lib/waktu'
-import { JENIS_METODE, riwayatTarif, type JenisMetode } from '@/lib/metode-bayar'
+import { JENIS_METODE, pemakaianMetode, riwayatTarif, type JenisMetode } from '@/lib/metode-bayar'
 import { persenTeks, teksTarif } from '@/lib/mdr'
 import { statusMetodeAksi, tambahTarifAksi, ubahMetodeAksi } from '../aksi'
 import { medanTarif, medanUbahMetode } from '../medan'
@@ -19,7 +19,7 @@ export default async function RincianMetode({ params, searchParams }: { params: 
   const p = await wajibIzin('akun.metode_bayar', 'L')
   const id = Number((await params).id)
   if (!Number.isInteger(id) || id <= 0) notFound()
-  const [m, { pesan }, riwayat] = await Promise.all([db.paymentMethod.findUnique({ where: { id } }), searchParams, riwayatTarif(db, id)])
+  const [m, { pesan }, riwayat, dipakai] = await Promise.all([db.paymentMethod.findUnique({ where: { id } }), searchParams, riwayatTarif(db, id), pemakaianMetode(db, id)])
   if (!m) notFound()
   const bolehUbah = punyaIzin(p.izin, 'akun.metode_bayar', 'U')
   const bolehTarif = punyaIzin(p.izin, 'akun.metode_bayar', 'T')
@@ -35,7 +35,7 @@ export default async function RincianMetode({ params, searchParams }: { params: 
         <section className="kartu" aria-labelledby="j-data">
           <h2 id="j-data">Data metode</h2>
           {bolehUbah ? (
-            <FormMaster aksi={ubahMetodeAksi.bind(null, m.id)} medan={medanUbahMetode({ name: m.name, kind: m.kind, openDrawer: m.openDrawer })} tombol="Simpan perubahan" />
+            <FormMaster aksi={ubahMetodeAksi.bind(null, m.id)} medan={medanUbahMetode({ name: m.name, kind: m.kind, openDrawer: m.openDrawer, dipakai })} tombol="Simpan perubahan" />
           ) : (
             <dl className="rincian">
               <dt>Nama</dt>

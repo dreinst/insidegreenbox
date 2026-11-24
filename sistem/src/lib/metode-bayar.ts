@@ -4,7 +4,7 @@
 import { z } from 'zod'
 import { GalatAturan } from './aksi'
 import { catatAudit, selisih, type Konteks } from './audit'
-import type { Db, Tx } from './db'
+import type { Db, DbAtauTx, Tx } from './db'
 import { pastikanIzin, type Pengguna } from './izin-inti'
 import { PER_HALAMAN, labelKolom, pesanUnik, sesuaiHalaman, skemaCentang, skemaPersen, skemaTanggal, skemaTeksOpsional, skemaUang } from './master'
 import { keTarif, tarifPada, teksTarif } from './mdr'
@@ -87,6 +87,12 @@ export async function tambahMetode(db: Db, k: Konteks, aktor: Aktor, masukan: un
   }
 }
 
+// Jumlah pembayaran kasir dan setoran yang memakai metode ini.
+export async function pemakaianMetode(db: DbAtauTx, id: number) {
+  const [bayar, setor] = await Promise.all([db.salePayment.count({ where: { paymentMethodId: id } }), db.posSettlement.count({ where: { paymentMethodId: id } })])
+  return bayar + setor
+}
+
 export async function ubahMetode(db: Db, k: Konteks, aktor: Aktor, id: number, masukan: unknown) {
   pastikanIzin(aktor, MENU, 'U')
   const d = skemaUbahMetode.parse(masukan)
@@ -95,6 +101,12 @@ export async function ubahMetode(db: Db, k: Konteks, aktor: Aktor, id: number, m
       const m = await tx.paymentMethod.findUnique({ where: { id } })
       if (!m) throw new GalatAturan('Metode bayar tidak ditemukan.')
       if (await tx.paymentMethod.findFirst({ where: { name: { equals: d.name, mode: 'insensitive' }, NOT: { id } } })) throw new GalatAturan('Nama metode bayar sudah dipakai.', 'name')
+      // Temuan audit A-6 (KONTRAK 11 butir 136): jenis menentukan kas seharusnya shift, setoran, laporan, dan jurnal
+      // penjualan, jadi metode yang sudah dipakai pembayaran tidak bisa diganti jenisnya oleh siapa pun.
+      if (d.kind !== m.kind) {
+        const dipakai = await pemakaianMetode(tx, id)
+        if (dipakai) throw new GalatAturan(`Jenis tidak bisa diganti karena metode ini sudah dipakai di ${dipakai} pembayaran. Buat metode baru dengan jenis yang benar, lalu nonaktifkan metode ini.`, 'kind')
+      }
       if (d.kind === 'tunai' && m.kind !== 'tunai') {
         // Tunai selalu ber-MDR 0: tarif yang berlaku sekarang dan tarif yang akan datang harus 0.
         const sekarang = await tarifPada(tx, id, hariIniIso())

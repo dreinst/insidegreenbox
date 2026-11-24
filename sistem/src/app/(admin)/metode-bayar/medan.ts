@@ -2,11 +2,22 @@ import type { Medan } from '@/components/form-master'
 import { JENIS_METODE } from '@/lib/metode-bayar'
 import { tanggalIso } from '@/lib/waktu'
 
-type Awal = { name?: string; kind?: string; openDrawer?: boolean }
+// dipakai: jumlah pembayaran yang memakai metode ini. Bila lebih dari 0, jenis dikunci (temuan audit A-6).
+type Awal = { name?: string; kind?: string; openDrawer?: boolean; dipakai?: number }
 
 const medanDasar = (awal: Awal): Medan[] => [
   { jenis: 'teks', nama: 'name', label: 'Nama metode', awal: awal.name, wajib: true, maxLength: 40 },
-  { jenis: 'pilih', nama: 'kind', label: 'Jenis', awal: awal.kind ?? 'tunai', pilihan: Object.entries(JENIS_METODE).map(([nilai, label]) => ({ nilai, label })), wajib: true },
+  awal.dipakai && awal.kind
+    ? {
+        jenis: 'pilih',
+        nama: 'kind',
+        label: 'Jenis',
+        awal: awal.kind,
+        pilihan: [{ nilai: awal.kind, label: JENIS_METODE[awal.kind as keyof typeof JENIS_METODE] ?? awal.kind }],
+        wajib: true,
+        bantuan: `Sudah dipakai di ${awal.dipakai} pembayaran, jadi jenisnya tidak bisa diganti. Bila salah, buat metode baru lalu nonaktifkan yang ini.`,
+      }
+    : { jenis: 'pilih', nama: 'kind', label: 'Jenis', awal: awal.kind ?? 'tunai', pilihan: Object.entries(JENIS_METODE).map(([nilai, label]) => ({ nilai, label })), wajib: true },
 ]
 const medanLaci = (awal: Awal): Medan => ({ jenis: 'centang', nama: 'openDrawer', label: 'Buka laci kasir saat dipakai', awal: awal.openDrawer ?? false })
 
