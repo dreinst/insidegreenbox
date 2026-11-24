@@ -58,14 +58,8 @@ export function kasSeharusnya(modal: number, tunaiPenjualan: number, kasMasuk: n
   return modal + tunaiPenjualan + kasMasuk - kasKeluar
 }
 
-// Batas selisih dari saklar pos.batas_selisih_kas peran kasir pemilik shift (KONTRAK 11).
-// Saklar mati: setiap selisih perlu persetujuan. Saklar nyala tanpa batas: tidak pernah perlu persetujuan.
-export function perluPersetujuan(selisih: number, saklar: { nyala: boolean; batas: number | null } | undefined) {
-  if (selisih === 0) return false
-  if (!saklar?.nyala) return true
-  if (saklar.batas === null) return false
-  return Math.abs(selisih) > saklar.batas
-}
+// Panjang alasan paling pendek untuk selisih kas tutup shift (KONTRAK 11 butir 121).
+export const ALASAN_SELISIH_MIN = 3
 
 export const PECAHAN = [100000, 50000, 20000, 10000, 5000, 2000, 1000, 500, 200, 100] as const
 

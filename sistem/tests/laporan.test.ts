@@ -60,12 +60,12 @@ before(async () => {
   const kas1 = 200000 + Number(jual.j1.total) + Number(jual.j4.total)
   await tutupShift(db, k(kasir), kasir, s1, { kasDihitung: String(kas1) })
 
-  // Shift kasir2 tanggal D2 dengan kas kurang 20.000 (di atas batas, perlu persetujuan).
+  // Shift kasir2 tanggal D2 dengan kas kurang 20.000 (tahap 6C: beralasan, langsung Ditutup tanpa persetujuan).
   s2 = (await bukaShift(db, k(kasir2), kasir2, { modal: '100000' })).id
   await pindahShift(db, s2, D2, '08:00')
   await simpan('j5', { mode: 'takeaway', baris: [{ menuItemId: toko.menu.Croissant, qty: 2 }], bayar: tunai(100000) }, kasir2)
   await pindahJual(db, jual.j5.id, D2, '09:00')
-  await tutupShift(db, k(kasir2), kasir2, s2, { kasDihitung: String(100000 + Number(jual.j5.total) - 20000) })
+  await tutupShift(db, k(kasir2), kasir2, s2, { kasDihitung: String(100000 + Number(jual.j5.total) - 20000), catatan: 'Kembalian salah' })
 })
 after(() => hapus())
 
@@ -188,14 +188,14 @@ describe('tutup harian dan selisih kas', () => {
       ['Tunai', 'QRIS'],
     )
     const d2 = await tutupHarian(db, { tanggal: D2 })
-    assert.deepEqual(d2.baris.map((x) => [x.id, x.status, x.selisih]), [[s2, 'PerluPersetujuan', -20000]])
+    assert.deepEqual(d2.baris.map((x) => [x.id, x.status, x.selisih]), [[s2, 'Tutup', -20000]])
     const csv = keCsv(tabelHarian(r))
     assert.ok(csv.includes('Setoran Tunai'))
   })
   test('selisih per kasir untuk memantau pola', async () => {
     const r = await selisihKas(db, { dari: D1, sampai: D2 })
     const k2 = r.baris.find((b) => b.kasir === 'kasir2')!
-    assert.deepEqual([k2.n, k2.nBeda, k2.nKurang, k2.kurang, k2.bersih, k2.nOwner, k2.persenBeda], [1, 1, 1, 20000, -20000, 1, 100])
+    assert.deepEqual([k2.n, k2.nBeda, k2.nKurang, k2.kurang, k2.bersih, k2.nOwner, k2.persenBeda], [1, 1, 1, 20000, -20000, 0, 100])
     const k1 = r.baris.find((b) => b.kasir === 'kasir1')!
     assert.deepEqual([k1.n, k1.nBeda], [1, 0])
     assert.deepEqual(r.rinci.map((x) => x.id), [s2])

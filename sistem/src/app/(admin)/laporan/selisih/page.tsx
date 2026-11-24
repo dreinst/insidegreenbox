@@ -47,7 +47,7 @@ export default async function SelisihKas({ searchParams }: { searchParams: Promi
                   Selisih
                 </th>
                 <th scope="col">Status</th>
-                <th scope="col">Catatan</th>
+                <th scope="col">Alasan</th>
               </tr>
             </thead>
             <tbody>
@@ -68,7 +68,7 @@ export default async function SelisihKas({ searchParams }: { searchParams: Promi
                     {selisihTeks(Number(x.cashDiff ?? 0))}
                   </td>
                   <td data-label="Status">{x.status === 'PerluPersetujuan' ? STATUS_SHIFT.PerluPersetujuan : x.approver ? `Disetujui ${x.approver.name}` : STATUS_SHIFT[x.status]}</td>
-                  <td data-label="Catatan" className="pecah">
+                  <td data-label="Alasan" className="pecah">
                     {[x.note, x.approvalNote].filter(Boolean).join(' · ') || '-'}
                   </td>
                 </tr>

@@ -60,8 +60,9 @@ describe('matriks bawaan RANCANGAN 8.2', () => {
 })
 
 describe('saklar fitur RANCANGAN 8.3', () => {
-  test('25 saklar dengan nilai bawaan per peran (tahap 4B menambah pos.jual_stok_minus)', async () => {
-    assert.equal(await db.featureSwitch.count(), 25)
+  test('24 saklar dengan nilai bawaan per peran (tahap 4B menambah pos.jual_stok_minus, tahap 6C menghapus pos.batas_selisih_kas)', async () => {
+    assert.equal(await db.featureSwitch.count(), 24)
+    assert.equal(await db.featureSwitch.count({ where: { code: 'pos.batas_selisih_kas' } }), 0)
     for (const p of [owner, admin, kasir]) {
       const s = await muatSaklar(db, p.peran.id)
       for (const def of SAKLAR) {
@@ -71,10 +72,10 @@ describe('saklar fitur RANCANGAN 8.3', () => {
       }
     }
   })
-  test('batas tanggal mundur: Owner tanpa batas, Admin 1 hari; selisih kas 10.000', () => {
+  test('batas tanggal mundur: Owner tanpa batas, Admin 1 hari; saklar batas selisih kas sudah tidak ada', () => {
     assert.equal(owner.saklar['dok.tanggal_mundur'].batas, null)
     assert.equal(admin.saklar['dok.tanggal_mundur'].batas, 1)
-    assert.equal(kasir.saklar['pos.batas_selisih_kas'].batas, 10000)
+    assert.equal(kasir.saklar['pos.batas_selisih_kas'], undefined)
   })
   test('saklar tersimpan dan dicatat, dan Owner tidak bisa kehilangan log.lihat_semua', async () => {
     const r = await idPeran('admin')

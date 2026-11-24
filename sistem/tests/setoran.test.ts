@@ -1,5 +1,6 @@
 // Setoran POS tahap 5A: isi otomatis dari shift ditutup, tolak ganda, tunai butuh semua shift tanggal itu ditutup,
-// selisih dan shift "Perlu persetujuan" butuh Owner, batal dari Diposting, hapus draf, rekening bank, dan audit.
+// selisih tidak lagi butuh Owner (tahap 6C), shift lama "Perlu persetujuan" butuh Owner, batal dari Diposting,
+// hapus draf, rekening bank, dan audit.
 import assert from 'node:assert/strict'
 import { after, before, describe, test } from 'node:test'
 import { GalatAturan, GalatIzin } from '../src/lib/aksi'
@@ -34,7 +35,7 @@ async function shiftLengkap(aktor: Pengguna, tanggal: string, selisih = 0) {
   const b = await simpanPenjualan(db, k(aktor), aktor, { mode: 'takeaway', baris: [{ menuItemId: toko.menu.Croissant, qty: 2 }], bayar: [{ metodeId: toko.metode.QRIS, jumlah: 57750 }] })
   await pindahJual(db, a.id, tanggal, '10:00')
   await pindahJual(db, b.id, tanggal, '11:00')
-  await tutupShift(db, k(aktor), aktor, s.id, { kasDihitung: String(150000 + total + selisih) })
+  await tutupShift(db, k(aktor), aktor, s.id, { kasDihitung: String(150000 + total + selisih), catatan: selisih ? 'Selisih uji' : '' })
   return { id: s.id, tunai: total, qris: Number(b.total) }
 }
 
@@ -115,21 +116,17 @@ describe('setoran harian', () => {
     const baris = await db.posSettlementLine.count({ where: { posSettlementId: tunaiId } })
     assert.equal(baris, 2)
   })
-  test('selisih di atas batas butuh Owner: Admin ditolak, diajukan, Owner menyetujui dan memposting', async () => {
+  test('tahap 6C: setoran berselisih tidak lagi butuh Owner, Admin langsung memposting', async () => {
     const l = await db.posSettlementLine.findFirstOrThrow({ where: { posSettlementId: tunaiId, shiftId: sA.id } })
     const lain = await db.posSettlementLine.findFirstOrThrow({ where: { posSettlementId: tunaiId, NOT: { id: l.id } } })
     await ubahSetoran(db, k(admin), admin, tunaiId, { bankAccountId: String(rekening), mdrFee: '0', note: 'Setor ke BCA', [`actual_${l.id}`]: String(sA.tunai - 15000), [`catatan_${l.id}`]: 'Kurang', [`actual_${lain.id}`]: String(lain.actual), [`catatan_${lain.id}`]: '' })
     const st = await db.posSettlement.findUniqueOrThrow({ where: { id: tunaiId } })
     assert.equal(Number(st.diff), -15000)
-    await assert.rejects(postingSetoran(db, k(admin), admin, tunaiId), tolak(/butuh persetujuan Owner.*Ajukan dulu/))
-    await ajukanSetoran(db, k(admin), admin, tunaiId)
-    await assert.rejects(ubahSetoran(db, k(admin), admin, tunaiId, { mdrFee: '0' }), tolak(/masih Draft/))
-    await assert.rejects(postingSetoran(db, k(admin), admin, tunaiId), tolak(/Tunggu Owner/))
-    const p = await postingSetoran(db, k(owner), owner, tunaiId)
+    const p = await postingSetoran(db, k(admin), admin, tunaiId)
     assert.equal(p.status, 'Diposting')
-    assert.equal(p.approvedBy, owner.id)
+    assert.equal(p.approvedBy, null)
     const aksi = (await db.auditLog.findMany({ where: { docType: 'pos_settlement', docId: String(tunaiId) }, orderBy: { id: 'asc' }, select: { action: true } })).map((a) => a.action)
-    assert.deepEqual(aksi, ['setoran.tambah', 'setoran.ubah', 'setoran.ubah', 'setoran.ajukan', 'setoran.setujui', 'setoran.posting'])
+    assert.deepEqual(aksi, ['setoran.tambah', 'setoran.ubah', 'setoran.ubah', 'setoran.posting'])
     // Laporan membaca status setoran: semua pembayaran tanggal D sudah disetor.
     const r = await ringkasanPembayaran(db, { dari: D, sampai: D })
     assert.equal(r.jumlah.belum, 0)
@@ -149,11 +146,18 @@ describe('setoran harian', () => {
 })
 
 describe('shift perlu persetujuan dan draf', () => {
-  test('shift "Perlu persetujuan" membuat setoran butuh Owner walau selisih setoran nol', async () => {
+  test('shift lama "Perlu persetujuan" membuat setoran butuh Owner walau selisih setoran nol', async () => {
     const s = await shiftLengkap(kasir, D2, -30000)
+    assert.equal((await db.shift.findUniqueOrThrow({ where: { id: s.id } })).status, 'Tutup')
+    // Data lama dari sebelum tahap 6C: shift yang masih menunggu persetujuan Owner.
+    await db.shift.update({ where: { id: s.id }, data: { status: 'PerluPersetujuan', diffLimit: 10000n } })
     const h = await buatSetoranHarian(db, k(admin), admin, { tanggal: D2 })
     const tunai = h.dibuat.find((x) => x.metode === 'Tunai')!
-    await assert.rejects(postingSetoran(db, k(admin), admin, tunai.id), tolak(/masih perlu persetujuan/))
+    await assert.rejects(postingSetoran(db, k(admin), admin, tunai.id), tolak(/masih perlu persetujuan.*Ajukan dulu/))
+    await ajukanSetoran(db, k(admin), admin, tunai.id)
+    await assert.rejects(ubahSetoran(db, k(admin), admin, tunai.id, { mdrFee: '0' }), tolak(/masih Draft/))
+    await assert.rejects(postingSetoran(db, k(admin), admin, tunai.id), tolak(/Tunggu Owner/))
+    await kembalikanSetoran(db, k(admin), admin, tunai.id, { catatan: 'Tunggu shift disetujui' })
     await setujuiShift(db, k(owner), owner, s.id, { catatan: 'Sudah dicek' })
     const p = await postingSetoran(db, k(admin), admin, tunai.id)
     assert.equal(p.status, 'Diposting')

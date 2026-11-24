@@ -9,7 +9,7 @@ import { balikJurnalSetoran, jurnalSetoran } from './akuntansi/dokumen'
 import { tanggalJurnal } from './akuntansi/jurnal'
 import { catatAudit, type Konteks } from './audit'
 import type { Db, DbAtauTx, Tx } from './db'
-import { perluPersetujuan, persen, rupiah } from './hitung-kasir'
+import { persen, rupiah } from './hitung-kasir'
 import { pastikanIzin, punyaIzin, saklarNyala, type Pengguna } from './izin-inti'
 import { PER_HALAMAN, sesuaiHalaman } from './master'
 import { ambilNomor } from './nomor'
@@ -20,7 +20,8 @@ type Aktor = Pick<Pengguna, 'id' | 'izin' | 'saklar' | 'peran'>
 const MENU = 'kasir.setoran'
 const BATAS_UANG = 1_000_000_000
 
-// Shift yang dianggap sudah ditutup untuk setoran. "Perlu persetujuan" boleh masuk, tetapi setorannya butuh Owner.
+// Shift yang dianggap sudah ditutup untuk setoran. "Perlu persetujuan" (hanya shift lama sebelum tahap 6C) boleh
+// masuk, tetapi setorannya butuh Owner.
 const STATUS_TUTUP = ['Tutup', 'PerluPersetujuan'] as const
 
 const tanggalSah = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s) && new Date(`${s}T00:00:00Z`).toISOString().slice(0, 10) === s
@@ -335,12 +336,10 @@ export async function muatUlangSetoran(db: Db, k: Konteks, aktor: Aktor, id: num
 
 type SetoranTerkunci = Awaited<ReturnType<typeof kunciSetoran>>
 
-// Alasan setoran butuh Owner: selisih di atas batas saklar pos.batas_selisih_kas milik peran pelaku (aturan sama
-// dengan tutup shift), atau ada shift yang masih "Perlu persetujuan".
-export function alasanButuhOwner(st: Pick<SetoranTerkunci, 'diff'> & { posSettlementLines: { shift: { id: number; status: string } }[] }, aktor: Pick<Pengguna, 'saklar'>) {
+// Alasan setoran butuh Owner. Sejak tahap 6C selisih setoran tidak lagi butuh Owner (saklar pos.batas_selisih_kas
+// dihapus, KONTRAK 11 butir 122). Yang tersisa hanya shift lama yang masih "Perlu persetujuan".
+export function alasanButuhOwner(st: { posSettlementLines: { shift: { id: number; status: string } }[] }) {
   const alasan: string[] = []
-  const diff = Number(st.diff)
-  if (perluPersetujuan(diff, aktor.saklar['pos.batas_selisih_kas'])) alasan.push(`selisih ${diff < 0 ? '-' : '+'}${rupiah(Math.abs(diff))} melewati batas`)
   const tunggu = st.posSettlementLines.filter((l) => l.shift.status === 'PerluPersetujuan').map((l) => `#${l.shift.id}`)
   if (tunggu.length) alasan.push(`shift ${tunggu.join(', ')} masih perlu persetujuan`)
   return alasan
@@ -405,7 +404,7 @@ export async function postingSetoran(db: Db, k: Konteks, aktor: Aktor, id: numbe
     const dari = st.status as StatusDokumen
     if (!transisiSah('pelaksana', dari, 'Diposting')) throw new GalatAturan('Setoran ini tidak bisa diposting dari status sekarang.')
     await periksaPosting(tx, st)
-    const alasan = alasanButuhOwner(st, aktor)
+    const alasan = alasanButuhOwner(st)
     const butuhSetuju = alasan.length > 0
     const sekarang = new Date()
     const data: Prisma.PosSettlementUpdateInput = { status: 'Diposting', postedBy: aktor.id, postedAt: sekarang, updatedBy: aktor.id }

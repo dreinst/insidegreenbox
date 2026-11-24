@@ -186,7 +186,7 @@ describe('jurnal dokumen', () => {
     const m = await catatKasLaci(db, k(kasir), kasir, shiftId, { jenis: 'keluar', jumlah: '5000', alasan: 'Beli es batu' })
     assert.deepEqual((await isiJurnal('shift_cash_move', m.id))!.peta, { '6-1950': 5000n, '1-1100': -5000n })
     // Kas seharusnya 100.000 + 45.738 - 5.000 = 140.738; dihitung kurang 2.000.
-    await tutupShift(db, k(kasir), kasir, shiftId, { kasDihitung: '138738' })
+    await tutupShift(db, k(kasir), kasir, shiftId, { kasDihitung: '138738', catatan: 'Uang kurang 2.000' })
     assert.deepEqual((await isiJurnal('shift', shiftId))!.peta, { '6-1100': 2000n, '1-1100': -2000n })
   })
 

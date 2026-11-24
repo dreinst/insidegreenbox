@@ -94,7 +94,13 @@ function IsiTutup({ hasil, kirim }: { hasil: HasilAksi; kirim: (fd: FormData) =>
         </p>
       </details>
       <div className="kisi-form jarak-atas">
-        <KolomTeks nama="catatan" label="Catatan untuk Owner (boleh kosong)" hasil={hasil} maxLength={200} bantuan="Tulis alasan bila kamu tahu ada uang yang kurang atau lebih." />
+        <KolomTeks
+          nama="catatan"
+          label="Alasan selisih"
+          hasil={hasil}
+          maxLength={200}
+          bantuan="Wajib bila uang di laci kurang atau lebih dari catatan sistem, minimal 3 huruf. Kalau ada selisih dan alasan kosong, shift belum ditutup."
+        />
       </div>
       <div className="tombol-baris">
         <TombolKirim konfirmasi="Tutup shift sekarang? Sesudah ditutup tidak ada penjualan lagi di shift ini.">Tutup shift</TombolKirim>

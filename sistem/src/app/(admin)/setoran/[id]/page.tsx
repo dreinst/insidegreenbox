@@ -35,7 +35,7 @@ export default async function RincianSetoran({ params, searchParams }: { params:
     st.status === 'Draft' ? calonBaris(db, iso, st.paymentMethod, st.id) : [],
   ])
   const shiftBaru = calon.filter((c) => !st.posSettlementLines.some((l) => l.shiftId === c.shiftId))
-  const alasan = terbuka ? alasanButuhOwner(st, p) : []
+  const alasan = terbuka ? alasanButuhOwner(st) : []
   const bisa = (a: 'U' | 'H' | 'S' | 'P') => punyaIzin(p.izin, 'kasir.setoran', a)
   const bolehUbah = st.status === 'Draft' && bisa('U')
   const bolehPosting = terbuka && bisa('P') && (!alasan.length || bisa('S'))

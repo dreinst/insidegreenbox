@@ -42,7 +42,7 @@ export default async function RincianShift({ params, searchParams }: { params: P
       <PesanFlash kode={pesan} />
       {s.status === 'PerluPersetujuan' ? (
         <p className="pesan peringatan" role="status">
-          Kas {Number(s.cashDiff ?? 0) < 0 ? 'kurang' : 'lebih'} {rupiah(Math.abs(Number(s.cashDiff ?? 0)))}, melewati batas {s.diffLimit === null ? 'yang berlaku' : rupiah(s.diffLimit)}. Shift ini menunggu persetujuan Owner.
+          Kas {Number(s.cashDiff ?? 0) < 0 ? 'kurang' : 'lebih'} {rupiah(Math.abs(Number(s.cashDiff ?? 0)))}, melewati batas {s.diffLimit === null ? 'yang berlaku' : rupiah(s.diffLimit)}. Shift ini ditutup sebelum aturan alasan selisih berlaku dan masih menunggu persetujuan Owner.
         </p>
       ) : null}
 
@@ -89,8 +89,12 @@ export default async function RincianShift({ params, searchParams }: { params: P
               <dd className="tebal">{rupiah(s.countedCash ?? 0)}</dd>
               <dt>Selisih</dt>
               <dd className={Number(s.cashDiff ?? 0) === 0 ? '' : 'teks-merah tebal'}>{selisihTeks(s.cashDiff)}</dd>
-              <dt>Batas tanpa persetujuan</dt>
-              <dd>{s.diffLimit === null ? 'Tidak ada' : rupiah(s.diffLimit)}</dd>
+              {s.diffLimit !== null ? (
+                <>
+                  <dt>Batas tanpa persetujuan</dt>
+                  <dd>{rupiah(s.diffLimit)}</dd>
+                </>
+              ) : null}
             </dl>
             {lembar && Object.keys(lembar).length ? (
               <p className="redup kecil">
@@ -102,8 +106,8 @@ export default async function RincianShift({ params, searchParams }: { params: P
               </p>
             ) : null}
             {s.note ? (
-              <p>
-                <b>Catatan kasir:</b> {s.note}
+              <p className="pecah">
+                <b>{Number(s.cashDiff ?? 0) !== 0 ? 'Alasan selisih' : 'Catatan kasir'}:</b> {s.note}
               </p>
             ) : null}
             {s.approvedAt ? (
@@ -142,7 +146,7 @@ export default async function RincianShift({ params, searchParams }: { params: P
         {bolehSetuju ? (
           <section className="kartu" aria-labelledby="j-setuju">
             <h2 id="j-setuju">Setujui selisih</h2>
-            <p className="redup">Sesudah disetujui, shift berstatus Ditutup dan bisa masuk setoran.</p>
+            <p className="redup">Shift lama ini ditutup sebelum aturan alasan selisih. Sesudah disetujui, statusnya Ditutup.</p>
             <FormSetujui aksi={setujuiShiftAksi.bind(null, s.id)} />
           </section>
         ) : null}

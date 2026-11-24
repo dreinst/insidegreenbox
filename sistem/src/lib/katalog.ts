@@ -134,7 +134,8 @@ export type SaklarFitur = {
 const Y = (batas: number | null = null) => ({ nyala: true, batas })
 const N = (batas: number | null = null) => ({ nyala: false, batas })
 
-// 23 saklar RANCANGAN 8.3 ditambah log.lihat_semua dan, sejak tahap 4B, pos.jual_stok_minus (KONTRAK 4.4).
+// Saklar RANCANGAN 8.3 ditambah log.lihat_semua dan, sejak tahap 4B, pos.jual_stok_minus (KONTRAK 4.4).
+// tahap 6C: pos.batas_selisih_kas dihapus karena selisih kas tidak lagi butuh persetujuan Owner (KONTRAK 11 butir 122).
 export const SAKLAR: SaklarFitur[] = [
   { kode: 'beli.po_tanpa_pr', nama: 'Pesanan tanpa permintaan', keterangan: 'Pesanan pembelian boleh dibuat tanpa permintaan pembelian.', bawaan: { owner: Y(), admin: Y(), kasir: N() } },
   { kode: 'beli.ubah_qty_pr', nama: 'Ubah qty permintaan', keterangan: 'Qty di pesanan boleh berbeda dari permintaan.', bawaan: { owner: Y(), admin: Y(), kasir: N() } },
@@ -154,7 +155,6 @@ export const SAKLAR: SaklarFitur[] = [
   { kode: 'menu.ubah_hpp', nama: 'Ubah HPP menu', keterangan: 'Mengubah HPP menu secara manual.', bawaan: { owner: Y(), admin: N(), kasir: N() } },
   { kode: 'pos.void', nama: 'Void transaksi', keterangan: 'Membatalkan transaksi kasir. Kasir tanpa saklar ini meminta PIN Admin.', bawaan: { owner: Y(), admin: Y(), kasir: N() } },
   { kode: 'pos.lihat_void_nonsales', nama: 'Lihat void dan non penjualan', keterangan: 'Melihat transaksi void dan non penjualan di laporan.', bawaan: { owner: Y(), admin: Y(), kasir: N() } },
-  { kode: 'pos.batas_selisih_kas', nama: 'Batas selisih kas', keterangan: 'Selisih kas per shift yang boleh ditutup tanpa persetujuan Owner.', satuan: 'rupiah', bawaan: { owner: Y(10000), admin: Y(10000), kasir: Y(10000) } },
   { kode: 'dok.tanggal_mundur', nama: 'Tanggal mundur', keterangan: 'Tanggal dokumen boleh mundur sampai batas hari. Batas kosong berarti selama periode masih terbuka.', satuan: 'hari', bawaan: { owner: Y(null), admin: Y(1), kasir: N(0) } },
   { kode: 'dok.batal_posting', nama: 'Batalkan dokumen diposting', keterangan: 'Membatalkan dokumen yang sudah Diposting lewat gerak balik.', bawaan: { owner: Y(), admin: N(), kasir: N() } },
   { kode: 'b2b.ubah_harga', nama: 'Ubah harga jual B2B', keterangan: 'Mengubah harga jual B2B dari daftar harga pelanggan.', bawaan: { owner: Y(), admin: N(), kasir: N() } },
