@@ -196,7 +196,25 @@ export async function batalAnggaran(db: Db, k: Konteks, aktor: Aktor, id: number
       if (teks.length < 5) throw new GalatAturan('Tulis alasan pembatalan, minimal 5 huruf.', 'alasan')
     } else throw new GalatAturan('Anggaran ini sudah dibatalkan.')
     await tx.budget.update({ where: { id }, data: { status: 'Batal', cancelledBy: aktor.id, cancelledAt: new Date(), cancelReason: teks || null, updatedBy: aktor.id } })
-    await catatAudit(tx, k, { action: 'anggaran.batal', docType: 'budget', docId: id, summary: `Membatalkan anggaran ${b.no} ${b.name}${teks ? `. Alasan: ${teks}` : ''}`, before: { status: b.status }, after: { status: 'Batal' } })
+    // Membatalkan revisi yang sedang berlaku mengembalikan versi asalnya menjadi berlaku lagi, supaya tahun itu tidak
+    // tiba-tiba tanpa anggaran (audit C-10).
+    let dipulihkan: string | null = null
+    if (b.status === 'Disetujui' && b.revisedFromId) {
+      await kunciBaris(tx, 'budget', b.revisedFromId)
+      const asal = await tx.budget.findUnique({ where: { id: b.revisedFromId } })
+      if (asal && asal.status === 'Disetujui' && asal.replacedAt) {
+        await tx.budget.update({ where: { id: asal.id }, data: { replacedAt: null, replacedBy: null, updatedBy: aktor.id } })
+        dipulihkan = asal.no
+      }
+    }
+    await catatAudit(tx, k, {
+      action: 'anggaran.batal',
+      docType: 'budget',
+      docId: id,
+      summary: `Membatalkan anggaran ${b.no} ${b.name}${dipulihkan ? `; ${dipulihkan} berlaku lagi` : ''}${teks ? `. Alasan: ${teks}` : ''}`,
+      before: { status: b.status },
+      after: { status: 'Batal', ...(dipulihkan ? { dipulihkan } : {}) },
+    })
   })
 }
 
