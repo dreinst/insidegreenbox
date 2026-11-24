@@ -49,16 +49,27 @@ export async function namaDana(db: DbAtauTx, bankAccountId: number | null) {
 }
 
 // Akun inti: akun kas dan bank, serta akun yang dipetakan ke kunci yang hanya boleh digerakkan dokumennya sendiri
-// (persediaan, hutang, BDBF, kliring, laba). Akun ini tidak boleh dipilih sebagai lawan kas oleh siapa pun.
-const KUNCI_INTI = ['kas_laci', 'kas_besar', 'bank', 'kliring', 'persediaan', 'bdp', 'hutang_usaha', 'grni', 'ppn_masukan', 'uang_muka_beli', 'pajak_pb1', 'saldo_awal', 'laba_ditahan', 'laba_berjalan', 'penjualan', 'pendapatan_service', 'potongan_penjualan', 'hpp']
-const AWALAN_INTI = ['bank.', 'kliring.', 'persediaan.']
+// (persediaan, hutang, piutang, BDBF, kliring, aset tetap dan akumulasinya, laba). Akun ini tidak boleh dipilih sebagai
+// lawan kas oleh siapa pun, termasuk Owner; koreksinya lewat jurnal memorial (KONTRAK 11 butir C-1).
+export const KUNCI_INTI = [
+  'kas_laci', 'kas_besar', 'bank', 'kliring', 'persediaan', 'bdp', 'hutang_usaha', 'grni', 'ppn_masukan', 'uang_muka_beli', 'pajak_pb1',
+  'saldo_awal', 'laba_ditahan', 'laba_berjalan', 'penjualan', 'pendapatan_service', 'potongan_penjualan', 'hpp',
+  'piutang_usaha', 'penjualan_b2b', 'retur_penjualan', 'aset_tetap', 'akumulasi_penyusutan',
+]
+export const AWALAN_INTI = ['bank.', 'kliring.', 'persediaan.', 'aset_tetap.', 'akumulasi_penyusutan.']
 // Tanpa izin Setujui Kas (Admin), lawan hanya akun beban dan pendapatan yang bukan inti.
 const JENIS_ADMIN: AccountKind[] = ['Beban', 'Pendapatan']
 
 export async function idAkunInti(db: DbAtauTx) {
   const peta = await db.accountMapping.findMany({ select: { key: true, accountId: true } })
   const kas = await db.account.findMany({ where: { isCashBank: true }, select: { id: true } })
-  return new Set([...peta.filter((m) => KUNCI_INTI.includes(m.key) || AWALAN_INTI.some((a) => m.key.startsWith(a))).map((m) => m.accountId), ...kas.map((a) => a.id)])
+  // Akun aset dan akumulasi disalin ke aset saat aktivasi, jadi akun aset lama tetap inti walau pemetaannya diganti.
+  const aset = await db.fixedAsset.findMany({ where: { status: { in: ['aktif', 'dilepas'] } }, distinct: ['assetAccountId', 'accumAccountId'], select: { assetAccountId: true, accumAccountId: true } })
+  return new Set([
+    ...peta.filter((m) => KUNCI_INTI.includes(m.key) || AWALAN_INTI.some((a) => m.key.startsWith(a))).map((m) => m.accountId),
+    ...kas.map((a) => a.id),
+    ...aset.flatMap((a) => [a.assetAccountId, a.accumAccountId]).filter((x): x is number => x !== null),
+  ])
 }
 
 // Daftar akun yang boleh dipilih aktor sebagai lawan kas masuk atau keluar.

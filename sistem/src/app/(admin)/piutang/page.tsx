@@ -61,7 +61,7 @@ export default async function PiutangPelanggan({ searchParams }: { searchParams:
       {buku ? (
         <p className={`pesan ${buku.cocok ? 'sukses' : 'galat'}`} role="status" data-cocok-piutang={buku.cocok ? 'ya' : 'tidak'}>
           Piutang Usaha di buku besar {formatRupiah(buku.buku)}
-          {buku.cocok ? ', sama dengan saldo halaman ini.' : `, berbeda ${formatRupiah(buku.buku - buku.halaman)} dari saldo halaman ini. Jalankan npm run jurnal:bentuk-ulang untuk dokumen lama.`}{' '}
+          {buku.cocok ? ', sama dengan saldo halaman ini.' : `, berbeda ${formatRupiah(buku.buku - buku.halaman)} dari saldo halaman ini. Biasanya karena ada jurnal memorial ke Piutang Usaha atau dokumen lama yang belum dijurnal. Periksa buku besarnya, lalu koreksi lewat jurnal memorial bila perlu.`}{' '}
           {akunPiutang ? <Link href={`/buku-besar?akun=${akunPiutang.accountId}`}>Buka buku besar</Link> : null}
         </p>
       ) : null}

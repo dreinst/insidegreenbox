@@ -59,6 +59,16 @@ describe('akun lawan', () => {
     assert.ok(!a.has('3-1000') && !a.has('2-1900'), 'Admin tidak memilih modal atau hutang lain')
     assert.ok(o.has('3-1000') && o.has('2-1900'), 'Owner boleh modal dan hutang lain')
   })
+
+  test('C-1: piutang, aset tetap, akumulasi penyusutan, penjualan dan retur B2B tidak ditawarkan ke siapa pun, dan ditolak saat ditambah', async () => {
+    const a = new Set((await akunLawan(db, admin)).map((x) => x.code))
+    const o = new Set((await akunLawan(db, owner)).map((x) => x.code))
+    for (const inti of ['1-1450', '1-2100', '1-2900', '4-1100', '4-3100']) assert.ok(!a.has(inti) && !o.has(inti), `${inti} akun inti, bukan lawan kas`)
+    const c = await buatKas(db, k(owner), owner, { kind: 'masuk', date: tgl(), sumber: String(rekening), partyName: 'Pelanggan B2B' })
+    await galat(() => tambahBarisKas(db, k(owner), owner, c.id, { accountId: String(akun['1-1450']), amount: '250.000' }), /tidak boleh dipakai/)
+    await galat(() => tambahBarisKas(db, k(owner), owner, c.id, { accountId: String(akun['1-2900']), amount: '1.000' }), /tidak boleh dipakai/)
+    await hapusKas(db, k(owner), owner, c.id)
+  })
 })
 
 describe('kas keluar', () => {
