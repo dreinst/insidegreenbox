@@ -5,7 +5,7 @@
 import { GalatAturan } from '../aksi'
 import type { DbAtauTx, Tx } from '../db'
 import { des, keRupiah } from '../stok/angka'
-import { ledgerDok } from './dokumen'
+import { barisKoreksi, ledgerDok, nilaiDokGerak } from './dokumen'
 import { buatJurnal, buatJurnalBalik, dk, jurnalMaju, type BarisJurnal, type HasilJurnal, type KunciAkun } from './jurnal'
 import { kunciBank, kunciPersediaan } from './pemetaan'
 
@@ -15,18 +15,20 @@ export type JenisBeliJurnal = (typeof DOK_BELI_JURNAL)[number]
 // Akun kas atau bank pembayar: rekening (bank.<id> lalu bank) atau Kas Besar.
 export const kunciKasBank = (bankAccountId: number | null): KunciAkun => (bankAccountId ? kunciBank(bankAccountId) : 'kas_besar')
 
-// Baris persediaan dari gerak stok dokumen, dan nilai bersihnya (plus masuk, minus keluar).
+// Baris persediaan dari gerak stok dokumen, dan nilai bersih dokumennya (plus masuk, minus keluar). Koreksi nilai stok
+// minus (KONTRAK 11 butir 127) ikut sebagai pasangan Persediaan lawan HPP dan tidak dihitung di nilai bersih, supaya
+// BDBF, Kas, dan Hutang tetap sebesar nilai dokumen.
 async function persediaan(tx: DbAtauTx, docType: string, docId: number, balik: boolean, memo: string) {
   const gerak = await ledgerDok(tx, docType, docId, balik)
   const baris: BarisJurnal[] = []
   let bersih = 0n
   for (const g of gerak) {
-    const v = BigInt(g.value)
+    const v = nilaiDokGerak(g)
     if (v === 0n) continue
     baris.push(dk(kunciPersediaan(g.location_id), v, memo))
     bersih += v
   }
-  return { baris, bersih }
+  return { baris: [...baris, ...barisKoreksi(gerak, memo)], bersih }
 }
 
 // Penutup jurnal: sisa yang membuat seimbang masuk Selisih Harga Pembelian.

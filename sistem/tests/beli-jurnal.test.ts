@@ -22,6 +22,7 @@ import type { Pengguna } from '../src/lib/izin-inti'
 import { tambahRekening } from '../src/lib/rekening'
 import { isiBawaanStok } from '../src/lib/stok/bawaan'
 import { hariIni } from '../src/lib/stok/dokumen'
+import { buatPenyesuaian, tambahBarisPenyesuaian, ubahStatusPenyesuaian } from '../src/lib/stok/penyesuaian'
 import { tambahProduk } from '../src/lib/stok/produk'
 import { buatAktor, k, siapkanDbUji } from './db-uji'
 
@@ -220,6 +221,39 @@ describe('jurnal pembelian', () => {
     await cocokSemua('sesudah batal penerimaan')
     assert.equal(await saldoKunci('grni'), 0n, 'BDBF kembali 0')
     assert.equal(await saldoKunci('hutang_usaha'), 0n, 'Hutang kembali 0')
+  })
+})
+
+// Temuan audit B-1, jalur auditor: stok minus lalu Pembelian Langsung tunai. Kas berkurang sebesar total pembelian,
+// persediaan menutup minus dengan harga beli, dan koreksi nilainya ke HPP.
+describe('pembelian langsung menutup stok minus (B-1)', () => {
+  test('kas sebesar total, koreksi Persediaan lawan HPP, saldo nol bernilai nol, rata-rata berikutnya harga beli', async () => {
+    const cabang = await db.branch.findFirstOrThrow()
+    const minus = (await db.location.create({ data: { branchId: cabang.id, code: 'J-MINUS', name: 'Dapur minus', allowNegativeStock: true } })).id
+    const matcha = (await tambahProduk(db, k(owner), owner, { code: 'J-MATCHA', name: 'Matcha jurnal', kind: 'bahan', baseUnitId: String(gram), purchasable: 'on' })).id
+    await db.product.update({ where: { id: matcha }, data: { lastCost: 700 } })
+    const rusak = (await db.stockReason.findFirstOrThrow({ where: { name: 'Rusak' } })).id
+    const ps = await buatPenyesuaian(db, k(owner), owner, { locationId: String(minus), date: tgl() })
+    await tambahBarisPenyesuaian(db, k(owner), owner, ps.id, { productId: String(matcha), reasonId: String(rusak), direction: 'kurang', qty: '4' })
+    await ubahStatusPenyesuaian(db, k(owner), owner, ps.id, 'posting')
+    const saldo = () => db.stockBalance.findUniqueOrThrow({ where: { productId_locationId: { productId: matcha, locationId: minus } } })
+    assert.equal((await saldo()).value, -2800n)
+
+    const beli = async (qty: string) => {
+      const t = await buatLangsung(db, k(owner), owner, { supplierId: String(pemasok), locationId: String(minus), date: tgl(), payMode: 'tunai', sumber: 'kas' })
+      await tambahBarisLangsung(db, k(owner), owner, t.id, { jenis: 'barang', item: `${matcha}:${gram}`, qty, price: '900' })
+      await ubahStatusLangsung(db, k(owner), owner, t.id, 'posting')
+      return t.id
+    }
+    const a = await beli('4')
+    const s = await saldo()
+    assert.deepEqual([s.qty.toString(), s.value], ['0', 0n])
+    const j = await isiJurnal('direct_purchase', a)
+    assert.deepEqual(j.peta, { '1-1500': 2800n, '1-1200': -3600n, '5-1000': 800n })
+    await beli('100')
+    const s2 = await saldo()
+    assert.deepEqual([s2.qty.toString(), s2.value, s2.avgCost.toString()], ['100', 90000n, '900'])
+    await cocokSemua('sesudah pembelian langsung menutup minus')
   })
 })
 

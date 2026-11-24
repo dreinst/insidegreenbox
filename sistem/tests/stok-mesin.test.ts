@@ -141,13 +141,138 @@ describe('stok minus', () => {
     const [h] = await db.$transaction((tx) => catatGerak(tx, dok(), [{ productId: p, locationId: outlet, qty: '-5' }], { izinkanMinus: true }))
     assert.equal(h.nilai, -250n)
     assert.deepEqual(await saldo(p, outlet), { qty: '-3', nilai: -150n, rata: '50' })
-    // Masuk saat saldo minus: rata-rata dihitung dari saldo sesudahnya.
-    await db.$transaction((tx) => catatGerak(tx, dok(), [{ productId: p, locationId: outlet, qty: '5', hargaSatuan: '60' }]))
-    assert.deepEqual(await saldo(p, outlet), { qty: '2', nilai: 150n, rata: '75' })
+    // Masuk saat saldo minus (B-1): 3 g yang menutup minus dinilai dengan harga masuk, jadi sisa 2 g @ 60 dan
+    // selisih -30 menjadi koreksi nilai.
+    const [m] = await db.$transaction((tx) => catatGerak(tx, dok(), [{ productId: p, locationId: outlet, qty: '5', hargaSatuan: '60' }]))
+    assert.equal(m.nilai, 300n)
+    assert.equal(m.koreksi, -30n)
+    assert.deepEqual(await saldo(p, outlet), { qty: '2', nilai: 120n, rata: '60' })
 
     const lain = await db.location.create({ data: { branchId: (await db.branch.findFirstOrThrow()).id, code: 'MINUS', name: 'Lokasi minus', allowNegativeStock: true } })
     await db.$transaction((tx) => catatGerak(tx, dok(), [{ productId: p, locationId: lain.id, qty: '-1' }]))
     assert.equal((await saldo(p, lain.id)).qty, '-1')
+  })
+})
+
+// Temuan audit B-1: barang masuk yang menutup saldo minus. Bagian yang menutup minus dinilai dengan harga masuk, selisih
+// nilainya menjadi koreksi (kolom revalue, ikut di value), saldo nol selalu bernilai nol, dan harga rata-rata sesudahnya
+// sama dengan harga masuk.
+describe('barang masuk sesudah saldo minus (B-1)', () => {
+  const ledgerDok = (d: DokumenAsal, balik = false) => db.stockLedger.findMany({ where: { docType: d.docType, docId: d.docId, isReversal: balik }, orderBy: { id: 'asc' } })
+
+  test('skenario auditor: jual saat kurang, lalu beli', async () => {
+    const p = await produkBaru('B1A')
+    await db.$transaction((tx) => catatGerak(tx, dok(), [{ productId: p, locationId: outlet, qty: '2', nilai: 1400n }]))
+    // Kasir menjual 6 g saat tersisa 2 g (saklar pos.jual_stok_minus): saldo -4 g, -Rp 2.800.
+    const [jual] = await db.$transaction((tx) => catatGerak(tx, dok('sale'), [{ productId: p, locationId: outlet, qty: '-6' }], { izinkanMinus: true }))
+    assert.equal(jual.nilai, -4200n)
+    assert.deepEqual(await saldo(p, outlet), { qty: '-4', nilai: -2800n, rata: '700' })
+    // Beli 4 g @ 900: saldo 0 g bernilai 0, koreksi -800 (4 g yang sudah terjual ternyata berharga 900, bukan 700).
+    const beli1 = dok('direct_purchase')
+    const [b1] = await db.$transaction((tx) => catatGerak(tx, beli1, [{ productId: p, locationId: outlet, qty: '4', nilai: 3600n }], { hargaBeli: true }))
+    assert.equal(b1.nilai, 3600n)
+    assert.equal(b1.koreksi, -800n)
+    assert.equal(b1.hargaSatuan.toString(), '900')
+    assert.equal(b1.saldoNilai, 0n)
+    assert.deepEqual(await saldo(p, outlet), { qty: '0', nilai: 0n, rata: '900' })
+    const [g1] = await ledgerDok(beli1)
+    assert.equal(g1.value, 2800n)
+    assert.equal(g1.revalue, -800n)
+    // Beli 100 g @ 900: harga rata-rata 900, bukan 908.
+    await db.$transaction((tx) => catatGerak(tx, dok('direct_purchase'), [{ productId: p, locationId: outlet, qty: '100', nilai: 90000n }], { hargaBeli: true }))
+    assert.deepEqual(await saldo(p, outlet), { qty: '100', nilai: 90000n, rata: '900' })
+    assert.deepEqual(await periksaSaldo(db, { productId: p }), [])
+    assert.equal(await periksaRantai(db), 0)
+    assert.deepEqual(await db.$transaction((tx) => hitungUlangSaldo(tx, { productId: p })), [])
+  })
+
+  test('varian lokasi yang mengizinkan minus: kurang dari saldo 0, lalu tambah dua kali', async () => {
+    const p = await produkBaru('B1B')
+    const lokasi = await db.location.create({ data: { branchId: (await db.branch.findFirstOrThrow()).id, code: 'MINUS-B1', name: 'Lokasi minus B1', allowNegativeStock: true } })
+    await db.product.update({ where: { id: p }, data: { lastCost: des('320') } })
+    await db.$transaction((tx) => catatGerak(tx, dok(), [{ productId: p, locationId: lokasi.id, qty: '-5' }]))
+    assert.deepEqual(await saldo(p, lokasi.id), { qty: '-5', nilai: -1600n, rata: '320' })
+    await db.$transaction((tx) => catatGerak(tx, dok(), [{ productId: p, locationId: lokasi.id, qty: '5', hargaSatuan: '500' }]))
+    assert.deepEqual(await saldo(p, lokasi.id), { qty: '0', nilai: 0n, rata: '500' })
+    await db.$transaction((tx) => catatGerak(tx, dok(), [{ productId: p, locationId: lokasi.id, qty: '10', hargaSatuan: '320' }]))
+    assert.deepEqual(await saldo(p, lokasi.id), { qty: '10', nilai: 3200n, rata: '320' })
+  })
+
+  test('masuk yang belum menutup seluruh minus: sisa minus tetap bernilai rata-rata minusnya', async () => {
+    const p = await produkBaru('B1C')
+    await db.$transaction((tx) => catatGerak(tx, dok(), [{ productId: p, locationId: outlet, qty: '1', nilai: 700n }]))
+    await db.$transaction((tx) => catatGerak(tx, dok('sale'), [{ productId: p, locationId: outlet, qty: '-11' }], { izinkanMinus: true }))
+    assert.deepEqual(await saldo(p, outlet), { qty: '-10', nilai: -7000n, rata: '700' })
+    const [h] = await db.$transaction((tx) => catatGerak(tx, dok(), [{ productId: p, locationId: outlet, qty: '4', nilai: 3600n }], { izinkanMinus: true }))
+    assert.equal(h.koreksi, -800n)
+    assert.deepEqual(await saldo(p, outlet), { qty: '-6', nilai: -4200n, rata: '900' })
+    await db.$transaction((tx) => catatGerak(tx, dok(), [{ productId: p, locationId: outlet, qty: '6', nilai: 5400n }]))
+    assert.deepEqual(await saldo(p, outlet), { qty: '0', nilai: 0n, rata: '900' })
+    assert.deepEqual(await periksaSaldo(db, { productId: p }), [])
+  })
+
+  test('barang bonus (nilai 0) yang menutup minus: seluruh nilai minus menjadi koreksi', async () => {
+    const p = await produkBaru('B1D')
+    await db.$transaction((tx) => catatGerak(tx, dok(), [{ productId: p, locationId: outlet, qty: '2', nilai: 1000n }]))
+    await db.$transaction((tx) => catatGerak(tx, dok('sale'), [{ productId: p, locationId: outlet, qty: '-4' }], { izinkanMinus: true }))
+    const [h] = await db.$transaction((tx) => catatGerak(tx, dok(), [{ productId: p, locationId: outlet, qty: '10', nilai: 0n }]))
+    assert.equal(h.koreksi, 1000n)
+    assert.deepEqual(await saldo(p, outlet), { qty: '8', nilai: 0n, rata: '0' })
+  })
+
+  test('pembatalan pembelian yang menutup minus mengembalikan saldo minus persis dan membalik koreksinya', async () => {
+    const p = await produkBaru('B1E')
+    await db.$transaction((tx) => catatGerak(tx, dok(), [{ productId: p, locationId: outlet, qty: '2', nilai: 1400n }]))
+    await db.$transaction((tx) => catatGerak(tx, dok('sale'), [{ productId: p, locationId: outlet, qty: '-6' }], { izinkanMinus: true }))
+    const beli = dok('direct_purchase')
+    await db.$transaction((tx) => catatGerak(tx, beli, [{ productId: p, locationId: outlet, qty: '4', nilai: 3600n }]))
+    const [b] = await db.$transaction((tx) => balikDokumen(tx, { ...beli, tanggal: new Date('2026-11-21T00:00:00Z') }, { izinkanMinus: true }))
+    assert.equal(b.nilai, -3600n)
+    assert.equal(b.koreksi, 800n)
+    assert.deepEqual(await saldo(p, outlet), { qty: '-4', nilai: -2800n, rata: '700' })
+    const [g] = await ledgerDok(beli, true)
+    assert.equal(g.value, -2800n)
+    assert.equal(g.revalue, 800n)
+    assert.deepEqual(await periksaSaldo(db, { productId: p }), [])
+    assert.equal(await periksaRantai(db), 0)
+  })
+
+  test('void penjualan lain yang menutup minus ikut dinilai dengan harga gerak baliknya', async () => {
+    const p = await produkBaru('B1F')
+    await db.$transaction((tx) => catatGerak(tx, dok(), [{ productId: p, locationId: outlet, qty: '6', nilai: 3000n }]))
+    const jualC = dok('sale')
+    await db.$transaction((tx) => catatGerak(tx, jualC, [{ productId: p, locationId: outlet, qty: '-6' }]))
+    await db.$transaction((tx) => catatGerak(tx, dok(), [{ productId: p, locationId: outlet, qty: '1', nilai: 700n }]))
+    await db.$transaction((tx) => catatGerak(tx, dok('sale'), [{ productId: p, locationId: outlet, qty: '-5' }], { izinkanMinus: true }))
+    assert.deepEqual(await saldo(p, outlet), { qty: '-4', nilai: -2800n, rata: '700' })
+    // Void C: 6 g @ 500 kembali, 4 g menutup minus dengan harga 500, sisa 2 g @ 500.
+    const [h] = await db.$transaction((tx) => balikDokumen(tx, jualC))
+    assert.equal(h.nilai, 3000n)
+    assert.equal(h.koreksi, 800n)
+    assert.deepEqual(await saldo(p, outlet), { qty: '2', nilai: 1000n, rata: '500' })
+  })
+})
+
+// Temuan audit B-3: saldo plus yang memang bernilai 0 (barang bonus) keluar dengan nilai 0, bukan harga beli terakhir.
+describe('barang keluar dari saldo bernilai 0 (B-3)', () => {
+  test('barang bonus keluar bernilai 0 dan saldo plus tidak pernah bernilai minus', async () => {
+    const p = await produkBaru('B3A')
+    await db.product.update({ where: { id: p }, data: { lastCost: des('750') } })
+    await db.$transaction((tx) => catatGerak(tx, dok(), [{ productId: p, locationId: gudang, qty: '10', nilai: 0n }]))
+    const h = await db.$transaction((tx) => pindahStok(tx, dok('stock_transfer'), [{ productId: p, dari: gudang, ke: outlet, qty: '4' }]))
+    assert.equal(h[0].nilai, 0n)
+    assert.deepEqual(await saldo(p, gudang), { qty: '6', nilai: 0n, rata: '0' })
+    assert.deepEqual(await saldo(p, outlet), { qty: '4', nilai: 0n, rata: '0' })
+    await db.$transaction((tx) => pindahStok(tx, dok('stock_transfer'), [{ productId: p, dari: gudang, ke: outlet, qty: '6' }]))
+    assert.deepEqual(await saldo(p, gudang), { qty: '0', nilai: 0n, rata: '0' })
+    assert.deepEqual(await saldo(p, outlet), { qty: '10', nilai: 0n, rata: '0' })
+  })
+
+  test('saldo nol atau minus tetap memakai harga beli terakhir', async () => {
+    const p = await produkBaru('B3B')
+    await db.product.update({ where: { id: p }, data: { lastCost: des('750') } })
+    const [h] = await db.$transaction((tx) => catatGerak(tx, dok(), [{ productId: p, locationId: gudang, qty: '-2' }], { izinkanMinus: true }))
+    assert.equal(h.nilai, -1500n)
   })
 })
 

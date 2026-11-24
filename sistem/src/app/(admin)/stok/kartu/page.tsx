@@ -167,6 +167,11 @@ export default async function KartuStok({ searchParams }: { searchParams: Promis
                             </td>
                             <td data-label="Nilai" className="angka">
                               {formatNilai(b.value)}
+                              {b.revalue !== 0n ? (
+                                <small className="redup blok" title="Barang masuk menutup saldo minus. Bagian yang menutup minus dinilai dengan harga masuk, bedanya dijurnal ke HPP.">
+                                  termasuk koreksi stok minus {formatNilai(b.revalue)}
+                                </small>
+                              ) : null}
                             </td>
                             <td data-label="Saldo nilai" className="angka">
                               {formatNilai(b.balanceValue)}

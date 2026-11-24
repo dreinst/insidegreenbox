@@ -40,10 +40,27 @@ const NAMA_DOK: Record<string, string> = {
 }
 export const namaSumber = (t: string) => NAMA_DOK[t] ?? t
 
-export type BarisLedger = { location_id: number; line_id: number | null; value: bigint }
+// value sudah termasuk revalue (koreksi nilai saat barang masuk menutup saldo minus, KONTRAK 11 butir 127).
+export type BarisLedger = { location_id: number; line_id: number | null; value: bigint; revalue: bigint }
 
 export const ledgerDok = (tx: DbAtauTx, docType: string, docId: number, balik: boolean) =>
-  tx.$queryRaw<BarisLedger[]>`SELECT location_id, line_id, value FROM stock_ledger WHERE doc_type = ${docType} AND doc_id = ${docId} AND is_reversal = ${balik} ORDER BY id`
+  tx.$queryRaw<BarisLedger[]>`SELECT location_id, line_id, value, revalue FROM stock_ledger WHERE doc_type = ${docType} AND doc_id = ${docId} AND is_reversal = ${balik} ORDER BY id`
+
+// Nilai dokumen sebuah gerak (tanpa koreksi): ini yang dilawankan ke akun dokumennya.
+export const nilaiDokGerak = (g: BarisLedger) => BigInt(g.value) - BigInt(g.revalue)
+
+// Koreksi nilai stok minus dijurnal terpisah: Persediaan lokasi itu lawan HPP (KONTRAK 11 butir 127). Koreksi minus
+// (barang yang sudah terjual ternyata lebih mahal) menjadi debit HPP, koreksi plus menjadi kredit HPP.
+export function barisKoreksi(gerak: BarisLedger[], memo: string): BarisJurnal[] {
+  const hasil: BarisJurnal[] = []
+  const m = `${memo}: koreksi nilai stok minus`
+  for (const g of gerak) {
+    const r = BigInt(g.revalue)
+    if (r === 0n) continue
+    hasil.push(dk(kunciPersediaan(g.location_id), r, m), dk('hpp', -r, m))
+  }
+  return hasil
+}
 
 // Baris persediaan dari gerak stok: setiap gerak mendebit (masuk) atau mengkredit (keluar) akun persediaan lokasinya,
 // dan lawannya ke akun yang ditentukan per gerak. Lawan null berarti tidak ada lawan per gerak (dipakai bila lawannya
@@ -51,12 +68,12 @@ export const ledgerDok = (tx: DbAtauTx, docType: string, docId: number, balik: b
 function barisPersediaan(gerak: BarisLedger[], lawan: ((g: BarisLedger) => KunciAkun) | null, memo: string): BarisJurnal[] {
   const hasil: BarisJurnal[] = []
   for (const g of gerak) {
-    const v = BigInt(g.value)
+    const v = nilaiDokGerak(g)
     if (v === 0n) continue
     hasil.push(dk(kunciPersediaan(g.location_id), v, memo))
     if (lawan) hasil.push(dk(lawan(g), -v, memo))
   }
-  return hasil
+  return [...hasil, ...barisKoreksi(gerak, memo)]
 }
 
 // Untuk modul lain (misalnya pembelian): baris jurnal persediaan dari gerak stok sebuah dokumen, dengan satu lawan untuk
@@ -89,7 +106,7 @@ async function barisStok(tx: DbAtauTx, jenis: JenisStokJurnal, docId: number, ba
   const { lawan, sisa } = await lawanStok(tx, jenis, docId)
   const baris = barisPersediaan(gerak, lawan, memo)
   if (sisa) {
-    const bersih = gerak.reduce((n, g) => n + BigInt(g.value), 0n)
+    const bersih = gerak.reduce((n, g) => n + nilaiDokGerak(g), 0n)
     if (bersih !== 0n) baris.push(dk(sisa, -bersih, memo))
   }
   return baris

@@ -42,7 +42,11 @@ export type HasilGerak = {
   lineId: number | null
   qty: Desimal
   hargaSatuan: Desimal
+  // Nilai dokumen gerak ini (tanpa koreksi). Nilai di ledger = nilai + koreksi.
   nilai: bigint
+  // Koreksi nilai saat barang masuk menutup saldo nol atau minus (KONTRAK 11 butir 127). Plus berarti nilai persediaan
+  // bertambah, minus berkurang. Lawannya di jurnal adalah HPP. 0 untuk gerak lain.
+  koreksi: bigint
   saldoQty: Desimal
   saldoNilai: bigint
   hargaRata: Desimal
@@ -51,7 +55,8 @@ export type HasilGerak = {
 // Langkah internal. nilaiTetap dipakai gerak balik (nilai persis dokumen asal), nilaiIkut dipakai pindah stok
 // (nilai masuk = nilai keluar langkah ke-i, tanda dibalik).
 // tahap 4B: nilaiDari dipakai produksi (nilai masuk = jumlah nilai keluar langkah-langkah itu, tanda dibalik, + tambahan).
-type Langkah = Gerak & { nilaiTetap?: bigint; nilaiIkut?: number; nilaiDari?: { langkah: number[]; tambahan: bigint } }
+// koreksiTetap dipakai gerak balik barang keluar: koreksi gerak masuk asalnya ikut dibalik persis.
+type Langkah = Gerak & { nilaiTetap?: bigint; koreksiTetap?: bigint; nilaiIkut?: number; nilaiDari?: { langkah: number[]; tambahan: bigint } }
 
 type Saldo = { qty: Desimal; nilai: bigint; rata: Desimal }
 
@@ -115,6 +120,7 @@ async function terapkan(tx: Tx, dok: DokumenAsal, langkah: Langkah[], opsi: Opsi
     const qtyBaru = s.qty.plus(q)
     let nilai: bigint
     let harga: Desimal
+    let koreksi = 0n
     let rataBaru = s.rata
     if (q.isPos()) {
       // Masuk: nilai dari rujukan, nilai tetap, nilai, atau qty x harga. Harga rata-rata dihitung ulang.
@@ -127,8 +133,20 @@ async function terapkan(tx: Tx, dok: DokumenAsal, langkah: Langkah[], opsi: Opsi
         nilai = keRupiah(q.times(harga))
       }
       harga = keHarga(new Desimal(nilai.toString()).div(q))
-      const nilaiBaru = s.nilai + nilai
-      rataBaru = qtyBaru.gt(0) ? keHarga(new Desimal(nilaiBaru.toString()).div(qtyBaru)) : harga
+      if (s.qty.gt(0)) {
+        const nilaiBaru = s.nilai + nilai
+        rataBaru = qtyBaru.gt(0) ? keHarga(new Desimal(nilaiBaru.toString()).div(qtyBaru)) : harga
+      } else {
+        // Saldo sebelumnya nol atau minus (KONTRAK 11 butir 127). Bagian yang menutup minus dinilai dengan harga masuk ini
+        // (bagian sebanding dari nilai masuk), jadi sisa saldo plus hanya berisi barang masuk ini dan saldo nol bernilai 0.
+        // Sisa minus yang belum tertutup tetap bernilai rata-rata minusnya. Bedanya dengan saldo + nilai masuk adalah koreksi.
+        const tutup = Desimal.min(q, s.qty.neg())
+        const sasaran = qtyBaru.isNeg()
+          ? keRupiah(new Desimal(s.nilai.toString()).times(qtyBaru).div(s.qty))
+          : nilai - keRupiah(new Desimal(nilai.toString()).times(tutup).div(q))
+        koreksi = sasaran - (s.nilai + nilai)
+        rataBaru = qtyBaru.gt(0) ? keHarga(new Desimal(sasaran.toString()).div(qtyBaru)) : harga
+      }
       if (opsi.hargaBeli) hargaBeliBaru.set(l.productId, harga)
     } else {
       // Keluar: tolak stok minus kecuali diizinkan. Nilai = qty x harga rata-rata; bila qty jadi tepat 0, seluruh sisa
@@ -138,9 +156,13 @@ async function terapkan(tx: Tx, dok: DokumenAsal, langkah: Langkah[], opsi: Opsi
           `Stok ${p.name} di ${lokasiIni.name} tidak cukup: tersedia ${s.qty.toString().replace('.', ',')} ${p.baseUnit.symbol}, perlu ${q.neg().toString().replace('.', ',')} ${p.baseUnit.symbol}.`,
         )
       }
-      const rataPakai = s.rata.gt(0) ? s.rata : des(p.lastCost)
+      // Saldo plus memakai rata-ratanya walau 0 (barang bonus keluar bernilai 0, temuan audit B-3). Harga beli terakhir
+      // hanya dipakai bila saldo nol atau minus, yaitu saat lokasi belum punya harga.
+      const rataPakai = s.qty.gt(0) || s.rata.gt(0) ? s.rata : des(p.lastCost)
       const nilaiPasti = l.nilai !== undefined && l.nilai !== null
-      if (qtyBaru.isZero()) nilai = -s.nilai
+      // Gerak balik barang keluar membalik koreksi gerak masuk asalnya.
+      koreksi = l.koreksiTetap ?? 0n
+      if (qtyBaru.isZero()) nilai = -s.nilai - koreksi
       else if (l.nilaiTetap !== undefined) nilai = l.nilaiTetap
       else if (nilaiPasti) nilai = l.nilai!
       else nilai = keRupiah(q.times(rataPakai))
@@ -152,12 +174,13 @@ async function terapkan(tx: Tx, dok: DokumenAsal, langkah: Langkah[], opsi: Opsi
         if (qtyBaru.gt(0)) rataBaru = keHarga(new Desimal((s.nilai + nilai).toString()).div(qtyBaru))
       }
     }
-    const saldoNilai = s.nilai + nilai
-    // Gerak balik: harga rata-rata dihitung ulang dari saldo sesudahnya (RANCANGAN 2.3 butir 3).
-    if (balik && qtyBaru.gt(0)) rataBaru = keHarga(new Desimal(saldoNilai.toString()).div(qtyBaru))
+    const saldoNilai = s.nilai + nilai + koreksi
+    // Gerak balik: harga rata-rata dihitung ulang dari saldo sesudahnya (RANCANGAN 2.3 butir 3), termasuk saldo minus
+    // yang nilainya minus, supaya pembatalan pembelian penutup minus mengembalikan harga lama.
+    if (balik && (qtyBaru.gt(0) || (qtyBaru.isNeg() && saldoNilai < 0n))) rataBaru = keHarga(new Desimal(saldoNilai.toString()).div(qtyBaru))
     const [baris] = await tx.$queryRaw<{ id: number }[]>`
-      INSERT INTO stock_ledger (product_id, location_id, at, date, qty, unit_cost, value, balance_qty, avg_cost_after, balance_value, doc_type, doc_id, doc_no, line_id, is_reversal, created_by)
-      VALUES (${l.productId}, ${l.locationId}, now(), ${dok.tanggal.toISOString().slice(0, 10)}::date, ${q.toFixed(3)}::numeric, ${harga.toFixed(4)}::numeric, ${nilai}, ${qtyBaru.toFixed(3)}::numeric,
+      INSERT INTO stock_ledger (product_id, location_id, at, date, qty, unit_cost, value, revalue, balance_qty, avg_cost_after, balance_value, doc_type, doc_id, doc_no, line_id, is_reversal, created_by)
+      VALUES (${l.productId}, ${l.locationId}, now(), ${dok.tanggal.toISOString().slice(0, 10)}::date, ${q.toFixed(3)}::numeric, ${harga.toFixed(4)}::numeric, ${nilai + koreksi}, ${koreksi}, ${qtyBaru.toFixed(3)}::numeric,
               ${rataBaru.toFixed(4)}::numeric, ${saldoNilai}, ${dok.docType}, ${dok.docId}, ${dok.docNo}, ${l.lineId ?? null}, ${balik}, ${dok.oleh})
       RETURNING id`
     s.qty = qtyBaru
@@ -171,6 +194,7 @@ async function terapkan(tx: Tx, dok: DokumenAsal, langkah: Langkah[], opsi: Opsi
       qty: q,
       hargaSatuan: harga,
       nilai,
+      koreksi,
       saldoQty: qtyBaru,
       saldoNilai,
       hargaRata: rataBaru,
@@ -239,7 +263,15 @@ export async function balikDokumen(tx: Tx, dok: DokumenAsal, opsi: OpsiGerak = {
   if (await tx.stockLedger.count({ where: { docType: dok.docType, docId: dok.docId, isReversal: true } })) {
     throw new GalatAturan('Gerak stok dokumen ini sudah pernah dibalik.')
   }
-  const langkah: Langkah[] = asal.map((g) => ({ productId: g.productId, locationId: g.locationId, qty: des(g.qty).neg(), nilaiTetap: -g.value, lineId: g.lineId }))
+  // Nilai dokumen dan koreksi asal dibalik terpisah, supaya jurnal balik memakai lawan dan HPP yang sama dengan jurnal maju.
+  const langkah: Langkah[] = asal.map((g) => ({
+    productId: g.productId,
+    locationId: g.locationId,
+    qty: des(g.qty).neg(),
+    nilaiTetap: -(g.value - g.revalue),
+    koreksiTetap: g.revalue ? -g.revalue : undefined,
+    lineId: g.lineId,
+  }))
   return terapkan(tx, dok, langkah, opsi, true)
 }
 

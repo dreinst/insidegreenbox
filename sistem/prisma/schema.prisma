@@ -1070,6 +1070,9 @@ model StockLedger {
   avgCostAfter Decimal  @map("avg_cost_after") @db.Decimal(18, 4)
   // tahap 4A: saldo nilai sesudah gerak dan nomor dokumen asal untuk kartu stok.
   balanceValue BigInt   @default(0) @map("balance_value")
+  // Koreksi nilai saat barang masuk menutup saldo nol atau minus (KONTRAK 11 butir 127). Sudah termasuk di value,
+  // jadi nilai dokumen = value - revalue. Dijurnal ke HPP.
+  revalue      BigInt   @default(0)
   docType      String   @map("doc_type")
   docId        Int      @map("doc_id")
   docNo        String   @default("") @map("doc_no")

@@ -130,7 +130,8 @@ export async function ubahStatusProduk(db: Db, k: Konteks, aktor: Aktor, id: num
     const p = await tx.product.findUnique({ where: { id } })
     if (!p) throw new GalatAturan('Produk tidak ditemukan.')
     if (p.active === aktif) return p
-    if (!aktif && (await tx.stockBalance.count({ where: { productId: id, NOT: { qty: 0 } } }))) {
+    // Saldo bernilai bukan 0 juga menahan (sisa data lama sebelum aturan koreksi stok minus, temuan audit B-1).
+    if (!aktif && (await tx.stockBalance.count({ where: { productId: id, OR: [{ NOT: { qty: 0 } }, { NOT: { value: 0n } }] } }))) {
       throw new GalatAturan('Produk masih punya stok. Kosongkan dulu lewat penyesuaian atau opname, baru nonaktifkan.')
     }
     const b = await tx.product.update({ where: { id }, data: { active: aktif, updatedBy: aktor.id } })

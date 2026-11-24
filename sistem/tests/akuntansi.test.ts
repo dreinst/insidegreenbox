@@ -351,3 +351,51 @@ describe('bentuk ulang dan laporan', () => {
     assert.ok(keCsv(tabelMenu(m, { nilai: true })).includes('HPP per porsi'))
   })
 })
+
+// Temuan audit B-1: penjualan saat bahan kurang lalu barang masuk. Koreksi nilai dijurnal Persediaan lawan HPP, akun
+// lawan dokumen tetap sebesar nilai dokumennya, dan pembatalan membalik keduanya persis.
+describe('koreksi nilai stok minus (B-1)', () => {
+  test('jual saat kurang, lalu penyesuaian tambah menutup minus: koreksi ke HPP, persediaan buku sama dengan stok', async () => {
+    const gram = (await db.unit.findFirstOrThrow({ where: { name: 'gram' } })).id
+    const matcha = (await db.product.create({ data: { code: 'MATCHA-B1', name: 'Matcha uji', baseUnitId: gram, kind: 'bahan' } })).id
+    const koreksiCatatan = (await db.stockReason.findFirstOrThrow({ where: { name: 'Koreksi catatan' } })).id
+    const tambah = async (qty: string, harga: string) => {
+      const d = await buatPenyesuaian(db, k(owner), owner, { locationId: String(outlet), date: tgl() })
+      await tambahBarisPenyesuaian(db, k(owner), owner, d.id, { productId: String(matcha), reasonId: String(koreksiCatatan), direction: 'tambah', qty, unitCost: harga })
+      await ubahStatusPenyesuaian(db, k(owner), owner, d.id, 'ajukan')
+      await ubahStatusPenyesuaian(db, k(owner), owner, d.id, 'posting')
+      return d.id
+    }
+    await tambah('2', '700')
+    const r = await tambahResep(db, k(admin), admin, { kind: 'menu', name: 'Resep Croissant Matcha', menuItemId: String(toko.menu.Croissant) })
+    await simpanBahan(db, k(admin), admin, r.id, { productId: String(matcha), qty: '6' })
+    const jual = await simpanPenjualan(db, k(kasir), kasir, { mode: 'takeaway', baris: [{ menuItemId: toko.menu.Croissant, qty: 1 }], bayar: [{ metodeId: toko.metode.QRIS, jumlah: 28875 }] })
+    assert.equal((await isiJurnal('sale', jual.id))!.peta['5-1000'], 4200n)
+    const s1 = await db.stockBalance.findUniqueOrThrow({ where: { productId_locationId: { productId: matcha, locationId: outlet } } })
+    assert.equal(s1.value, -2800n)
+
+    const hppSebelum = await saldoAkun('5-1000')
+    const tutup = await tambah('4', '900')
+    const s2 = await db.stockBalance.findUniqueOrThrow({ where: { productId_locationId: { productId: matcha, locationId: outlet } } })
+    assert.equal(s2.qty.toString(), '0')
+    assert.equal(s2.value, 0n)
+    const j = (await isiJurnal('stock_adjustment', tutup))!
+    // Persediaan debit 3.600 (nilai dokumen) dan kredit 800 (koreksi); Selisih Persediaan kredit 3.600; HPP debit 800.
+    assert.deepEqual(j.peta, { '1-1500': 2800n, '5-3000': -3600n, '5-1000': 800n })
+    const baris = await db.journalLine.findMany({ where: { journalId: j.j.id }, include: { account: true }, orderBy: { id: 'asc' } })
+    assert.ok(baris.some((l) => l.account.code === '1-1500' && l.credit === 800n && /koreksi nilai stok minus/.test(l.memo ?? '')))
+    assert.equal(await saldoAkun('5-1000'), hppSebelum + 800n)
+    assert.ok((await cocokkanPersediaan(db)).cocok)
+
+    // Outlet tidak mengizinkan minus, jadi pembatalan baru bisa sesudah ada barang lagi. Jurnal balik membalik nilai
+    // dokumen dan koreksinya persis: 10 g @ 900 dikurangi 3.600 lalu ditambah koreksi balik 800.
+    await galat(() => ubahStatusPenyesuaian(db, k(owner), owner, tutup, 'batal', { alasan: 'Salah catat harga' }), /tidak cukup/)
+    await tambah('10', '900')
+    await ubahStatusPenyesuaian(db, k(owner), owner, tutup, 'batal', { alasan: 'Salah catat harga' })
+    const b = (await isiJurnal('stock_adjustment', tutup, true))!
+    for (const [kode, v] of Object.entries(j.peta)) assert.equal(b.peta[kode], -v, `akun ${kode} dibalik`)
+    const s3 = await db.stockBalance.findUniqueOrThrow({ where: { productId_locationId: { productId: matcha, locationId: outlet } } })
+    assert.deepEqual([s3.qty.toString(), s3.value], ['6', 6200n])
+    assert.ok((await cocokkanPersediaan(db)).cocok)
+  })
+})
