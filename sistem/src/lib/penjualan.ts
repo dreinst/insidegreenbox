@@ -43,6 +43,8 @@ export const skemaJual = z
     memberId: z.coerce.number().int().positive().nullable().default(null),
     baris: z.array(skemaBaris).min(1, 'Keranjang masih kosong.').max(100, 'Paling banyak 100 baris per transaksi.'),
     bayar: z.array(z.object({ metodeId: bulat('Metode bayar tidak sah.', 1, 2_000_000_000), jumlah: bulat('Jumlah bayar tidak sah.', 0, 1_000_000_000) })).max(10, 'Paling banyak 10 pembayaran.'),
+    // Total yang tampil di layar kasir saat Bayar ditekan (temuan audit A-9). Kosong untuk pemanggil lain.
+    totalLayar: bulat('Total layar tidak sah.', 0, 10_000_000_000).optional(),
   })
   .refine((d) => d.mode !== 'dinein' || d.meja !== '', { path: ['meja'], message: 'Isi nomor meja untuk dine in.' })
 
@@ -118,6 +120,11 @@ export async function simpanPenjualan(db: Db, k: Konteks, aktor: Aktor, masukan:
     const biaya = biayaDari(lokasi.branch)
     // Potongan member hanya untuk baris menu biasa; paket set tidak kena (admin lama, KONTRAK 11).
     const t = hitungKeranjang(baris.map((b) => ({ harga: Number(b.harga), qty: b.qty, jenis: b.jenis })), pctMember, biaya)
+    // Harga, potongan member, pajak, atau service bisa berubah selama layar kasir terbuka. Total yang sudah disebut ke
+    // pelanggan harus sama dengan yang disimpan (KONTRAK 11 butir 141).
+    if (d.totalLayar !== undefined && d.totalLayar !== t.total) {
+      throw new GalatAturan(`Harga, potongan, atau pajak berubah sejak layar kasir dibuka: total sekarang ${rupiah(t.total)}, di layar ${rupiah(d.totalLayar)}. Muat ulang layar kasir, lalu sebut total baru ke pelanggan.`, 'bayar')
+    }
 
     const idMetode = [...new Set(d.bayar.map((b) => b.metodeId))]
     const metode = await tx.paymentMethod.findMany({ where: { id: { in: idMetode }, active: true } })

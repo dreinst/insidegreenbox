@@ -180,7 +180,10 @@ describe('shift', () => {
     const j2 = await simpanPenjualan(db, k(kasir), kasir, { mode: 'takeaway', baris: [{ menuItemId: menu.Teh, qty: 1 }], bayar: [{ metodeId: metode.QRIS, jumlah: 0 }] }).catch((e) => e)
     assert.ok(tolakAturan(/Isi pembayaran/)(j2), 'QRIS 0 berarti belum bayar')
     const t2 = hitungTotal([{ harga: 18000, qty: 1, reguler: true }], 0, { pajak: 10, service: 5 }).total
-    const j3 = await simpanPenjualan(db, k(kasir), kasir, { mode: 'takeaway', baris: [{ menuItemId: menu.Teh, qty: 1 }], bayar: [{ metodeId: metode.QRIS, jumlah: t2 }] })
+    // Temuan audit A-9: total di layar yang berbeda dari hitungan server (harga berubah selama layar terbuka) ditolak.
+    const basi = await simpanPenjualan(db, k(kasir), kasir, { mode: 'takeaway', baris: [{ menuItemId: menu.Teh, qty: 1 }], bayar: [{ metodeId: metode.QRIS, jumlah: t2 }], totalLayar: t2 - 1000 }).catch((e) => e)
+    assert.ok(tolakAturan(/berubah sejak layar kasir dibuka/)(basi), 'total layar basi ditolak')
+    const j3 = await simpanPenjualan(db, k(kasir), kasir, { mode: 'takeaway', baris: [{ menuItemId: menu.Teh, qty: 1 }], bayar: [{ metodeId: metode.QRIS, jumlah: t2 }], totalLayar: t2 })
     assert.match(j3.no, /-0002$/)
 
     // Kasir tidak punya saklar pos.void: tanpa PIN ditolak, PIN salah ditolak, PIN Admin benar diterima.

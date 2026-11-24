@@ -120,6 +120,7 @@ export function LayarKasir({ kategori: semuaKategori, menu, paket, metode, biaya
     memberId: member?.id ?? null,
     baris: keranjang.map((b) => (b.jenis === 'paket' ? { menuSetId: b.id, qty: b.qty, catatan: b.catatan } : { menuItemId: b.id, qty: b.qty, catatan: b.catatan })),
     bayar: masukanBayar.map((b) => ({ metodeId: b.metodeId, jumlah: b.jumlah })),
+    totalLayar: t.total,
   })
 
   return (
