@@ -94,33 +94,58 @@ async function hitungUlang(tx: Tx, setoranId: number, mdrFee: bigint) {
   return tx.posSettlement.update({ where: { id: setoranId }, data: { expectedTotal, actualTotal, mdrFee, diff: actualTotal + mdrFee - expectedTotal } })
 }
 
-// Menambah baris shift yang belum ada dan memperbarui nilai sistem baris yang sudah ada (nilai disetor tidak diubah).
-// MDR kepala ikut ditambah sebesar MDR bawaan baris baru (jumlah MDR per transaksi shift itu).
+// Nilai sistem dan MDR terbaru untuk shift-shift yang sudah menjadi baris setoran, termasuk shift yang nilainya kini 0
+// karena semua transaksinya di-void (calonBaris membuang shift non tunai bernilai 0).
+async function nilaiBarisKini(tx: DbAtauTx, shiftIds: number[], metode: { id: number; kind: string }) {
+  if (!shiftIds.length) return new Map<number, { nilai: number; mdr: number }>()
+  const shifts = await tx.shift.findMany({ where: { id: { in: shiftIds } }, select: { id: true, openCash: true, countedCash: true, status: true } })
+  const per = await nilaiDanMdr(tx, shifts, metode)
+  return new Map(shiftIds.map((id) => [id, per.get(id) ?? { nilai: 0, mdr: 0 }]))
+}
+
+// Menambah baris shift yang belum ada dan memperbarui baris yang nilai sistemnya berubah (misalnya ada void).
+// MDR kepala ikut ditambah sebesar MDR bawaan baris baru (jumlah MDR per transaksi shift itu). Temuan audit A-3:
+// baris yang berubah ikut menghitung ulang MDR bawaannya (selisihnya masuk MDR kepala), dan nilai disetornya ikut
+// dihitung ulang bila masih sama dengan bawaan lama (nilai sistem lama dikurangi MDR bawaan lama). Nilai disetor yang
+// sudah diubah user, atau baris lama yang MDR bawaannya tidak tersimpan, tidak ditimpa dan dilaporkan di `periksa`.
 async function segarkanBaris(tx: Tx, st: Kepala & { date: Date; paymentMethod: { id: number; kind: string } }) {
   const iso = dariKolomTanggal(st.date)
   const calon = await calonBaris(tx, iso, st.paymentMethod, st.id)
-  const lama = await tx.posSettlementLine.findMany({ where: { posSettlementId: st.id } })
-  const perShift = new Map(lama.map((l) => [l.shiftId, l]))
-  let tambahMdr = 0
+  const lama = await tx.posSettlementLine.findMany({ where: { posSettlementId: st.id }, orderBy: { shiftId: 'asc' } })
+  const kini = await nilaiBarisKini(tx, lama.map((l) => l.shiftId), st.paymentMethod)
+  let tambahMdr = 0n
   const baru: number[] = []
   const berubah: number[] = []
+  const periksa: number[] = []
+  for (const l of lama) {
+    const v = kini.get(l.shiftId)!
+    const expected = BigInt(v.nilai)
+    if (l.expected === expected) continue
+    const bawaan = l.mdr !== null && l.actual === l.expected - l.mdr
+    const mdr = l.mdr === null ? null : BigInt(v.mdr)
+    const actual = bawaan ? expected - mdr! : l.actual
+    if (mdr !== null) tambahMdr += mdr - l.mdr!
+    await tx.posSettlementLine.update({ where: { id: l.id }, data: { expected, actual, diff: actual - expected, mdr } })
+    berubah.push(l.shiftId)
+    if (!bawaan) periksa.push(l.shiftId)
+  }
+  const ada = new Set(lama.map((l) => l.shiftId))
   for (const c of calon) {
-    const ada = perShift.get(c.shiftId)
-    if (ada) {
-      if (Number(ada.expected) !== c.expected) {
-        await tx.posSettlementLine.update({ where: { id: ada.id }, data: { expected: BigInt(c.expected), diff: ada.actual - BigInt(c.expected) } })
-        berubah.push(c.shiftId)
-      }
-      continue
-    }
-    tambahMdr += c.mdr
+    if (ada.has(c.shiftId)) continue
+    tambahMdr += BigInt(c.mdr)
     const actual = c.expected - c.mdr
-    await tx.posSettlementLine.create({ data: { posSettlementId: st.id, shiftId: c.shiftId, paymentMethodId: st.paymentMethod.id, expected: BigInt(c.expected), actual: BigInt(actual), diff: BigInt(actual - c.expected) } })
+    await tx.posSettlementLine.create({ data: { posSettlementId: st.id, shiftId: c.shiftId, paymentMethodId: st.paymentMethod.id, expected: BigInt(c.expected), actual: BigInt(actual), diff: BigInt(actual - c.expected), mdr: BigInt(c.mdr) } })
     baru.push(c.shiftId)
   }
-  const kepala = await hitungUlang(tx, st.id, st.mdrFee + BigInt(tambahMdr))
-  return { kepala, baru, berubah }
+  const mdrKepala = st.mdrFee + tambahMdr
+  const kepala = await hitungUlang(tx, st.id, mdrKepala < 0n ? 0n : mdrKepala)
+  return { kepala, baru, berubah, periksa }
 }
+
+const ringkasMuat = (no: string, s: { baru: number[]; berubah: number[]; periksa: number[] }) =>
+  `Memuat ulang baris setoran ${no}: ${s.baru.length} shift baru` +
+  (s.berubah.length ? `, nilai sistem shift ${s.berubah.map((x) => `#${x}`).join(', ')} berubah` : '') +
+  (s.periksa.length ? `, nilai disetor shift ${s.periksa.map((x) => `#${x}`).join(', ')} perlu diperiksa` : '')
 
 const kunciTanggal = (tx: Tx, iso: string) => tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`setoran:${iso}`}))`
 
@@ -162,9 +187,9 @@ export async function buatSetoranHarian(db: Db, k: Konteks, aktor: Aktor, masuka
             action: 'setoran.ubah',
             docType: 'pos_settlement',
             docId: ada.id,
-            summary: `Memuat ulang baris setoran ${ada.no}: ${s.baru.length} shift baru`,
+            summary: ringkasMuat(ada.no, s),
             before: { expectedTotal: ada.expectedTotal, actualTotal: ada.actualTotal, mdrFee: ada.mdrFee },
-            after: { expectedTotal: s.kepala.expectedTotal, actualTotal: s.kepala.actualTotal, mdrFee: s.kepala.mdrFee, shiftBaru: s.baru, shiftBerubah: s.berubah },
+            after: { expectedTotal: s.kepala.expectedTotal, actualTotal: s.kepala.actualTotal, mdrFee: s.kepala.mdrFee, shiftBaru: s.baru, shiftBerubah: s.berubah, shiftPerluDiperiksa: s.periksa },
           })
           hasil.diperbarui.push({ id: ada.id, no: ada.no, metode: m.name, baru: s.baru.length })
         }
@@ -307,17 +332,17 @@ export async function muatUlangSetoran(db: Db, k: Konteks, aktor: Aktor, id: num
     if (st.status !== 'Draft') throw new GalatAturan('Baris hanya bisa dimuat ulang saat setoran masih Draft.')
     await kunciTanggal(tx, dariKolomTanggal(st.date))
     const s = await segarkanBaris(tx, st)
-    if (!s.baru.length && !s.berubah.length) return { baru: 0 }
+    if (!s.baru.length && !s.berubah.length) return { baru: 0, berubah: 0, periksa: 0 }
     await tx.posSettlement.update({ where: { id }, data: { updatedBy: aktor.id } })
     await catatAudit(tx, k, {
       action: 'setoran.ubah',
       docType: 'pos_settlement',
       docId: id,
-      summary: `Memuat ulang baris setoran ${st.no}: ${s.baru.length} shift baru`,
+      summary: ringkasMuat(st.no, s),
       before: { expectedTotal: st.expectedTotal, actualTotal: st.actualTotal, mdrFee: st.mdrFee },
-      after: { expectedTotal: s.kepala.expectedTotal, actualTotal: s.kepala.actualTotal, mdrFee: s.kepala.mdrFee, shiftBaru: s.baru, shiftBerubah: s.berubah },
+      after: { expectedTotal: s.kepala.expectedTotal, actualTotal: s.kepala.actualTotal, mdrFee: s.kepala.mdrFee, shiftBaru: s.baru, shiftBerubah: s.berubah, shiftPerluDiperiksa: s.periksa },
     })
-    return { baru: s.baru.length }
+    return { baru: s.baru.length, berubah: s.berubah.length, periksa: s.periksa.length }
   })
 }
 
@@ -349,8 +374,9 @@ async function periksaPosting(tx: Tx, st: SetoranTerkunci) {
   const sisa = await calonBaris(tx, iso, st.paymentMethod, st.id)
   const kurang = sisa.filter((c) => !st.posSettlementLines.some((l) => l.shiftId === c.shiftId))
   if (kurang.length) throw new GalatAturan(`Shift ${kurang.map((c) => `#${c.shiftId}`).join(', ')} sudah ditutup tetapi belum masuk setoran ini. ${st.status === 'Draft' ? 'Tekan Muat ulang baris dulu.' : 'Kembalikan ke Draft lalu muat ulang baris.'}`)
-  const berubah = sisa.filter((c) => st.posSettlementLines.some((l) => l.shiftId === c.shiftId && Number(l.expected) !== c.expected))
-  if (berubah.length) throw new GalatAturan(`Nilai sistem shift ${berubah.map((c) => `#${c.shiftId}`).join(', ')} berubah sesudah setoran dibuat (ada void). ${st.status === 'Draft' ? 'Tekan Muat ulang baris dulu.' : 'Kembalikan ke Draft lalu muat ulang baris.'}`)
+  const kini = await nilaiBarisKini(tx, st.posSettlementLines.map((l) => l.shiftId), st.paymentMethod)
+  const berubah = st.posSettlementLines.filter((l) => Number(l.expected) !== kini.get(l.shiftId)!.nilai)
+  if (berubah.length) throw new GalatAturan(`Nilai sistem shift ${berubah.map((l) => `#${l.shiftId}`).join(', ')} berubah sesudah setoran dibuat (ada void). ${st.status === 'Draft' ? 'Tekan Muat ulang baris dulu.' : 'Kembalikan ke Draft lalu muat ulang baris.'}`)
 }
 
 const jejak = (st: { status: string }) => ({ status: st.status })

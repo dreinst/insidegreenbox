@@ -7,7 +7,7 @@ import { GalatAturan, GalatIzin } from '../src/lib/aksi'
 import type { Db } from '../src/lib/db'
 import type { Pengguna } from '../src/lib/izin-inti'
 import { ringkasanPembayaran, tutupHarian } from '../src/lib/laporan'
-import { simpanPenjualan } from '../src/lib/penjualan'
+import { simpanPenjualan, voidPenjualan } from '../src/lib/penjualan'
 import { tambahRekening, ubahStatusRekening } from '../src/lib/rekening'
 import { ajukanSetoran, batalSetoran, buatSetoranHarian, hapusSetoran, kembalikanSetoran, muatUlangSetoran, postingSetoran, ubahSetoran } from '../src/lib/setoran'
 import { bukaShift, setujuiShift, tutupShift } from '../src/lib/shift'
@@ -198,5 +198,61 @@ describe('tahap 6C: alasan selisih kosong', () => {
     assert.equal(p.status, 'Diposting')
     const baris = await db.posSettlementLine.findFirstOrThrow({ where: { posSettlementId: tunai.id }, include: { shift: true } })
     assert.equal(baris.shift.reasonMissing, true, 'baris setoran bisa menandai shift tanpa alasan')
+  })
+})
+
+// Temuan audit A-3: void sesudah setoran Draft dibuat, lalu Muat ulang baris.
+describe('muat ulang sesudah void (A-3)', () => {
+  test('nilai disetor dan MDR bawaan ikut dihitung ulang, yang sudah diubah user tidak ditimpa, shift bernilai 0 ikut', async () => {
+    const D4 = hariKe(-4)
+    const kasir3 = await buatAktor(db, 'kasir', 'kasir3')
+    const s = await bukaShift(db, k(kasir3), kasir3, { modal: '100000' })
+    await pindahShift(db, s.id, D4, '09:00')
+    const jual = []
+    // Total dengan service 5% dan pajak 10%: 32.340, 28.875, 40.425.
+    for (const [i, [menu, bayar]] of ([['Kopi Susu', 32340], ['Croissant', 28875], ['Nasi Goreng', 40425]] as const).entries()) {
+      const j = await simpanPenjualan(db, k(kasir3), kasir3, { mode: 'takeaway', baris: [{ menuItemId: toko.menu[menu], qty: 1 }], bayar: [{ metodeId: toko.metode.QRIS, jumlah: bayar }] })
+      await pindahJual(db, j.id, D4, `1${i}:00`)
+      jual.push(await db.sale.findUniqueOrThrow({ where: { id: j.id } }))
+    }
+    await tutupShift(db, k(kasir3), kasir3, s.id, { kasDihitung: '100000' })
+    const h = await buatSetoranHarian(db, k(admin), admin, { tanggal: D4 })
+    const qris = h.dibuat.find((x) => x.metode === 'QRIS')!
+    const mdr = (n: bigint) => BigInt(Math.round((Number(n) * 0.7) / 100))
+    const [a, b, c] = jual.map((j) => j.total)
+    const baris = () => db.posSettlementLine.findFirstOrThrow({ where: { posSettlementId: qris.id } })
+    const kepala = () => db.posSettlement.findUniqueOrThrow({ where: { id: qris.id } })
+    assert.equal((await kepala()).mdrFee, mdr(a) + mdr(b) + mdr(c))
+
+    // Void C sesudah shift ditutup (Owner). Muat ulang: nilai sistem, MDR, dan nilai disetor ikut turun, selisih tetap 0.
+    await voidPenjualan(db, k(owner), owner, jual[2].id, { alasan: 'Salah input' })
+    await assert.rejects(postingSetoran(db, k(admin), admin, qris.id), tolak(/berubah sesudah setoran dibuat/))
+    const m1 = await muatUlangSetoran(db, k(admin), admin, qris.id)
+    assert.deepEqual(m1, { baru: 0, berubah: 1, periksa: 0 })
+    let l = await baris()
+    assert.equal(l.expected, a + b)
+    assert.equal(l.mdr, mdr(a) + mdr(b))
+    assert.equal(l.actual, a + b - mdr(a) - mdr(b))
+    let st = await kepala()
+    assert.deepEqual([st.expectedTotal, st.actualTotal, st.mdrFee, st.diff], [a + b, a + b - mdr(a) - mdr(b), mdr(a) + mdr(b), 0n])
+    const audit = await db.auditLog.findFirstOrThrow({ where: { action: 'setoran.ubah', docId: String(qris.id) }, orderBy: { id: 'desc' } })
+    assert.match(audit.summary, new RegExp(`shift #${s.id} berubah`))
+
+    // Nilai disetor yang diubah user (sesuai mutasi) tidak ditimpa sesudah void berikutnya, dan dilaporkan.
+    await ubahSetoran(db, k(admin), admin, qris.id, { bankAccountId: String(rekening), mdrFee: String(st.mdrFee), note: '', [`actual_${l.id}`]: '60000', [`catatan_${l.id}`]: 'Sesuai mutasi' })
+    await voidPenjualan(db, k(owner), owner, jual[1].id, { alasan: 'Salah input' })
+    assert.deepEqual(await muatUlangSetoran(db, k(admin), admin, qris.id), { baru: 0, berubah: 1, periksa: 1 })
+    l = await baris()
+    assert.deepEqual([l.expected, l.actual, l.mdr], [a, 60000n, mdr(a)])
+    assert.equal((await kepala()).mdrFee, mdr(a))
+
+    // Semua transaksi QRIS shift itu di-void: nilai sistem 0 tetap terdeteksi saat posting dan saat muat ulang.
+    await voidPenjualan(db, k(owner), owner, jual[0].id, { alasan: 'Salah input' })
+    await assert.rejects(postingSetoran(db, k(admin), admin, qris.id), tolak(/berubah sesudah setoran dibuat/))
+    await muatUlangSetoran(db, k(admin), admin, qris.id)
+    l = await baris()
+    assert.deepEqual([l.expected, l.mdr], [0n, 0n])
+    st = await kepala()
+    assert.deepEqual([st.expectedTotal, st.mdrFee], [0n, 0n])
   })
 })

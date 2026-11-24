@@ -1606,6 +1606,8 @@ model PosSettlementLine {
   actual          BigInt        @default(0)
   diff            BigInt        @default(0)
   note            String        @default("")
+  // MDR bawaan shift itu saat baris dibuat atau dimuat ulang (KONTRAK 11 butir 131). Kosong untuk baris lama.
+  mdr             BigInt?
   // tahap 5A: salinan metode bayar kepala dan penanda batal, untuk indeks unik sebagian
   // (shift_id, payment_method_id) WHERE NOT cancelled di migrasi: satu shift dan metode hanya di satu setoran
   // yang tidak Batal.

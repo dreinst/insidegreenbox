@@ -20,6 +20,8 @@ const PESAN: Record<string, string> = {
   // tahap 5A
   'setoran-dibuat': 'Setoran dibuat dari shift yang sudah ditutup.',
   'setoran-muat': 'Baris setoran dimuat ulang dari shift yang sudah ditutup.',
+  'setoran-berubah': 'Nilai sistem shift berubah sejak setoran dibuat (ada void). Nilai disetor dan MDR yang masih bawaan sudah dihitung ulang. Periksa kolom selisih sebelum posting.',
+  'setoran-periksa': 'Nilai sistem shift berubah sejak setoran dibuat (ada void). Nilai disetor yang sudah kamu ubah tidak ditimpa, jadi periksa lagi nilai disetor dan MDR-nya sebelum posting.',
   'setoran-tersimpan': 'Setoran tersimpan.',
   'setoran-ajukan': 'Setoran diajukan ke Owner.',
   'setoran-kembali': 'Setoran dikembalikan ke Draft.',
@@ -28,10 +30,13 @@ const PESAN: Record<string, string> = {
   'setoran-hapus': 'Draf setoran dihapus.',
 }
 
+// Pesan yang meminta pengguna memeriksa sesuatu tampil berwarna peringatan.
+const PESAN_AWAS = new Set(['setoran-berubah', 'setoran-periksa'])
+
 export function PesanFlash({ kode }: { kode?: string }) {
   const teks = kode ? PESAN[kode] : undefined
   return teks ? (
-    <p className="pesan sukses" role="status">
+    <p className={`pesan ${PESAN_AWAS.has(kode!) ? 'awas' : 'sukses'}`} role="status">
       {teks}
     </p>
   ) : null

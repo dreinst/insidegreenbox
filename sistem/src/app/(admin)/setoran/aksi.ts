@@ -44,7 +44,7 @@ export async function muatUlangAksi(id: number, sebelum: HasilAksi, fd: FormData
   return jalankanAksi(sebelum, fd, 'kasir.setoran', 'U', async (p) => {
     const h = await muatUlangSetoran(db, await konteksPermintaan(p), p, id)
     revalidatePath(`/setoran/${id}`)
-    redirect(`/setoran/${id}?pesan=${h.baru ? 'setoran-muat' : 'tetap'}`)
+    redirect(`/setoran/${id}?pesan=${h.periksa ? 'setoran-periksa' : h.berubah ? 'setoran-berubah' : h.baru ? 'setoran-muat' : 'tetap'}`)
   })
 }
 
