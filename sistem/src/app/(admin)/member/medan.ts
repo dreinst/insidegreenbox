@@ -1,12 +1,13 @@
 import type { Medan } from '@/components/form-master'
 
-export function medanMember(awal: { name?: string; wa?: string; visits?: string; discountOn?: boolean; note?: string } = {}): Medan[] {
+// aturTingkat: pemegang Ubah menu.tingkat. Tanpa itu, isian kunjungan dan potongan tidak ditampilkan (temuan audit A-1).
+export function medanMember(awal: { name?: string; wa?: string; visits?: string; discountOn?: boolean; note?: string } = {}, aturTingkat = true): Medan[] {
   return [
     { jenis: 'teks', nama: 'name', label: 'Nama member', awal: awal.name, wajib: true, maxLength: 80 },
     { jenis: 'teks', nama: 'wa', label: 'Nomor WhatsApp', awal: awal.wa, wajib: true, inputMode: 'tel', placeholder: '0812 3456 7890', bantuan: 'Boleh ditulis 08..., +62..., atau 62.... Disimpan dalam format 62.' },
-    { jenis: 'angka', nama: 'visits', label: 'Jumlah kunjungan', awal: awal.visits ?? '0', bantuan: 'Menentukan tingkat Greenbox Key. Kasir menambahnya otomatis nanti.' },
+    ...(aturTingkat ? [{ jenis: 'angka', nama: 'visits', label: 'Jumlah kunjungan', awal: awal.visits ?? '0', bantuan: 'Menentukan tingkat Greenbox Key. Kasir menambahnya otomatis nanti.' } satisfies Medan] : []),
     { jenis: 'area', nama: 'note', label: 'Catatan', awal: awal.note, maxLength: 300, lebar: true },
-    { jenis: 'centang', nama: 'discountOn', label: 'Potongan tingkat berlaku untuk member ini', awal: awal.discountOn ?? true },
+    ...(aturTingkat ? [{ jenis: 'centang', nama: 'discountOn', label: 'Potongan tingkat berlaku untuk member ini', awal: awal.discountOn ?? true } satisfies Medan] : []),
   ]
 }
 

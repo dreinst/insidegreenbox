@@ -284,6 +284,23 @@ describe('member dan tingkat', () => {
     assert.equal(await tier(), 'Guest Key')
     await ubahStatusTingkat(db, k(owner), owner, house.id, true)
   })
+  // Temuan audit A-1: Kasir (menu.member L T, menu.tingkat L) tidak bisa mengisi kunjungan atau mematikan potongan.
+  test('kunjungan dan potongan dari Kasir diabaikan, pemegang Ubah tingkat tetap bisa mengaturnya', async () => {
+    const m = await tambahMember(db, k(kasir), kasir, { name: 'Teman Kasir', wa: '+62 857-1111-2222', visits: '999', discountOn: '', note: '' })
+    const simpan = await db.member.findUniqueOrThrow({ where: { id: m.id }, include: { tier: true } })
+    assert.equal(simpan.visits, 0)
+    assert.equal(simpan.discountOn, true)
+    assert.equal(simpan.tier?.name, 'Guest Key')
+    // Peran tambahan yang boleh Ubah member tetapi tidak Ubah tingkat: kunjungan dan potongan tetap.
+    const r = await db.role.create({ data: { code: 'kasir_plus', name: 'Kasir plus' } })
+    await db.rolePermission.create({ data: { roleId: r.id, menuCode: 'menu.member', canView: true, canCreate: true, canUpdate: true } })
+    const plus = await buatAktor(db, 'kasir_plus', 'kasirplus1')
+    await ubahMember(db, k(plus), plus, m.id, { name: 'Teman Kasir', wa: '085711112222', visits: '500', discountOn: '', note: 'teman' })
+    const ubah = await db.member.findUniqueOrThrow({ where: { id: m.id } })
+    assert.deepEqual([ubah.visits, ubah.discountOn, ubah.note], [0, true, 'teman'])
+    await ubahMember(db, k(admin), admin, m.id, { name: 'Teman Kasir', wa: '085711112222', visits: '12', discountOn: 'on', note: 'teman' })
+    assert.equal((await db.member.findUniqueOrThrow({ where: { id: m.id } })).visits, 12)
+  })
   test('tingkat tidak boleh bernama atau bersyarat sama', async () => {
     await galat(() => tambahTingkat(db, k(owner), owner, { name: 'guest key', minVisits: '3', discountPct: '5', perk: '' }), 'name')
     await galat(() => tambahTingkat(db, k(owner), owner, { name: 'Tamu Baru', minVisits: '10', discountPct: '5', perk: '' }), 'minVisits')

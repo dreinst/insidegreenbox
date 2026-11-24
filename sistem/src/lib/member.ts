@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { GalatAturan } from './aksi'
 import { catatAudit, selisih, type Konteks } from './audit'
 import type { Db, Tx } from './db'
-import { pastikanIzin, type Pengguna } from './izin-inti'
+import { pastikanIzin, punyaIzin, type Pengguna } from './izin-inti'
 import { PER_HALAMAN, pesanUnik, sesuaiHalaman, skemaCentang, skemaPersen, skemaTeksOpsional, labelKolom } from './master'
 import { normalisasiWa } from './wa'
 
@@ -126,9 +126,15 @@ async function waDipakai(tx: Tx, wa: string, kecuali?: number) {
   if (ada) throw new GalatAturan(`Nomor WhatsApp ini sudah dipakai member ${ada.name}.`, 'wa')
 }
 
+// Kunjungan dan saklar potongan menentukan tingkat dan potongan, jadi hanya pemegang Ubah menu.tingkat yang boleh
+// mengisinya (KONTRAK 11 butir 9 dan 129, temuan audit A-1). Pengguna lain: member baru mulai 0 kunjungan dengan
+// potongan bawaan nyala, dan ubah member tidak menyentuh keduanya.
+export const bolehAturTingkat = (aktor: Pick<Aktor, 'izin'>) => punyaIzin(aktor.izin, 'menu.tingkat', 'U')
+
 export async function tambahMember(db: Db, k: Konteks, aktor: Aktor, masukan: unknown) {
   pastikanIzin(aktor, MENU, 'T')
-  const d = skemaMember.parse(masukan)
+  const isi = skemaMember.parse(masukan)
+  const d = bolehAturTingkat(aktor) ? isi : { ...isi, visits: 0, discountOn: true }
   const wa = bacaWa(d.wa)
   try {
     return await db.$transaction(async (tx) => {
@@ -152,12 +158,13 @@ export async function tambahMember(db: Db, k: Konteks, aktor: Aktor, masukan: un
 
 export async function ubahMember(db: Db, k: Konteks, aktor: Aktor, id: number, masukan: unknown) {
   pastikanIzin(aktor, MENU, 'U')
-  const d = skemaMember.parse(masukan)
-  const wa = bacaWa(d.wa)
+  const isi = skemaMember.parse(masukan)
+  const wa = bacaWa(isi.wa)
   try {
     return await db.$transaction(async (tx) => {
       const m = await tx.member.findUnique({ where: { id } })
       if (!m) throw new GalatAturan('Member tidak ditemukan.')
+      const d = bolehAturTingkat(aktor) ? isi : { ...isi, visits: m.visits, discountOn: m.discountOn }
       await waDipakai(tx, wa, id)
       const tingkat = await tingkatUntuk(tx, d.visits)
       const s = selisih({ name: m.name, wa: m.wa, visits: m.visits, discountOn: m.discountOn, note: m.note }, { name: d.name, wa, visits: d.visits, discountOn: d.discountOn, note: d.note })

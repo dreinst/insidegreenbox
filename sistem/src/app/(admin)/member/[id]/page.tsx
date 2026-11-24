@@ -7,7 +7,7 @@ import { KepalaHalaman, Lencana } from '@/components/umum'
 import { db } from '@/lib/db'
 import { wajibIzin } from '@/lib/izin'
 import { punyaIzin } from '@/lib/izin-inti'
-import { formatWa, potonganMember } from '@/lib/member'
+import { bolehAturTingkat, formatWa, potonganMember } from '@/lib/member'
 import { formatWaktu } from '@/lib/waktu'
 import { statusMemberAksi, ubahMemberAksi } from '../aksi'
 import { medanMember } from '../medan'
@@ -35,7 +35,7 @@ export default async function RincianMember({ params, searchParams }: { params: 
           {bolehUbah ? (
             <FormMaster
               aksi={ubahMemberAksi.bind(null, m.id)}
-              medan={medanMember({ name: m.name, wa: m.wa, visits: String(m.visits), discountOn: m.discountOn, note: m.note })}
+              medan={medanMember({ name: m.name, wa: m.wa, visits: String(m.visits), discountOn: m.discountOn, note: m.note }, bolehAturTingkat(p))}
               tombol="Simpan perubahan"
             />
           ) : (
