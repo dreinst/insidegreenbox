@@ -92,6 +92,11 @@ export default async function RincianRekonsiliasi({ params, searchParams }: { pa
           ['Selisih', tanda(h.diff), h.diff !== 0n],
         ]}
       />
+      {h.sesudahPosting.length ? (
+        <p className="pesan galat" role="status" data-jurnal-sesudah-posting>
+          Sesudah rekonsiliasi ini diposting, ada {h.sesudahPosting.length} baris jurnal bank baru bertanggal sampai {formatTanggal(r.periodTo)} senilai {tanda(h.nilaiSesudahPosting)} ({h.sesudahPosting.map((l) => l.docNo || l.no).join(', ')}). Angka di atas tetap angka saat posting. Baris itu muncul sebagai jurnal belum cair di rekonsiliasi berikutnya.
+        </p>
+      ) : null}
       <div className="kisi">
         <section className="kartu" aria-labelledby="j-cek">
           <h2 id="j-cek">Syarat posting</h2>

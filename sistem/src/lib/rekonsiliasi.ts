@@ -238,14 +238,14 @@ export async function ubahKepalaRekonsiliasi(db: Db, k: Konteks, aktor: Aktor, i
 
 // --- Saldo buku, belum cair, dan selisih ---
 
-type BarisCalon = { id: number; journalId: number; no: string; docNo: string; sourceType: string; sourceId: number | null; date: Date; memo: string; debit: bigint; credit: bigint; matchedLine: number | null; matchedDate: Date | null; reversed: boolean }
+type BarisCalon = { id: number; journalId: number; no: string; docNo: string; sourceType: string; sourceId: number | null; date: Date; memo: string; debit: bigint; credit: bigint; matchedLine: number | null; matchedDate: Date | null; reversed: boolean; postedAt: Date }
 
 // Baris jurnal akun rekening ini sampai tanggal akhir. Baris yang ditandai rekening lain tidak ikut (rekening yang
 // berbagi satu akun COA tetap terpisah lewat journal_line.bank_account_id).
 async function barisBuku(tx: DbAtauTx, r: { bankAccountId: number; periodTo: Date }) {
   const akun = await akunRekening(tx, r.bankAccountId)
   return tx.$queryRaw<BarisCalon[]>`
-    SELECT l.id, l.journal_id AS "journalId", j.no, j.doc_no AS "docNo", j.source_type AS "sourceType", j.source_id AS "sourceId", j.date, l.memo, l.debit, l.credit,
+    SELECT l.id, l.journal_id AS "journalId", j.no, j.doc_no AS "docNo", j.source_type AS "sourceType", j.source_id AS "sourceId", j.date, l.memo, l.debit, l.credit, j.posted_at AS "postedAt",
       m.bank_statement_line_id AS "matchedLine", s.date AS "matchedDate",
       (j.reversal_of_id IS NOT NULL OR EXISTS (SELECT 1 FROM journal b WHERE b.reversal_of_id = j.id AND b.posted_at IS NOT NULL AND b.date <= ${r.periodTo})) AS reversed
     FROM journal_line l JOIN journal j ON j.id = l.journal_id
@@ -265,21 +265,30 @@ async function awalPertama(tx: DbAtauTx, bankAccountId: number) {
 
 export async function hitungRekonsiliasi(tx: DbAtauTx, id: number, simpan = true) {
   const r = await tx.bankReconcile.findUniqueOrThrow({ where: { id } })
-  const buku = await barisBuku(tx, r)
+  const semuaBuku = await barisBuku(tx, r)
   const awal = (await awalPertama(tx, r.bankAccountId)) ?? r.periodFrom
-  const saldoBuku = buku.reduce((n, l) => n + netJurnal(l), 0n)
+  // Rekonsiliasi Diposting sudah final: angkanya dibaca dari kolom yang disimpan saat posting, dan jurnal yang diposting
+  // sesudahnya (walau bertanggal di periode ini) tidak mengubah isinya. Jurnal itu ditampilkan terpisah (audit C-7).
+  const final = r.status === 'Diposting' && r.postedAt ? r.postedAt : null
+  const buku = final ? semuaBuku.filter((l) => l.postedAt <= final) : semuaBuku
+  const sesudahPosting = final ? semuaBuku.filter((l) => l.postedAt > final && l.date >= awal) : []
   // Belum cair: jurnal bank sejak awal rekonsiliasi pertama yang belum dicocokkan dengan mutasi sampai tanggal akhir.
   const belum = buku.filter((l) => l.date >= awal && (!l.matchedDate || l.matchedDate > r.periodTo))
-  const outstanding = belum.reduce((n, l) => n + netJurnal(l), 0n)
+  const hitungBuku = buku.reduce((n, l) => n + netJurnal(l), 0n)
+  const hitungBelum = belum.reduce((n, l) => n + netJurnal(l), 0n)
+  const saldoBuku = final ? r.bookClosing : hitungBuku
+  const outstanding = final ? r.outstanding : hitungBelum
   const mutasi = await tx.bankStatementLine.findMany({ where: { bankReconcileId: id } })
   const netMut = mutasi.reduce((n, m) => n + netMutasi(m), 0n)
-  const diff = r.stmtClosing - (saldoBuku - outstanding)
+  const diff = final ? r.diff : r.stmtClosing - (saldoBuku - outstanding)
   if (simpan && r.status === 'Draft') await tx.bankReconcile.update({ where: { id }, data: { bookClosing: saldoBuku, outstanding, diff } })
   return {
     saldoBuku,
     outstanding,
     diff,
     belumCair: belum,
+    sesudahPosting,
+    nilaiSesudahPosting: sesudahPosting.reduce((n, l) => n + netJurnal(l), 0n),
     mutasiMasuk: mutasi.reduce((n, m) => n + m.credit, 0n),
     mutasiKeluar: mutasi.reduce((n, m) => n + m.debit, 0n),
     selisihMutasi: r.stmtClosing - (r.stmtOpening + netMut),
