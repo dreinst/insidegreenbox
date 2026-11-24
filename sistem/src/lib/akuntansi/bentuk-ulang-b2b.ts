@@ -2,6 +2,7 @@
 // pencocokan Piutang Usaha di buku dengan halaman Piutang Pelanggan. Dipanggil dari bentukUlangJurnal. Tanpa impor Next.
 import { Prisma } from '@/generated/prisma/client'
 import { piutangPelanggan } from '../b2b/piutang'
+import { hutangPemasok } from '../beli/hutang'
 import type { Db, Tx } from '../db'
 import { balikJurnalFakturJual, balikJurnalReturJual, balikJurnalTerimaPelanggan, jurnalFakturJual, jurnalReturJual, jurnalTerimaPelanggan, piutangBukuPerPelanggan, saldoPiutangBuku } from './dokumen-b2b'
 import { tanggalJurnal, type HasilJurnal } from './jurnal'
@@ -47,5 +48,35 @@ export async function cocokkanPiutang(db: Db) {
     if (b !== p.saldo) selisih.push({ customerId: p.customerId, pelanggan: p.pelanggan, buku: b, halaman: p.saldo })
   }
   for (const [id, b] of perBuku) if (!dilihat.has(id) && b !== 0n) selisih.push({ customerId: id, pelanggan: `#${id}`, buku: b, halaman: 0n })
-  return { buku, halaman: halaman.total, cocok: buku === halaman.total && !selisih.length, selisih }
+  // Baris Piutang Usaha tanpa pelanggan (misalnya kas atau memorial lama ke akun piutang) tidak pernah cocok per
+  // pelanggan, jadi disebut terpisah (audit C-11).
+  const tanpaPelanggan = buku - [...perBuku.values()].reduce((n, b) => n + b, 0n)
+  return { buku, halaman: halaman.total, cocok: buku === halaman.total && !selisih.length && tanpaPelanggan === 0n, selisih, tanpaPelanggan }
+}
+
+// Hutang Usaha di buku (kredit - debit semua akun yang dipetakan ke hutang_usaha) lawan saldo halaman Hutang Pemasok,
+// total dan per pemasok, plus baris tanpa pemasok (audit C-11).
+export async function cocokkanHutang(db: Db) {
+  const [[t], per, halaman] = await Promise.all([
+    db.$queryRaw<{ saldo: bigint | null }[]>`
+      SELECT COALESCE(SUM(l.credit - l.debit), 0)::bigint AS saldo FROM journal_line l JOIN journal j ON j.id = l.journal_id
+      WHERE j.posted_at IS NOT NULL AND l.account_id IN (SELECT account_id FROM account_mapping WHERE key = 'hutang_usaha')`,
+    db.$queryRaw<{ supplier_id: number; saldo: bigint }[]>`
+      SELECT l.supplier_id, SUM(l.credit - l.debit)::bigint AS saldo FROM journal_line l JOIN journal j ON j.id = l.journal_id
+      WHERE j.posted_at IS NOT NULL AND l.supplier_id IS NOT NULL AND l.account_id IN (SELECT account_id FROM account_mapping WHERE key = 'hutang_usaha')
+      GROUP BY 1`,
+    hutangPemasok(db),
+  ])
+  const buku = BigInt(t?.saldo ?? 0)
+  const perBuku = new Map(per.map((b) => [b.supplier_id, BigInt(b.saldo)]))
+  const selisih: { supplierId: number; pemasok: string; buku: bigint; halaman: bigint }[] = []
+  const dilihat = new Set<number>()
+  for (const p of halaman.perPemasok) {
+    dilihat.add(p.supplierId)
+    const b = perBuku.get(p.supplierId) ?? 0n
+    if (b !== p.saldo) selisih.push({ supplierId: p.supplierId, pemasok: p.pemasok, buku: b, halaman: p.saldo })
+  }
+  for (const [id, b] of perBuku) if (!dilihat.has(id) && b !== 0n) selisih.push({ supplierId: id, pemasok: `#${id}`, buku: b, halaman: 0n })
+  const tanpaPemasok = buku - [...perBuku.values()].reduce((n, b) => n + b, 0n)
+  return { buku, halaman: halaman.total, cocok: buku === halaman.total && !selisih.length && tanpaPemasok === 0n, selisih, tanpaPemasok }
 }

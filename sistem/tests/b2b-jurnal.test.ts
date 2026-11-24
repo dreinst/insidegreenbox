@@ -5,7 +5,8 @@ import assert from 'node:assert/strict'
 import { after, before, describe, test } from 'node:test'
 import { GalatAturan } from '../src/lib/aksi'
 import { bentukUlangJurnal } from '../src/lib/akuntansi/bentuk-ulang'
-import { cocokkanPiutang } from '../src/lib/akuntansi/bentuk-ulang-b2b'
+import { cocokkanHutang, cocokkanPiutang } from '../src/lib/akuntansi/bentuk-ulang-b2b'
+import { buatJurnal } from '../src/lib/akuntansi/jurnal'
 import { cocokkanPersediaan } from '../src/lib/akuntansi/laporan'
 import { buatFakturJual, tambahBarisFakturJual, ubahStatusFakturJual } from '../src/lib/b2b/faktur'
 import { simpanHargaPelanggan, tambahPelanggan } from '../src/lib/b2b/pelanggan'
@@ -198,5 +199,25 @@ describe('bentuk ulang jurnal B2B', () => {
     assert.equal(await persediaanBersih(), 0)
     const kedua = await bentukUlangJurnal(db)
     assert.equal(kedua.per.faktur_jual, undefined, 'jalan kedua tidak membentuk apa pun')
+    assert.ok(kedua.hutang.cocok, 'hutang ikut dicocokkan')
+  })
+
+  test('C-11: baris piutang dan hutang tanpa pelanggan atau pemasok disebut terpisah dan membuat pencocokan gagal', async () => {
+    await db.$transaction((tx) =>
+      buatJurnal(tx, { docType: 'uji_lama', docId: 1, docNo: 'UJI-1', tanggal: hariIni(), memo: 'Data lama', oleh: owner.id }, [
+        { akun: 'kas_besar', debit: 250_000n },
+        { akun: 'piutang_usaha', kredit: 250_000n },
+        { akun: 'kas_besar', kredit: 10_000n },
+        { akun: 'hutang_usaha', debit: 10_000n },
+      ]),
+    )
+    const p = await cocokkanPiutang(db)
+    assert.equal(p.tanpaPelanggan, -250_000n)
+    assert.equal(p.selisih.length, 0, 'per pelanggan tetap cocok')
+    assert.equal(p.cocok, false)
+    const h = await cocokkanHutang(db)
+    assert.equal(h.tanpaPemasok, -10_000n)
+    assert.equal(h.buku - h.halaman, -10_000n)
+    assert.equal(h.cocok, false)
   })
 })

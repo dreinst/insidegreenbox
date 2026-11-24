@@ -23,7 +23,12 @@ async function main() {
   const pu = h.piutang
   console.log(`Piutang usaha di buku ${rp(Number(pu.buku))}, halaman Piutang Pelanggan ${rp(Number(pu.halaman))}: ${pu.cocok ? 'cocok' : `selisih ${rp(Number(pu.buku - pu.halaman))}`}.`)
   for (const s of pu.selisih.slice(0, 10)) console.log(`  ${s.pelanggan}: buku ${rp(Number(s.buku))}, halaman ${rp(Number(s.halaman))}`)
-  if (!p.cocok || !pu.cocok || kelompok.some(([, r]) => r.gagal.length)) process.exitCode = 1
+  if (pu.tanpaPelanggan) console.log(`  baris Piutang Usaha tanpa pelanggan: ${rp(Number(pu.tanpaPelanggan))} (jurnal kas atau memorial ke akun piutang; buka Buku Besar akun itu).`)
+  const hu = h.hutang
+  console.log(`Hutang usaha di buku ${rp(Number(hu.buku))}, halaman Hutang Pemasok ${rp(Number(hu.halaman))}: ${hu.cocok ? 'cocok' : `selisih ${rp(Number(hu.buku - hu.halaman))}`}.`)
+  for (const s of hu.selisih.slice(0, 10)) console.log(`  ${s.pemasok}: buku ${rp(Number(s.buku))}, halaman ${rp(Number(s.halaman))}`)
+  if (hu.tanpaPemasok) console.log(`  baris Hutang Usaha tanpa pemasok: ${rp(Number(hu.tanpaPemasok))} (jurnal kas atau memorial ke akun hutang; buka Buku Besar akun itu).`)
+  if (!p.cocok || !pu.cocok || !hu.cocok || kelompok.some(([, r]) => r.gagal.length)) process.exitCode = 1
 }
 
 main()

@@ -22,7 +22,7 @@ export default async function DaftarRekonsiliasi({ searchParams }: { searchParam
   const nama = new Map(rekening.map((r) => [r.id, namaRekening(r)]))
   // Ringkasan impor dibaca dari audit, bukan dari isi query.
   const impor = s.pesan === 'impor' && s.batch ? await db.auditLog.findFirst({ where: { action: 'mutasi.impor', docId: s.batch.slice(0, 60), userId: p.id } }) : null
-  const isiImpor = impor?.afterJson as { baru?: number; sudahAda?: number; terkunci?: number; bukanMutasi?: number } | null
+  const isiImpor = impor?.afterJson as { baru?: number; sudahAda?: number; terkunci?: number; bukanMutasi?: number; angkaSalah?: number; contohAngkaSalah?: string[] } | null
   const bolehT = punyaIzin(p.izin, 'kas.rekonsiliasi', 'T')
   return (
     <>
@@ -42,6 +42,11 @@ export default async function DaftarRekonsiliasi({ searchParams }: { searchParam
       {isiImpor ? (
         <p className="rk-hasil" role="status">
           Impor selesai: {isiImpor.baru ?? 0} baris baru, {isiImpor.sudahAda ?? 0} sudah pernah diimpor (dilewati), {isiImpor.terkunci ?? 0} di periode yang sudah direkonsiliasi, {isiImpor.bukanMutasi ?? 0} baris bukan mutasi.
+        </p>
+      ) : null}
+      {isiImpor?.angkaSalah ? (
+        <p className="pesan galat" role="alert">
+          {isiImpor.angkaSalah} baris tidak diimpor karena angkanya tidak sesuai format angka yang dipilih ({(isiImpor.contohAngkaSalah ?? []).join('; ')}). Periksa pilihan format angka, lalu impor ulang berkas yang sama. Baris yang sudah masuk tidak akan tergandakan.
         </p>
       ) : null}
       {terbuka.length ? (

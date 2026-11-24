@@ -134,4 +134,17 @@ describe('revisi anggaran', () => {
     const aksi = new Set(audit.map((a) => a.action))
     for (const a of ['anggaran.tambah', 'anggaran.akun_tambah', 'anggaran.rincian', 'anggaran.setujui', 'anggaran.revisi', 'anggaran.batal']) assert.ok(aksi.has(a), a)
   })
+
+  test('C-10: membatalkan revisi yang berlaku mengembalikan versi asalnya, lalu versi itu bisa direvisi lagi', async () => {
+    await batalAnggaran(db, k(owner), owner, ag2, 'Revisi salah angka')
+    const lama = await db.budget.findUniqueOrThrow({ where: { id: ag1 } })
+    assert.equal(lama.replacedAt, null, 'versi 1 berlaku lagi')
+    assert.equal((await realisasiAnggaran(db, tahun, { bulan })).anggaran?.id, ag1)
+    const log = await db.auditLog.findFirstOrThrow({ where: { docType: 'budget', docId: String(ag2), action: 'anggaran.batal' } })
+    assert.equal((log.afterJson as { dipulihkan?: string }).dipulihkan, lama.no)
+    const r = await revisiAnggaran(db, k(owner), owner, ag1)
+    assert.equal(r.version, 3)
+    await batalAnggaran(db, k(owner), owner, r.id, '')
+    assert.equal((await db.budget.findUniqueOrThrow({ where: { id: ag1 } })).replacedAt, null, 'membatalkan draf revisi tidak mengubah versi asal')
+  })
 })

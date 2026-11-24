@@ -10,7 +10,7 @@ import { KepalaHalaman } from '@/components/umum'
 import { pilihanAkun } from '@/lib/akuntansi/akun'
 import { namaSumber, tautanSumber } from '@/lib/akuntansi/dokumen'
 import { namaPeriode } from '@/lib/akuntansi/jurnal'
-import { ambilJurnal, butuhSetujuMemorial, tombolMemorial } from '@/lib/akuntansi/memorial'
+import { akunBukuPembantu, ambilJurnal, butuhSetujuMemorial, tombolMemorial } from '@/lib/akuntansi/memorial'
 import { db } from '@/lib/db'
 import { wajibIzin } from '@/lib/izin'
 import { punyaIzin } from '@/lib/izin-inti'
@@ -28,6 +28,13 @@ export default async function RincianJurnal({ params, searchParams }: { params: 
   const butuhSetuju = memorial ? await butuhSetujuMemorial(db) : false
   const t = memorial ? tombolMemorial(p, j.status, butuhSetuju, j.submittedBy) : null
   const akun = t?.ubah ? await pilihanAkun(db) : []
+  const [pembantu, pelanggan, pemasok] = await Promise.all([
+    memorial ? akunBukuPembantu(db) : new Map<number, string>(),
+    t?.ubah ? db.customer.findMany({ where: { active: true }, orderBy: { name: 'asc' }, select: { id: true, name: true } }) : [],
+    t?.ubah ? db.supplier.findMany({ where: { active: true }, orderBy: { name: 'asc' }, select: { id: true, name: true } }) : [],
+  ])
+  // Baris memorial ke akun yang juga dibaca buku pembantu: peringatan keras sebelum posting (audit C-4).
+  const kenaPembantu = memorial ? [...new Map(j.journalLines.filter((l) => pembantu.has(l.accountId)).map((l) => [l.accountId, `${l.account.code} ${l.account.name} (${pembantu.get(l.accountId)})`])).values()] : []
   const sumber = memorial ? null : tautanSumber(j.sourceType, j.sourceId, j.docNo)
   const selisih = j.debit - j.kredit
   const lihatBB = punyaIzin(p.izin, 'akun.buku_besar', 'L')
@@ -93,10 +100,15 @@ export default async function RincianJurnal({ params, searchParams }: { params: 
           </div>
           {memorial && butuhSetuju && j.status === 'Draft' ? <p className="catatan">Jurnal memorial perlu diajukan lalu disetujui Owner. Penyetuju menekan Setujui dan posting.</p> : null}
           {!memorial ? <p className="redup kecil">Jurnal ini dibentuk otomatis saat dokumen sumbernya diposting atau dibatalkan, jadi tidak bisa diubah di sini.</p> : null}
+          {kenaPembantu.length && j.status !== 'Batal' ? (
+            <p className="pesan galat" role="alert" data-peringatan-pembantu>
+              Jurnal ini menggerakkan akun yang saldonya juga dibaca dari buku pembantu: {kenaPembantu.join('; ')}. Sesudah diposting, buku besar akun itu akan berbeda dari buku pembantunya, kecuali jurnal ini memang mengoreksi selisih yang sudah ada. Koreksi dokumen sebaiknya lewat pembatalan dokumennya.
+            </p>
+          ) : null}
           <JejakStatus d={j} />
           {t && (t.ajukan || t.kembalikan || t.posting || t.hapus) ? (
             <div className="deret-tombol">
-              {t.posting ? <TombolAksi aksi={statusMemorialAksi.bind(null, j.id, 'posting')} label={t.setujuiPosting ? 'Setujui dan posting' : 'Posting'} konfirmasi={`Posting ${j.no}? Jurnal masuk buku besar dan tidak bisa diubah lagi.`} /> : null}
+              {t.posting ? <TombolAksi aksi={statusMemorialAksi.bind(null, j.id, 'posting')} label={t.setujuiPosting ? 'Setujui dan posting' : 'Posting'} konfirmasi={`Posting ${j.no}? Jurnal masuk buku besar dan tidak bisa diubah lagi.${kenaPembantu.length ? ` Jurnal ini menggerakkan ${kenaPembantu.join('; ')}, jadi buku besar akan berbeda dari buku pembantunya kecuali ini koreksi selisih yang sudah ada.` : ''}`} /> : null}
               {t.ajukan ? <TombolAksi aksi={statusMemorialAksi.bind(null, j.id, 'ajukan')} label={butuhSetuju ? 'Ajukan untuk disetujui' : 'Ajukan'} kelas={t.posting ? 'btn sekunder' : 'btn'} /> : null}
               {t.kembalikan ? <TombolAksi aksi={statusMemorialAksi.bind(null, j.id, 'kembalikan')} label="Kembalikan ke draf" kelas="btn sekunder" /> : null}
               {t.hapus ? <TombolAksi aksi={hapusMemorialAksi.bind(null, j.id)} label="Hapus draf" kelas="btn bahaya" konfirmasi={`Hapus draf ${j.no}? Nomornya tidak dipakai ulang.`} /> : null}
@@ -154,7 +166,9 @@ export default async function RincianJurnal({ params, searchParams }: { params: 
                       </span>
                     </td>
                     <td data-label="Keterangan" className="pecah">
-                      {l.memo || '-'}
+                      {l.memo || (l.customer || l.supplier ? '' : '-')}
+                      {l.customer ? <small className="redup jr-pihak">Pelanggan {l.customer.name}</small> : null}
+                      {l.supplier ? <small className="redup jr-pihak">Pemasok {l.supplier.name}</small> : null}
                     </td>
                     <td data-label="Debit" className="angka">
                       {l.debit ? rp(l.debit) : ''}
@@ -199,6 +213,18 @@ export default async function RincianJurnal({ params, searchParams }: { params: 
                 { jenis: 'pilih', nama: 'accountId', label: 'Akun', pilihan: [{ nilai: '', label: 'Pilih akun' }, ...akun.map((a) => ({ nilai: String(a.id), label: `${a.code} ${a.name}` }))], wajib: true, lebar: true },
                 { jenis: 'angka', nama: 'debit', label: 'Debit (Rp)', placeholder: '0', bantuan: 'Isi debit atau kredit saja.' },
                 { jenis: 'angka', nama: 'kredit', label: 'Kredit (Rp)', placeholder: '0' },
+                {
+                  jenis: 'pilih',
+                  nama: 'pihak',
+                  label: 'Pelanggan atau pemasok',
+                  pilihan: [
+                    { nilai: '', label: 'Tanpa (akun selain Piutang dan Hutang Usaha)' },
+                    ...pelanggan.map((c) => ({ nilai: `c:${c.id}`, label: `Pelanggan: ${c.name}` })),
+                    ...pemasok.map((x) => ({ nilai: `s:${x.id}`, label: `Pemasok: ${x.name}` })),
+                  ],
+                  bantuan: 'Wajib untuk baris Piutang Usaha (pelanggan) dan Hutang Usaha (pemasok).',
+                  lebar: true,
+                },
                 { jenis: 'teks', nama: 'memo', label: 'Keterangan baris', maxLength: 200, lebar: true },
               ]}
               tombol="Tambah baris"

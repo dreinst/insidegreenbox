@@ -104,6 +104,11 @@ export async function piutangTerbuka(db: Db | Tx, customerId: number): Promise<P
 
 const kunciAlok = (a: { salesInvoiceId: number | null; salesReturnId: number | null }) => (a.salesInvoiceId ? `f${a.salesInvoiceId}` : `r${a.salesReturnId}`)
 
+// Penerimaan tidak boleh melunasi faktur atau memakai nota kredit yang bertanggal sesudahnya, supaya piutang per
+// pelanggan di buku besar tidak pernah minus di antara dua tanggal itu (audit C-9).
+const tanggalSesudah = (jenis: 'faktur' | 'retur', no: string, tanggal: Date) =>
+  `${jenis === 'faktur' ? 'Faktur' : 'Nota kredit retur'} ${no} bertanggal ${tanggal.toISOString().slice(0, 10)}, sesudah tanggal penerimaan. Ubah tanggal penerimaan ke tanggal itu atau sesudahnya.`
+
 // Simpan alokasi (isian terima_<kunci>, misalnya terima_f12 atau terima_r5). Kosong atau 0 berarti tidak dialokasikan.
 // Jumlah diterima = alokasi faktur - nota kredit yang dipakai.
 export async function simpanAlokasiTerima(db: Db, k: Konteks, aktor: Aktor, id: number, masukan: Record<string, unknown>) {
@@ -117,6 +122,7 @@ export async function simpanAlokasiTerima(db: Db, k: Konteks, aktor: Aktor, id: 
       const v = skemaUang({ label: `Jumlah ${p.no}`, min: 0n, wajib: false, max: 10_000_000_000n }).safeParse(String(masukan[`terima_${p.kunci}`] ?? ''))
       if (!v.success) throw new GalatAturan(v.error.issues[0].message, `terima_${p.kunci}`)
       if (v.data > p.sisa) throw new GalatAturan(`Jumlah ${p.no} melebihi sisanya (${formatRupiah(p.sisa)}).`, `terima_${p.kunci}`)
+      if (v.data > 0n && p.date.getTime() > t.date.getTime()) throw new GalatAturan(tanggalSesudah(p.jenis, p.no, p.date), `terima_${p.kunci}`)
       if (v.data > 0n) baru.push({ p, jumlah: v.data })
     }
     const tagihan = baru.filter((x) => x.p.jenis === 'faktur').reduce((n, x) => n + x.jumlah, 0n)
@@ -157,6 +163,7 @@ async function prosesAlokasi(tx: Tx, d: KepalaTerima, tanda: 0 | 1 | -1) {
       if (f.customerId !== d.customerId) throw new GalatAturan(`Faktur ${f.no} milik pelanggan lain.`)
       if (tanda >= 0) {
         if (f.status !== 'Diposting') throw new GalatAturan(`Faktur ${f.no} berstatus ${f.status}, jadi tidak bisa dilunasi.`)
+        if (f.date.getTime() > d.date.getTime()) throw new GalatAturan(tanggalSesudah('faktur', f.no, f.date))
         if (a.amount > f.total - f.paidAmount) throw new GalatAturan(`Alokasi ${f.no} melebihi sisa piutangnya (${formatRupiah(f.total - f.paidAmount)}). Perbarui alokasi.`)
       }
       if (tanda !== 0) {
@@ -170,6 +177,7 @@ async function prosesAlokasi(tx: Tx, d: KepalaTerima, tanda: 0 | 1 | -1) {
       if (r.customerId !== d.customerId) throw new GalatAturan(`Retur ${r.no} milik pelanggan lain.`)
       if (tanda >= 0) {
         if (r.status !== 'Diposting') throw new GalatAturan(`Retur ${r.no} berstatus ${r.status}, jadi nota kreditnya tidak bisa dipakai.`)
+        if (r.date.getTime() > d.date.getTime()) throw new GalatAturan(tanggalSesudah('retur', r.no, r.date))
         if (a.amount > r.total - r.creditUsed) throw new GalatAturan(`Pemakaian nota kredit ${r.no} melebihi sisanya (${formatRupiah(r.total - r.creditUsed)}). Perbarui alokasi.`)
       }
       if (tanda !== 0) await tx.salesReturn.update({ where: { id: r.id }, data: { creditUsed: r.creditUsed + BigInt(tanda) * a.amount } })

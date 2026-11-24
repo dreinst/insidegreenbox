@@ -15,7 +15,7 @@ import { formatRupiah, PER_HALAMAN, sesuaiHalaman, skemaUang } from '../master'
 import { ambilNomor } from '../nomor'
 import { transisiSah } from '../status'
 import { hariIni, periksaTanggal } from '../stok/dokumen'
-import { MENU_SUSUT } from './penyusutan'
+import { akumulasiTerjadwal, MENU_SUSUT } from './penyusutan'
 
 const JENIS = 'asset_disposal'
 
@@ -96,10 +96,17 @@ export async function hapusPelepasan(db: Db, k: Konteks, aktor: Aktor, id: numbe
   })
 }
 
-// Nilai pelepasan dari angka aset saat ini. laba > 0 berarti laba, < 0 rugi.
-export const hitungPelepasan = (a: { cost: bigint; accumDepreciation: bigint }, proceeds: bigint) => {
-  const buku = a.cost - a.accumDepreciation
-  return { buku, labaRugi: proceeds - buku }
+type DataLepas = { cost: bigint; salvage: bigint; usefulMonths: number; acquiredDate: Date; accumDepreciation: bigint }
+
+// Nilai pelepasan bertanggal `tanggal`. Penyusutan yang tertinggal sampai bulan pelepasan (aset diaktifkan sesudah
+// bulannya disusutkan, atau bulan pelepasan belum dihitung) disusulkan di jurnal pelepasan, supaya nilai buku dan laba
+// atau rugi benar (audit C-6). laba > 0 berarti laba, < 0 rugi.
+export const hitungPelepasan = (a: DataLepas, proceeds: bigint, tanggal: Date) => {
+  const terjadwal = akumulasiTerjadwal(a, tanggal.toISOString().slice(0, 7))
+  const susulan = terjadwal > a.accumDepreciation ? terjadwal - a.accumDepreciation : 0n
+  const akumulasi = a.accumDepreciation + susulan
+  const buku = a.cost - akumulasi
+  return { susulan, akumulasi, buku, labaRugi: proceeds - buku }
 }
 
 export async function postingPelepasan(db: Db, k: Konteks, aktor: Aktor, id: number) {
@@ -116,25 +123,28 @@ export async function postingPelepasan(db: Db, k: Konteks, aktor: Aktor, id: num
     if (susutAkhir && susutAkhir.run.yearMonth > x.date.toISOString().slice(0, 7)) {
       throw new GalatAturan(`Aset ini sudah disusutkan sampai ${namaPeriode(susutAkhir.run.yearMonth)}. Tanggal pelepasan tidak boleh sebelum bulan itu.`, 'date')
     }
-    const { buku, labaRugi } = hitungPelepasan(a, x.proceeds)
+    const { susulan, akumulasi, buku, labaRugi } = hitungPelepasan(a, x.proceeds, x.date)
+    if (susulan > 0n && !a.expenseAccountId) throw new GalatAturan(`Aset ${a.code} belum punya akun beban penyusutan. Batalkan lalu aktifkan ulang asetnya.`)
     const memo = `Pelepasan aset ${a.code} ${a.name} ${x.no}`
+    const memoSusul = `Penyusutan tertinggal sampai ${namaPeriode(x.date.toISOString().slice(0, 7))}, ${memo}`
     const tujuan = x.bankAccountId ? kunciBank(x.bankAccountId) : 'kas_besar'
     const j = await buatJurnal(tx, { docType: JENIS, docId: x.id, docNo: x.no, tanggal: x.date, memo, oleh: aktor.id }, [
+      ...(susulan > 0n ? [dk(a.expenseAccountId!, susulan, memoSusul), dk(a.accumAccountId, -susulan, memoSusul)] : []),
       dk(tujuan, x.proceeds, memo),
-      dk(a.accumAccountId, a.accumDepreciation, memo),
+      dk(a.accumAccountId, akumulasi, memo),
       dk(a.assetAccountId, -a.cost, memo),
       labaRugi >= 0n ? dk('laba_lepas_aset', -labaRugi, memo) : dk('rugi_lepas_aset', -labaRugi, memo),
     ])
     const sekarang = new Date()
-    await tx.assetDisposal.update({ where: { id }, data: { status: 'Diposting', cost: a.cost, accumDepreciation: a.accumDepreciation, bookValue: buku, gainLoss: labaRugi, postedBy: aktor.id, postedAt: sekarang, updatedBy: aktor.id } })
+    await tx.assetDisposal.update({ where: { id }, data: { status: 'Diposting', cost: a.cost, accumDepreciation: akumulasi, bookValue: buku, gainLoss: labaRugi, postedBy: aktor.id, postedAt: sekarang, updatedBy: aktor.id } })
     await tx.fixedAsset.update({ where: { id: a.id }, data: { status: 'dilepas', bookValue: 0n, updatedBy: aktor.id } })
     await catatAudit(tx, k, {
       action: 'pelepasan.posting',
       docType: JENIS,
       docId: id,
-      summary: `Memposting pelepasan ${x.no} aset ${a.code}: nilai buku ${formatRupiah(buku)}, hasil ${formatRupiah(x.proceeds)}, ${labaRugi >= 0n ? 'laba' : 'rugi'} ${formatRupiah(labaRugi < 0n ? -labaRugi : labaRugi)}`,
+      summary: `Memposting pelepasan ${x.no} aset ${a.code}: nilai buku ${formatRupiah(buku)}, hasil ${formatRupiah(x.proceeds)}, ${labaRugi >= 0n ? 'laba' : 'rugi'} ${formatRupiah(labaRugi < 0n ? -labaRugi : labaRugi)}${susulan ? `, penyusutan susulan ${formatRupiah(susulan)}` : ''}`,
       before: { status: x.status },
-      after: { status: 'Diposting', nilaiBuku: buku, hasil: x.proceeds, labaRugi, jurnal: j?.no ?? null },
+      after: { status: 'Diposting', nilaiBuku: buku, hasil: x.proceeds, labaRugi, susulan, jurnal: j?.no ?? null },
     })
     return j
   })

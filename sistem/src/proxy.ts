@@ -23,6 +23,11 @@ export async function proxy(req: NextRequest) {
   ].join('; ')
 
   const jalur = req.nextUrl.pathname
+  // Aksi server tanpa header Origin ditolak. Peramban selalu mengirim Origin pada POST, jadi yang ditolak hanya klien
+  // buatan atau proxy yang membuang header itu; Origin asing sudah ditolak Next sendiri (audit C-13).
+  if (req.method === 'POST' && req.headers.has('next-action') && !req.headers.get('origin')) {
+    return new NextResponse('Permintaan ditolak: header Origin tidak ada.', { status: 403, headers: { 'Content-Security-Policy': csp, 'Content-Type': 'text/plain; charset=utf-8' } })
+  }
   if (jalur !== '/masuk' && !(await bacaToken(req.cookies.get(NAMA_COOKIE)?.value))) {
     const ke = new URL('/masuk', req.url)
     if (jalur !== '/') ke.searchParams.set('ke', jalur + req.nextUrl.search)

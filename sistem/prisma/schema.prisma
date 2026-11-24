@@ -1777,6 +1777,9 @@ model Journal {
   cancelledBy  Int?          @map("cancelled_by")
   cancelledAt  DateTime?     @map("cancelled_at") @db.Timestamptz(6)
   cancelReason String?       @map("cancel_reason")
+  // audit C: kunci pemetaan yang dipakai jurnal ini beserta id akunnya ({"grni": 30, "persediaan.3|persediaan": 12}),
+  // supaya jurnal baliknya memakai akun yang sama walau pemetaan sudah diganti (KONTRAK 11 butir C-2).
+  mappingSnapshot Json?      @map("mapping_snapshot")
   journalLines JournalLine[]
 
   // Indeks unik sebagian di migrasi tahap5b: satu jurnal maju per dokumen sumber (selain memorial) dan satu jurnal

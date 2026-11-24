@@ -17,6 +17,7 @@ import {
   kasDariBarisMutasi,
   lepasCocok,
   postingRekonsiliasi,
+  rincianRekonsiliasi,
   saranCocok,
   terapkanSaran,
   ubahKepalaRekonsiliasi,
@@ -105,6 +106,17 @@ describe('pengurai CSV', () => {
     assert.equal(h.baris[1].debit, 15_000n)
     assert.equal(h.baris[1].description, 'BIAYA ADM, BULANAN')
     assert.ok(h.lewat.some((x) => x.nomorBaris === 8), 'baris PEND dilewati')
+  })
+
+  test('C-8: angka yang pemisah ribuannya tidak tiga angka ditolak, bukan dibaca 100 kali; kutip tunggal pengapit dibuang', () => {
+    const teks = ['Tanggal,Keterangan,Referensi,Debit,Kredit,Saldo', `01/11/2026,'BIAYA ADM',,10000.60,,`, '01/11/2026,ADM,,"10.000,60",,', '01/11/2026,ADM,,1.5,,'].join('\n')
+    const h = uraiMutasi(teks, CONTOH_FORMAT.umum.pemetaan)
+    assert.deepEqual(h.baris.map((b) => b.debit), [10_001n])
+    assert.deepEqual(h.lewat.map((x) => x.nomorBaris), [2, 4])
+    assert.match(h.lewat[0].alasan, /tidak sesuai format angka 1\.234\.567,89/)
+    const titik = uraiMutasi(`01/11/2026,'BIAYA ADM',,"1,234.50",,\n01/11/2026,X,,"10000,60",,`, { ...CONTOH_FORMAT.umum.pemetaan, lewati: 0, angka: 'titik' })
+    assert.deepEqual(titik.baris.map((b) => [b.description, b.debit]), [['BIAYA ADM', 1_235n]])
+    assert.equal(titik.lewat.length, 1)
   })
 
   test('baris kembar di satu berkas tetap dua baris, sidiknya stabil', () => {
@@ -210,6 +222,25 @@ describe('rekonsiliasi', () => {
     assert.equal((await db.bankReconcile.findUniqueOrThrow({ where: { id: dua.id } })).stmtOpening, 14_136_000n)
     await galat(() => batalRekonsiliasi(db, k(owner), owner, rk, 'Uji batal berurutan'), /sesudahnya/)
     await batalRekonsiliasi(db, k(owner), owner, dua.id, '')
+  })
+
+  test('C-7: jurnal bank baru bertanggal di periode yang sudah Diposting tidak mengubah angka rekonsiliasi itu', async () => {
+    const d = await db.bankReconcile.findUniqueOrThrow({ where: { id: rk } })
+    const sebelum = (await rincianRekonsiliasi(db, rk))!.h
+    const telat = await kasPosting('keluar', tanggalIso(d.periodTo), akun['6-1300'], '7.000', 'Biaya telat')
+    const h = (await rincianRekonsiliasi(db, rk))!.h
+    assert.equal(h.saldoBuku, d.bookClosing, 'saldo buku = angka saat posting')
+    assert.equal(h.outstanding, d.outstanding)
+    assert.equal(h.diff, 0n)
+    assert.equal(h.belumCair.length, sebelum.belumCair.length, 'daftar belum cair tidak bertambah')
+    assert.equal(h.sesudahPosting.length, 1)
+    assert.equal(h.nilaiSesudahPosting, -7_000n)
+    // Jurnal itu menjadi belum cair di hitungan rekonsiliasi yang masih Draft (rekonsiliasi berikutnya).
+    const dua = await buatRekonsiliasi(db, k(owner), owner, { bankAccountId: String(rekening), periodFrom: hari(0), periodTo: hari(0) })
+    const h2 = await hitungRekonsiliasi(db, dua.id, false)
+    assert.ok(h2.belumCair.some((l) => l.docNo === telat.no), 'kas telat belum cair di rekonsiliasi berikutnya')
+    await batalRekonsiliasi(db, k(owner), owner, dua.id, '')
+    await ubahStatusKas(db, k(owner), owner, telat.id, 'batal', { alasan: 'Uji jurnal telat' })
   })
 
   test('batal rekonsiliasi Diposting membuka kunci baris jurnal', async () => {

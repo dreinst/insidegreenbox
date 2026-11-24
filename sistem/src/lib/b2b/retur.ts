@@ -70,6 +70,8 @@ export async function ubahKepalaReturJual(db: Db, k: Konteks, aktor: Aktor, id: 
   periksaTanggal(aktor, d.date)
   return db.$transaction(async (tx) => {
     const r = await muatDraf(tx, id)
+    const f = await tx.salesInvoice.findUniqueOrThrow({ where: { id: r.salesInvoiceId }, select: { date: true } })
+    if (d.date.getTime() < f.date.getTime()) throw new GalatAturan('Tanggal retur tidak boleh sebelum tanggal faktur.', 'date')
     const sebelum = { date: r.date.toISOString().slice(0, 10), reason: r.reason }
     const sesudah = { date: d.date.toISOString().slice(0, 10), reason: d.reason }
     if (JSON.stringify(sebelum) === JSON.stringify(sesudah)) return 0
