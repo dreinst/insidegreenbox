@@ -54,7 +54,7 @@ export async function tarifPadaBanyak(db: DbAtauTx, metodeIds: number[], iso: st
   if (!metodeIds.length) return hasil
   const baris = await db.$queryRaw<{ payment_method_id: number; mdr_pct: Prisma.Decimal; free_limit: bigint | null }[]>`
     SELECT DISTINCT ON (payment_method_id) payment_method_id, mdr_pct, free_limit FROM payment_method_mdr
-    WHERE payment_method_id IN (${Prisma.join(metodeIds)}) AND effective_from <= ${keTanggal(iso)}::date
+    WHERE payment_method_id IN (${Prisma.join(metodeIds)}) AND effective_from <= ${iso}::date
     ORDER BY payment_method_id, effective_from DESC`
   for (const b of baris) hasil.set(Number(b.payment_method_id), keTarif({ mdrPct: b.mdr_pct, freeLimit: b.free_limit }))
   return hasil

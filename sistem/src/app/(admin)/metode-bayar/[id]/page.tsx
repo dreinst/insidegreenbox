@@ -112,7 +112,9 @@ export default async function RincianMetode({ params, searchParams }: { params: 
                     {r.note || '-'}
                   </td>
                   <td data-label="Dicatat">
-                    {r.oleh} <small className="redup">{formatWaktu(r.createdAt)}</small>
+                    <span>
+                      {r.oleh} <small className="redup">{formatWaktu(r.createdAt)}</small>
+                    </span>
                   </td>
                   <td data-label="Keadaan">
                     <span className={`lencana ${r.keadaan === 'berlaku' ? 'hijau' : r.keadaan === 'nanti' ? 'kuning' : 'abu'}`}>{r.keadaan === 'berlaku' ? 'Berlaku' : r.keadaan === 'nanti' ? 'Akan berlaku' : 'Lama'}</span>

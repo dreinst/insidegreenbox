@@ -126,7 +126,7 @@ export async function tambahTarif(db: Db, k: Konteks, aktor: Aktor, metodeId: nu
     periksaTarif(m.kind, d)
     const iso = d.effectiveFrom!.toISOString().slice(0, 10)
     if (await tx.paymentMethodMdr.findFirst({ where: { paymentMethodId: metodeId, effectiveFrom: d.effectiveFrom! } })) {
-      throw new GalatAturan(`Sudah ada tarif yang berlaku mulai ${iso}. Pilih tanggal lain.`, 'effectiveFrom')
+      throw new GalatAturan(`Sudah ada tarif yang berlaku mulai ${new Intl.DateTimeFormat('id-ID', { dateStyle: 'long', timeZone: 'UTC' }).format(d.effectiveFrom!)}. Pilih tanggal lain.`, 'effectiveFrom')
     }
     const lama = await tarifPada(tx, metodeId, iso)
     const t = await tx.paymentMethodMdr.create({ data: { paymentMethodId: metodeId, ...dataTarif(d), createdBy: aktor.id } })
