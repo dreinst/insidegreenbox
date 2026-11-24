@@ -21,10 +21,10 @@ import { BALIK_JURNAL_BELI, DOK_BELI_JURNAL, JURNAL_BELI } from './beli'
 import { tanggalJurnal, type HasilJurnal } from './jurnal'
 import { cocokkanPersediaan } from './laporan'
 import { pasangBawaanAkuntansi } from './pemetaan'
-import { DOK_B2B_STOK, bentukUlangB2b, cocokkanPiutang } from './bentuk-ulang-b2b'
+import { DOK_B2B_STOK, bentukUlangB2b, cocokkanHutang, cocokkanPiutang } from './bentuk-ulang-b2b'
 
 export type Rekap = { dibuat: number; kosong: number; gagal: { dok: string; pesan: string }[] }
-export type HasilBentukUlang = { per: Record<string, Rekap>; belumDidukung: { docType: string; dokumen: number }[]; persediaan: Awaited<ReturnType<typeof cocokkanPersediaan>>; piutang: Awaited<ReturnType<typeof cocokkanPiutang>>; pemetaanBaru: number }
+export type HasilBentukUlang = { per: Record<string, Rekap>; belumDidukung: { docType: string; dokumen: number }[]; persediaan: Awaited<ReturnType<typeof cocokkanPersediaan>>; piutang: Awaited<ReturnType<typeof cocokkanPiutang>>; hutang: Awaited<ReturnType<typeof cocokkanHutang>>; pemetaanBaru: number }
 
 const BELUM = (jenis: string, balik = false) =>
   Prisma.sql`NOT EXISTS (SELECT 1 FROM journal j WHERE j.source_type = ${jenis} AND j.source_id = x.id AND ${balik ? Prisma.sql`j.reversal_of_id IS NOT NULL` : Prisma.sql`j.reversal_of_id IS NULL`})`
@@ -108,6 +108,7 @@ export async function bentukUlangJurnal(db: Db, opsi: { oleh?: number | null; lo
   ).map((b) => ({ docType: b.doc_type, dokumen: Number(b.n) }))
   const persediaan = await cocokkanPersediaan(db)
   const piutang = await cocokkanPiutang(db)
+  const hutang = await cocokkanHutang(db)
   opsi.log?.(`Selesai: ${Object.entries(per).map(([k, r]) => `${k} ${r.dibuat}`).join(', ') || 'tidak ada yang perlu dibentuk'}`)
-  return { per, belumDidukung, persediaan, piutang, pemetaanBaru }
+  return { per, belumDidukung, persediaan, piutang, hutang, pemetaanBaru }
 }
