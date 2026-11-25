@@ -146,8 +146,8 @@ export function hitungKeranjang(baris: { harga: number; qty: number; jenis: Jeni
   let alasan = ''
   if (terbaik && nilaiMember > 0) {
     alasan = pakaiPromo
-      ? `Promo ${terbaik.p.nama} (${rupiah(terbaik.n)}) lebih besar dari potongan member (${rupiah(nilaiMember)}), jadi promo yang dipakai. Promo tidak digabung dengan potongan member.`
-      : `Potongan member (${rupiah(nilaiMember)}) ${nilaiMember === terbaik.n ? 'sama dengan' : 'lebih besar dari'} promo ${terbaik.p.nama} (${rupiah(terbaik.n)}), jadi potongan member yang dipakai. Promo tidak digabung dengan potongan member.`
+      ? `Promo ${namaPromo(terbaik.p.nama)} (${rupiah(terbaik.n)}) lebih besar dari potongan member (${rupiah(nilaiMember)}), jadi promo yang dipakai. Promo tidak digabung dengan potongan member.`
+      : `Potongan member (${rupiah(nilaiMember)}) ${nilaiMember === terbaik.n ? 'sama dengan' : 'lebih besar dari'} promo ${namaPromo(terbaik.p.nama)} (${rupiah(terbaik.n)}), jadi potongan member yang dipakai. Promo tidak digabung dengan potongan member.`
   }
   return {
     sub,

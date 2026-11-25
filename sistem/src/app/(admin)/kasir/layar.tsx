@@ -241,7 +241,7 @@ export function LayarKasir({ kategori: semuaKategori, menu, paket, metode, biaya
               <div className="lk-promo" aria-live="polite">
                 {t.promo ? (
                   <p>
-                    Promo <b>{labelPromo(t.promo)}</b> dipakai otomatis{t.promo.syarat ? `. Syarat: ${t.promo.syarat}` : ''}.
+                    Promo <b>{labelPromo(t.promo)}</b> dipakai otomatis{t.promo.syarat ? `. Syarat: ${t.promo.syarat.trim().replace(/[.\s]+$/, '')}` : ''}.
                   </p>
                 ) : (
                   <p>

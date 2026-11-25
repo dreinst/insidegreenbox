@@ -8,7 +8,7 @@ import { GalatAturan } from './aksi'
 import { balikJurnalPenjualan, jurnalPenjualan } from './akuntansi/dokumen'
 import { catatAudit, type Konteks } from './audit'
 import type { Db, DbAtauTx } from './db'
-import { bagiBayar, hitungKeranjang, rupiah, type JenisBaris } from './hitung-kasir'
+import { bagiBayar, hitungKeranjang, namaPromo, rupiah, type JenisBaris } from './hitung-kasir'
 import { isOwner, pastikanIzin, punyaIzin, saklarNyala, type Pengguna } from './izin-inti'
 import { catatKunjungan, potonganMember, tingkatUntuk } from './member'
 import { ambilNomor } from './nomor'
@@ -134,7 +134,7 @@ export async function simpanPenjualan(db: Db, k: Konteks, aktor: Aktor, masukan:
 
     if (d.promoLayar !== undefined && (d.promoLayar ?? null) !== (t.promo?.id ?? null)) {
       throw new GalatAturan(
-        `Promo berubah sejak layar kasir dibuka: sekarang ${t.promo ? `promo ${t.promo.nama} yang berlaku` : 'tidak ada promo yang berlaku'} untuk pesanan ini. Muat ulang layar kasir, lalu sebut total baru ke pelanggan.`,
+        `Promo berubah sejak layar kasir dibuka: sekarang ${t.promo ? `promo ${namaPromo(t.promo.nama)} yang berlaku` : 'tidak ada promo yang berlaku'} untuk pesanan ini. Muat ulang layar kasir, lalu sebut total baru ke pelanggan.`,
         'bayar',
       )
     }
