@@ -175,7 +175,9 @@ async function barisPendapatan(tx: DbAtauTx, saleId: number, memo: string) {
   const s = await tx.sale.findUniqueOrThrow({ where: { id: saleId }, include: { salePayments: { include: { paymentMethod: { select: { kind: true } } } } } })
   const baris: BarisJurnal[] = []
   for (const p of s.salePayments) baris.push(dk(p.paymentMethod.kind === 'tunai' ? 'kas_laci' : kunciKliring(p.paymentMethodId), p.amount, memo))
-  baris.push(dk('potongan_penjualan', s.disc, memo), dk('penjualan', -s.sub, memo), dk('pendapatan_service', -s.svc, memo), dk('pajak_pb1', -s.tax, memo))
+  // Potongan promo (KONTRAK 11 butir 160) didebit ke kunci potongan_promo, atau potongan_penjualan bila kunci itu belum
+  // dipetakan; sisa disc adalah potongan member.
+  baris.push(dk('potongan_penjualan', s.disc - s.promoDisc, memo), dk(['potongan_promo', 'potongan_penjualan'], s.promoDisc, memo), dk('penjualan', -s.sub, memo), dk('pendapatan_service', -s.svc, memo), dk('pajak_pb1', -s.tax, memo))
   // Pembulatan tunai (KONTRAK 11 butir 155): uang diterima = total + rounding, jadi pembulatan naik dikredit dan
   // pembulatan turun didebit ke akun pemetaan pembulatan. Bernilai 0 untuk penjualan tanpa tunai dan penjualan lama.
   if (s.rounding !== 0n) baris.push(dk('pembulatan', -s.rounding, memo))

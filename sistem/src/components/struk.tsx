@@ -60,7 +60,7 @@ export function IsiStruk({ j }: { j: Jual }) {
               {l.qty} x {l.name}
               {l.note ? <small>{l.note}</small> : null}
             </span>
-            <b>{rupiah(l.price * BigInt(l.qty))}</b>
+            <b>{l.promoGift ? 'Gratis' : rupiah(l.price * BigInt(l.qty))}</b>
           </li>
         ))}
       </ul>
@@ -70,10 +70,22 @@ export function IsiStruk({ j }: { j: Jual }) {
           <dt>Subtotal</dt>
           <dd>{rupiah(j.sub)}</dd>
         </div>
-        {j.disc > 0n ? (
+        {j.promoDisc > 0n ? (
+          <div>
+            <dt>Potongan promo {j.promoName}</dt>
+            <dd>-{rupiah(j.promoDisc)}</dd>
+          </div>
+        ) : null}
+        {j.disc - j.promoDisc > 0n ? (
           <div>
             <dt>Potongan member {persenTeks(j.memberPct)}</dt>
-            <dd>-{rupiah(j.disc)}</dd>
+            <dd>-{rupiah(j.disc - j.promoDisc)}</dd>
+          </div>
+        ) : null}
+        {j.promoName && j.promoDisc === 0n ? (
+          <div>
+            <dt>Promo {j.promoName}</dt>
+            <dd>hadiah</dd>
           </div>
         ) : null}
         {j.svc > 0n ? (

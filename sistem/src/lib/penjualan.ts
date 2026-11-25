@@ -13,6 +13,7 @@ import { isOwner, pastikanIzin, punyaIzin, saklarNyala, type Pengguna } from './
 import { catatKunjungan, potonganMember, tingkatUntuk } from './member'
 import { ambilNomor } from './nomor'
 import { periksaPenyetujuVoid } from './pin'
+import { promoBerlaku } from './promo'
 import { pemakaianJual } from './produksi/resep'
 import { hariIni } from './stok/dokumen'
 import { balikDokumen, catatGerak } from './stok/mesin'
@@ -45,6 +46,8 @@ export const skemaJual = z
     bayar: z.array(z.object({ metodeId: bulat('Metode bayar tidak sah.', 1, 2_000_000_000), jumlah: bulat('Jumlah bayar tidak sah.', 0, 1_000_000_000) })).max(10, 'Paling banyak 10 pembayaran.'),
     // Total yang tampil di layar kasir saat Bayar ditekan (temuan audit A-9). Kosong untuk pemanggil lain.
     totalLayar: bulat('Total layar tidak sah.', 0, 10_000_000_000).optional(),
+    // Promo yang dipakai layar kasir (id, atau null bila tanpa promo). Kosong untuk pemanggil lain (KONTRAK 11 butir 160).
+    promoLayar: z.number().int().positive().nullable().optional(),
   })
   .refine((d) => d.mode !== 'dinein' || d.meja !== '', { path: ['meja'], message: 'Isi nomor meja untuk dine in.' })
 
@@ -68,7 +71,7 @@ export async function cariMember(db: DbAtauTx, wa: string) {
   return { id: m.id, name: m.name, ...(await potonganSaatIni(db, m)) }
 }
 
-type BarisJual = { jenis: JenisBaris; menuItemId: number; menuSetId: number | null; drinkId: number | null; name: string; category: string; harga: bigint; qty: number; catatan: string }
+type BarisJual = { jenis: JenisBaris; menuItemId: number; menuSetId: number | null; drinkId: number | null; name: string; category: string; harga: bigint; qty: number; catatan: string; hadiah?: boolean }
 
 // Kode kategori yang disimpan di sale_line.category untuk baris paket (bukan kode menu_category).
 export const KATEGORI_PAKET = 'paket'
@@ -118,12 +121,27 @@ export async function simpanPenjualan(db: Db, k: Konteks, aktor: Aktor, masukan:
     }
 
     const biaya = biayaDari(lokasi.branch)
-    // Potongan member hanya untuk baris menu biasa; paket set tidak kena (admin lama, KONTRAK 11).
-    const t = hitungKeranjang(baris.map((b) => ({ harga: Number(b.harga), qty: b.qty, jenis: b.jenis })), pctMember, biaya)
+    const sekarang = new Date()
+    // Potongan member hanya untuk baris menu biasa; paket set tidak kena (admin lama, KONTRAK 11). Promo yang berlaku hari
+    // ini dibaca ulang di sini dan tidak digabung dengan potongan member: yang lebih besar untuk pembeli dipakai (butir 160).
+    const promo = await promoBerlaku(tx, sekarang)
+    const t = hitungKeranjang(baris.map((b) => ({ harga: Number(b.harga), qty: b.qty, jenis: b.jenis })), pctMember, biaya, promo)
     // Harga, potongan member, pajak, atau service bisa berubah selama layar kasir terbuka. Total yang sudah disebut ke
     // pelanggan harus sama dengan yang disimpan (KONTRAK 11 butir 141).
     if (d.totalLayar !== undefined && d.totalLayar !== t.total) {
       throw new GalatAturan(`Harga, potongan, atau pajak berubah sejak layar kasir dibuka: total sekarang ${rupiah(t.total)}, di layar ${rupiah(d.totalLayar)}. Muat ulang layar kasir, lalu sebut total baru ke pelanggan.`, 'bayar')
+    }
+
+    if (d.promoLayar !== undefined && (d.promoLayar ?? null) !== (t.promo?.id ?? null)) {
+      throw new GalatAturan(
+        `Promo berubah sejak layar kasir dibuka: sekarang ${t.promo ? `promo ${t.promo.nama} yang berlaku` : 'tidak ada promo yang berlaku'} untuk pesanan ini. Muat ulang layar kasir, lalu sebut total baru ke pelanggan.`,
+        'bayar',
+      )
+    }
+    // Promo hadiah: satu baris menu gratis yang tetap memotong stok resep dan ber-HPP.
+    if (t.hadiah) {
+      const m = await tx.menuItem.findUniqueOrThrow({ where: { id: t.hadiah.menuItemId }, select: { id: true, name: true, category: true } })
+      baris.push({ jenis: 'menu', menuItemId: m.id, menuSetId: null, drinkId: null, name: m.name, category: m.category, harga: 0n, qty: 1, catatan: `Hadiah ${t.promo!.nama}`, hadiah: true })
     }
 
     const idMetode = [...new Set(d.bayar.map((b) => b.metodeId))]
@@ -136,7 +154,6 @@ export async function simpanPenjualan(db: Db, k: Konteks, aktor: Aktor, masukan:
     )
     if (!bagi.ok) throw new GalatAturan(bagi.pesan, 'bayar')
 
-    const sekarang = new Date()
     const no = await ambilNomor(tx, 'sale', 'GB', sekarang)
     const jual = await tx.sale.create({
       data: {
@@ -154,12 +171,15 @@ export async function simpanPenjualan(db: Db, k: Konteks, aktor: Aktor, masukan:
         // Pembulatan bagian tunai ke Rp 500 (KONTRAK 11 butir 155); uang diterima = total + rounding.
         rounding: BigInt(bagi.pembulatan),
         hpp: 0n,
-        memberPct: pctMember,
+        memberPct: t.pctMember,
+        promoId: t.promo?.id ?? null,
+        promoName: t.promo?.nama ?? '',
+        promoDisc: BigInt(t.discPromo),
         svcPct: biaya.service,
         taxPct: biaya.pajak,
         createdBy: aktor.id,
         saleLines: {
-          create: baris.map((b) => ({ menuItemId: b.menuItemId, menuSetId: b.menuSetId, drinkId: b.drinkId, qty: b.qty, price: b.harga, note: b.catatan, hpp: 0n, name: b.name, category: b.category })),
+          create: baris.map((b) => ({ menuItemId: b.menuItemId, menuSetId: b.menuSetId, drinkId: b.drinkId, qty: b.qty, price: b.harga, note: b.catatan, hpp: 0n, name: b.name, category: b.category, promoGift: !!b.hadiah })),
         },
         salePayments: { create: bagi.baris.map((b) => ({ paymentMethodId: b.metodeId, amount: BigInt(b.amount), paid: BigInt(b.paid), change: BigInt(b.change) })) },
       },
@@ -172,25 +192,33 @@ export async function simpanPenjualan(db: Db, k: Konteks, aktor: Aktor, masukan:
       action: 'penjualan.simpan',
       docType: 'sale',
       docId: jual.id,
-      summary: `Penjualan ${no} ${rupiah(t.total)}${bagi.pembulatan ? `, pembulatan ${bagi.pembulatan > 0 ? '+' : ''}${rupiah(bagi.pembulatan)}` : ''} di shift #${s.id}${namaBayar ? `, ${namaBayar}` : ''}`,
+      summary: `Penjualan ${no} ${rupiah(t.total)}${t.promo ? `, promo ${t.promo.nama}${t.discPromo ? ` -${rupiah(t.discPromo)}` : ` hadiah ${t.hadiah!.nama}`}` : ''}${bagi.pembulatan ? `, pembulatan ${bagi.pembulatan > 0 ? '+' : ''}${rupiah(bagi.pembulatan)}` : ''} di shift #${s.id}${namaBayar ? `, ${namaBayar}` : ''}`,
       after: {
         no,
         shiftId: s.id,
         mode: d.mode,
         meja: d.mode === 'dinein' ? d.meja : null,
         member: member?.name ?? null,
-        memberPct: pctMember,
-        ...t,
+        memberPct: t.pctMember,
+        sub: t.sub,
+        disc: t.disc,
+        net: t.net,
+        svc: t.svc,
+        tax: t.tax,
+        total: t.total,
+        // Promo yang dipakai dan alasan pilihannya terhadap potongan member (KONTRAK 11 butir 160).
+        promo: t.promo ? { id: t.promo.id, nama: t.promo.nama, jenis: t.promo.jenis, potongan: t.discPromo, hadiah: t.hadiah?.nama ?? null } : null,
+        ...(t.alasan ? { alasanPotongan: t.alasan, potonganMemberTersedia: t.nilaiMember } : {}),
         pembulatan: bagi.pembulatan,
         hpp: stok.hpp,
         jurnal: jurnal?.no ?? null,
         ...(stok.tanpaResep.length ? { tanpaResep: stok.tanpaResep } : {}),
         ...(stok.minus.length ? { stokMinus: stok.minus } : {}),
-        baris: baris.map((b) => ({ menu: b.name, ...(b.menuSetId ? { paketId: b.menuSetId } : {}), qty: b.qty, harga: b.harga, catatan: b.catatan })),
+        baris: baris.map((b) => ({ menu: b.name, ...(b.menuSetId ? { paketId: b.menuSetId } : {}), ...(b.hadiah ? { hadiah: true } : {}), qty: b.qty, harga: b.harga, catatan: b.catatan })),
         bayar: bagi.baris.map((b) => ({ metode: perMetode.get(b.metodeId)!.name, amount: b.amount, paid: b.paid, change: b.change })),
       },
     })
-    return { id: jual.id, no, total: t.total, pembulatan: bagi.pembulatan, kembalian: bagi.kembalian, hpp: stok.hpp }
+    return { id: jual.id, no, total: t.total, pembulatan: bagi.pembulatan, kembalian: bagi.kembalian, hpp: stok.hpp, promo: t.promo?.nama ?? null, potonganPromo: t.discPromo }
   })
 }
 

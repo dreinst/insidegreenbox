@@ -491,6 +491,7 @@ model Promo {
   createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedBy  Int?      @map("updated_by")
   updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  sales      Sale[]
 
   @@map("promo")
 }
@@ -1512,11 +1513,18 @@ model Sale {
   // Keputusan pemilik 24 November 2026: selisih pembulatan bagian tunai ke Rp 500 (KONTRAK 11 butir 155).
   // Uang diterima = total + rounding.
   rounding       BigInt        @default(0)
+  // Perbaikan panduan 25 November 2026: promo otomatis (KONTRAK 11 butir 160). disc tetap seluruh potongan; promo_disc
+  // bagian disc dari promo. promo_name nama promo saat dijual.
+  promoId        Int?          @map("promo_id")
+  promo          Promo?        @relation(fields: [promoId], references: [id], onDelete: SetNull)
+  promoName      String        @default("") @map("promo_name")
+  promoDisc      BigInt        @default(0) @map("promo_disc")
   saleLines      SaleLine[]
   salePayments   SalePayment[]
 
   @@index([shiftId])
   @@index([at])
+  @@index([promoId])
   @@map("sale")
 }
 
@@ -1539,6 +1547,8 @@ model SaleLine {
   menuSet    MenuSet?  @relation(fields: [menuSetId], references: [id], onDelete: Restrict)
   drinkId    Int?      @map("set_drink_item_id")
   drinkItem  MenuItem? @relation("BarisMinumanPaket", fields: [drinkId], references: [id], onDelete: Restrict)
+  // KONTRAK 11 butir 160: baris menu gratis dari promo hadiah (harga 0, CHECK di migrasi).
+  promoGift  Boolean   @default(false) @map("promo_gift")
 
   @@index([saleId])
   @@map("sale_line")

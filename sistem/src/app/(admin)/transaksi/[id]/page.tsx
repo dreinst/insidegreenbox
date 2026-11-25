@@ -101,6 +101,7 @@ export default async function RincianTransaksi({ params, searchParams }: { param
                 <tr key={l.id}>
                   <td data-label="Baris">
                     {l.name}
+                    {l.promoGift ? <small className="redup"> · hadiah promo</small> : null}
                     {bergerak.has(l.id) ? null : <small className="redup"> · menu tanpa resep, stok tidak dipotong</small>}
                   </td>
                   <td data-label="Qty" className="angka">

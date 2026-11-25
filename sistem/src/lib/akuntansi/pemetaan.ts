@@ -31,6 +31,8 @@ export const KUNCI_UMUM: KunciUmum[] = [
   { kunci: 'penjualan', nama: 'Penjualan', jenis: ['Pendapatan'], keterangan: 'Penjualan kotor kasir (sebelum potongan).' },
   { kunci: 'pendapatan_service', nama: 'Pendapatan service', jenis: ['Pendapatan'], keterangan: 'Service charge kasir.' },
   { kunci: 'potongan_penjualan', nama: 'Potongan penjualan', jenis: ['Pendapatan'], keterangan: 'Potongan member di kasir (mengurangi pendapatan).' },
+  // Perbaikan panduan 25 November 2026 (KONTRAK 11 butir 160).
+  { kunci: 'potongan_promo', nama: 'Potongan promo', jenis: ['Pendapatan'], keterangan: 'Potongan promo persen atau nominal di kasir (mengurangi pendapatan). Bawaannya akun yang sama dengan potongan penjualan.' },
   // Keputusan pemilik 24 November 2026 (KONTRAK 11 butir 155).
   { kunci: 'pembulatan', nama: 'Pembulatan penjualan', jenis: ['Pendapatan', 'Beban'], keterangan: 'Selisih pembulatan bagian tunai kasir ke Rp 500: naik dikredit, turun didebit.' },
   { kunci: 'hpp', nama: 'HPP penjualan', jenis: ['HPP'], keterangan: 'Nilai bahan resep yang keluar karena penjualan.' },

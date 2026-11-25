@@ -26,6 +26,8 @@ export function tabelRekap(d: Awaited<ReturnType<typeof rekapPenjualan>>, opsi: 
     { h: 'Transaksi', v: (b) => b.n, jenis: 'angka' },
     { h: 'Penjualan kotor', v: (b) => b.kotor, jenis: 'uang' },
     { h: 'Potongan', v: (b) => b.potongan, jenis: 'uang' },
+    // Promo otomatis (KONTRAK 11 butir 160): bagian Potongan yang berasal dari promo, sudah termasuk di kolom Potongan.
+    { h: 'Termasuk promo', v: (b) => b.potonganPromo, jenis: 'uang' },
     { h: 'Penjualan bersih', v: (b) => b.bersih, jenis: 'uang' },
     { h: 'Service', v: (b) => b.service, jenis: 'uang' },
     { h: 'Pajak PB1', v: (b) => b.pajak, jenis: 'uang' },

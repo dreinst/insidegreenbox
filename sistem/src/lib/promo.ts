@@ -3,7 +3,8 @@
 import { z } from 'zod'
 import { GalatAturan } from './aksi'
 import { catatAudit, selisih, type Konteks } from './audit'
-import type { Db } from './db'
+import type { Db, DbAtauTx } from './db'
+import type { PromoKasir } from './hitung-kasir'
 import { pastikanIzin, type Pengguna } from './izin-inti'
 import { PER_HALAMAN, formatRupiah, sesuaiHalaman, skemaPersen, skemaTanggal, skemaTeksOpsional, skemaUang, labelKolom } from './master'
 import { tanggalIso } from './waktu'
@@ -145,5 +146,35 @@ export async function daftarPromo(db: Db, s: SaringPromo) {
   return { baris, total, hal, jumlahHal: Math.max(1, Math.ceil(total / PER_HALAMAN)) }
 }
 
-export const nilaiPromoTeks = (p: { kind: string; percent: { toString(): string } | null; amount: bigint | null; giftItem: { name: string } | null }) =>
+// Promo yang berlaku pada tanggal itu (WIB) untuk layar kasir dan simpan penjualan (KONTRAK 11 butir 160): aktif dan
+// tanggalnya masuk masa berlaku. Promo hadiah hanya ikut bila menu hadiahnya aktif dan kategorinya aktif, karena baris
+// hadiah memakai menu itu. Paling banyak 50 promo, cukup untuk satu hari.
+export async function promoBerlaku(db: DbAtauTx, sekarang = new Date()): Promise<PromoKasir[]> {
+  const hari = new Date(`${tanggalIso(sekarang)}T00:00:00Z`)
+  const baris = await db.promo.findMany({
+    where: { active: true, AND: [{ OR: [{ startsOn: null }, { startsOn: { lte: hari } }] }, { OR: [{ endsOn: null }, { endsOn: { gte: hari } }] }] },
+    include: { giftItem: { select: { id: true, name: true, price: true, active: true, categoryRef: { select: { active: true } } } } },
+    orderBy: { id: 'asc' },
+    take: 50,
+  })
+  return baris.flatMap((p): PromoKasir[] => {
+    if (p.kind !== 'persen' && p.kind !== 'nominal' && p.kind !== 'hadiah') return []
+    const g = p.giftItem
+    if (p.kind === 'hadiah' && !(g && g.active && g.categoryRef.active)) return []
+    return [
+      {
+        id: p.id,
+        nama: p.name,
+        jenis: p.kind,
+        persen: p.kind === 'persen' ? Number(p.percent ?? 0) : 0,
+        nominal: p.kind === 'nominal' ? Number(p.amount ?? 0n) : 0,
+        minBelanja: Number(p.minSpend),
+        syarat: p.condition,
+        hadiah: p.kind === 'hadiah' && g ? { menuItemId: g.id, nama: g.name, harga: Number(g.price) } : null,
+      },
+    ]
+  })
+}
+
+export const nilaiPromoTeks =(p: { kind: string; percent: { toString(): string } | null; amount: bigint | null; giftItem: { name: string } | null }) =>
   p.kind === 'persen' ? `${(p.percent?.toString() ?? '0').replace('.', ',')}%` : p.kind === 'nominal' ? formatRupiah(p.amount ?? 0n) : `Gratis ${p.giftItem?.name ?? 'menu'}`

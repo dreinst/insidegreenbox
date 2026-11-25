@@ -53,7 +53,7 @@ export async function namaDana(db: DbAtauTx, bankAccountId: number | null) {
 // lawan kas oleh siapa pun, termasuk Owner; koreksinya lewat jurnal memorial (KONTRAK 11 butir 142).
 export const KUNCI_INTI = [
   'kas_laci', 'kas_besar', 'bank', 'kliring', 'persediaan', 'bdp', 'hutang_usaha', 'grni', 'ppn_masukan', 'uang_muka_beli', 'pajak_pb1',
-  'saldo_awal', 'laba_ditahan', 'laba_berjalan', 'penjualan', 'pendapatan_service', 'potongan_penjualan', 'hpp',
+  'saldo_awal', 'laba_ditahan', 'laba_berjalan', 'penjualan', 'pendapatan_service', 'potongan_penjualan', 'potongan_promo', 'hpp',
   'piutang_usaha', 'penjualan_b2b', 'retur_penjualan', 'aset_tetap', 'akumulasi_penyusutan',
 ]
 export const AWALAN_INTI = ['bank.', 'kliring.', 'persediaan.', 'aset_tetap.', 'akumulasi_penyusutan.']

@@ -68,7 +68,7 @@ const laba = (bersih: number, hpp: number) => ({ hpp, laba: bersih - hpp, persen
 export const KELOMPOK_REKAP = { hari: 'Per hari', kasir: 'Per kasir', shift: 'Per shift' } as const
 // tahap 5B: hpp dari sale.hpp (nilai bahan resep saat dijual), laba kotor = penjualan bersih - HPP (KONTRAK 11 butir 47).
 // total = uang diterima (total pas + pembulatan tunai, KONTRAK 11 butir 155).
-export type BarisRekap = { kunci: string; label: string; n: number; kotor: number; potongan: number; bersih: number; service: number; pajak: number; pembulatan: number; total: number; nVoid: number; nilaiVoid: number; hpp: number; laba: number; persenLaba: number | null }
+export type BarisRekap = { kunci: string; label: string; n: number; kotor: number; potongan: number; potonganPromo: number; bersih: number; service: number; pajak: number; pembulatan: number; total: number; nVoid: number; nilaiVoid: number; hpp: number; laba: number; persenLaba: number | null }
 
 export async function rekapPenjualan(db: Db, s: SaringLaporan) {
   const r = rentang(s)
@@ -88,6 +88,7 @@ export async function rekapPenjualan(db: Db, s: SaringLaporan) {
       COUNT(*) FILTER (WHERE s.status = 'Selesai')::bigint AS n,
       COALESCE(SUM(s.sub) FILTER (WHERE s.status = 'Selesai'), 0)::bigint AS kotor,
       COALESCE(SUM(s.disc) FILTER (WHERE s.status = 'Selesai'), 0)::bigint AS potongan,
+      COALESCE(SUM(s.promo_disc) FILTER (WHERE s.status = 'Selesai'), 0)::bigint AS potonganpromo,
       COALESCE(SUM(s.svc) FILTER (WHERE s.status = 'Selesai'), 0)::bigint AS service,
       COALESCE(SUM(s.tax) FILTER (WHERE s.status = 'Selesai'), 0)::bigint AS pajak,
       COALESCE(SUM(s.rounding) FILTER (WHERE s.status = 'Selesai'), 0)::bigint AS pembulatan,
@@ -104,6 +105,7 @@ export async function rekapPenjualan(db: Db, s: SaringLaporan) {
     n: N(b.n),
     kotor: N(b.kotor),
     potongan: N(b.potongan),
+    potonganPromo: N(b.potonganpromo),
     bersih: N(b.kotor) - N(b.potongan),
     service: N(b.service),
     pajak: N(b.pajak),
@@ -114,8 +116,8 @@ export async function rekapPenjualan(db: Db, s: SaringLaporan) {
     ...laba(N(b.kotor) - N(b.potongan), N(b.hpp)),
   }))
   const jumlah = hasil.reduce(
-    (a, b) => ({ ...a, n: a.n + b.n, kotor: a.kotor + b.kotor, potongan: a.potongan + b.potongan, bersih: a.bersih + b.bersih, service: a.service + b.service, pajak: a.pajak + b.pajak, pembulatan: a.pembulatan + b.pembulatan, total: a.total + b.total, nVoid: a.nVoid + b.nVoid, nilaiVoid: a.nilaiVoid + b.nilaiVoid, hpp: a.hpp + b.hpp }),
-    { kunci: '', label: 'Jumlah', n: 0, kotor: 0, potongan: 0, bersih: 0, service: 0, pajak: 0, pembulatan: 0, total: 0, nVoid: 0, nilaiVoid: 0, hpp: 0, laba: 0, persenLaba: null } as BarisRekap,
+    (a, b) => ({ ...a, n: a.n + b.n, kotor: a.kotor + b.kotor, potongan: a.potongan + b.potongan, potonganPromo: a.potonganPromo + b.potonganPromo, bersih: a.bersih + b.bersih, service: a.service + b.service, pajak: a.pajak + b.pajak, pembulatan: a.pembulatan + b.pembulatan, total: a.total + b.total, nVoid: a.nVoid + b.nVoid, nilaiVoid: a.nilaiVoid + b.nilaiVoid, hpp: a.hpp + b.hpp }),
+    { kunci: '', label: 'Jumlah', n: 0, kotor: 0, potongan: 0, potonganPromo: 0, bersih: 0, service: 0, pajak: 0, pembulatan: 0, total: 0, nVoid: 0, nilaiVoid: 0, hpp: 0, laba: 0, persenLaba: null } as BarisRekap,
   )
   Object.assign(jumlah, laba(jumlah.bersih, jumlah.hpp))
   return { rentang: r, kelompok, baris: hasil, jumlah }
@@ -140,7 +142,7 @@ export async function rekapMenu(db: Db, s: SaringLaporan) {
   const kunci = kelompok === 'menu' ? Prisma.sql`CASE WHEN c.menu_set_id IS NOT NULL THEN 'p' || c.menu_set_id ELSE 'm' || c.menu_item_id END` : Prisma.sql`c.category`
   const baris = await db.$queryRaw<Record<string, unknown>[]>`
     WITH b AS (
-      SELECT l.id, l.sale_id, l.qty, (l.price * l.qty)::bigint AS nilai, (l.menu_set_id IS NULL) AS reguler, l.hpp,
+      SELECT l.id, l.sale_id, l.qty, (l.price * l.qty)::bigint AS nilai, (l.menu_set_id IS NULL AND NOT l.promo_gift) AS reguler, l.hpp,
         l.menu_item_id, l.menu_set_id, l.name, l.category, s.disc
       FROM sale_line l JOIN sale s ON s.id = l.sale_id JOIN shift sh ON sh.id = s.shift_id
       WHERE s.status = 'Selesai' AND ${syaratJual(r, s)}

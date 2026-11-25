@@ -213,7 +213,8 @@ describe('CSV', () => {
     assert.ok(csv.startsWith('﻿Tanggal,Transaksi,Penjualan kotor'))
     const baris = csv.trim().split('\r\n')
     assert.equal(baris.length, 1 + r.baris.length + 1)
-    assert.equal(baris.at(-1), `Jumlah,4,${r.jumlah.kotor},${r.jumlah.potongan},${r.jumlah.bersih},${r.jumlah.service},${r.jumlah.pajak},${r.jumlah.pembulatan},${r.jumlah.total},1,${r.jumlah.nilaiVoid}`)
+    // Kolom Termasuk promo (KONTRAK 11 butir 160) sesudah Potongan.
+    assert.equal(baris.at(-1), `Jumlah,4,${r.jumlah.kotor},${r.jumlah.potongan},${r.jumlah.potonganPromo},${r.jumlah.bersih},${r.jumlah.service},${r.jumlah.pajak},${r.jumlah.pembulatan},${r.jumlah.total},1,${r.jumlah.nilaiVoid}`)
     const aneh = keCsv({ kolom: [{ h: 'Nama', v: (b: { n: string }) => b.n }], baris: [{ n: '=SUM(A1)' }, { n: 'a,"b"' }] })
     assert.ok(aneh.includes("'=SUM(A1)"))
     assert.ok(aneh.includes('"a,""b"""'))

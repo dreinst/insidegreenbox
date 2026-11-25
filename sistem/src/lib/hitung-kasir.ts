@@ -87,12 +87,86 @@ export const totalPecahan = (jumlah: Partial<Record<number, number>>) => PECAHAN
 export type JenisBaris = 'menu' | 'paket'
 export const kenaPotonganMember = (jenis: JenisBaris) => jenis === 'menu'
 
-export function hitungKeranjang(baris: { harga: number; qty: number; jenis: JenisBaris }[], persenMember: number, biaya: Biaya) {
-  return hitungTotal(
-    baris.map((b) => ({ harga: b.harga, qty: b.qty, reguler: kenaPotonganMember(b.jenis) })),
-    persenMember,
-    biaya,
-  )
+// Promo otomatis (KONTRAK 11 butir 160). Promo yang berlaku hari itu dikirim server ke layar kasir dan dibaca ulang
+// server saat simpan. Persen dan nominal memotong baris menu biasa saja (paket tidak kena, sama dengan potongan member,
+// karena data promo tidak punya kolom yang menunjuk paket). Hadiah menambah satu baris menu gratis.
+export type PromoKasir = {
+  id: number
+  nama: string
+  jenis: 'persen' | 'nominal' | 'hadiah'
+  persen: number
+  nominal: number
+  minBelanja: number
+  syarat: string
+  hadiah: { menuItemId: number; nama: string; harga: number } | null
 }
+
+// Nilai promo untuk pembeli: rupiah potongan, atau harga normal menu hadiah. 0 berarti tidak berlaku untuk keranjang ini.
+// Belanja minimal dibandingkan dengan subtotal semua baris sebelum potongan.
+export function nilaiPromo(p: PromoKasir, sub: number, subReguler: number) {
+  if (sub <= 0 || sub < p.minBelanja) return 0
+  if (p.jenis === 'persen') return persen(subReguler, p.persen)
+  if (p.jenis === 'nominal') return Math.min(p.nominal, subReguler)
+  return p.hadiah ? p.hadiah.harga : 0
+}
+
+export type HasilKeranjang = ReturnType<typeof hitungTotal> & {
+  // Bagian dari disc yang berasal dari promo (0 bila potongan member yang dipakai atau promo hadiah).
+  discPromo: number
+  // Persen member yang benar-benar dipakai (0 bila promo yang menang).
+  pctMember: number
+  promo: PromoKasir | null
+  hadiah: PromoKasir['hadiah']
+  nilaiMember: number
+  nilaiPromo: number
+  alasan: string
+}
+
+// Promo tidak digabung dengan potongan member: sistem memilih yang lebih besar untuk pembeli per transaksi. Di antara
+// beberapa promo yang berlaku, yang nilainya paling besar menang; bila sama, id terkecil. Seri dengan potongan member
+// dimenangkan potongan member.
+export function hitungKeranjang(baris: { harga: number; qty: number; jenis: JenisBaris }[], persenMember: number, biaya: Biaya, promo: PromoKasir[] = []): HasilKeranjang {
+  const reguler = baris.map((b) => ({ harga: b.harga, qty: b.qty, reguler: kenaPotonganMember(b.jenis) }))
+  const sub = reguler.reduce((a, b) => a + b.harga * b.qty, 0)
+  const subReguler = reguler.reduce((a, b) => a + (b.reguler ? b.harga * b.qty : 0), 0)
+  const nilaiMember = persen(subReguler, persenMember)
+  let terbaik: { p: PromoKasir; n: number } | null = null
+  for (const p of [...promo].sort((a, b) => a.id - b.id)) {
+    const n = nilaiPromo(p, sub, subReguler)
+    if (n > 0 && (!terbaik || n > terbaik.n)) terbaik = { p, n }
+  }
+  const pakaiPromo = !!terbaik && terbaik.n > nilaiMember
+  const discPromo = pakaiPromo && terbaik!.p.jenis !== 'hadiah' ? terbaik!.n : 0
+  const pctMember = pakaiPromo ? 0 : persenMember
+  const t = hitungTotal(reguler, pctMember, biaya)
+  const disc = t.disc + discPromo
+  const net = t.sub - disc
+  const svc = persen(net, biaya.service)
+  const tax = persen(net + svc, biaya.pajak)
+  let alasan = ''
+  if (terbaik && nilaiMember > 0) {
+    alasan = pakaiPromo
+      ? `Promo ${terbaik.p.nama} (${rupiah(terbaik.n)}) lebih besar dari potongan member (${rupiah(nilaiMember)}), jadi promo yang dipakai. Promo tidak digabung dengan potongan member.`
+      : `Potongan member (${rupiah(nilaiMember)}) ${nilaiMember === terbaik.n ? 'sama dengan' : 'lebih besar dari'} promo ${terbaik.p.nama} (${rupiah(terbaik.n)}), jadi potongan member yang dipakai. Promo tidak digabung dengan potongan member.`
+  }
+  return {
+    sub,
+    disc,
+    net,
+    svc,
+    tax,
+    total: net + svc + tax,
+    discPromo,
+    pctMember,
+    promo: pakaiPromo ? terbaik!.p : null,
+    hadiah: pakaiPromo && terbaik!.p.jenis === 'hadiah' ? terbaik!.p.hadiah : null,
+    nilaiMember,
+    nilaiPromo: terbaik?.n ?? 0,
+    alasan,
+  }
+}
+
+// Label promo untuk layar, struk, dan rincian: "Promo Hemat 10%", "Promo Potong 5rb", "Hadiah promo Gratis Teh".
+export const labelPromo = (p: Pick<PromoKasir, 'nama' | 'jenis' | 'persen'>) => (p.jenis === 'persen' ? `Promo ${p.nama} ${p.persen.toLocaleString('id-ID')}%` : `Promo ${p.nama}`)
 
 export const rupiah = (n: number | bigint) => `Rp ${Number(n).toLocaleString('id-ID')}`

@@ -6,6 +6,7 @@ import { rupiah } from '@/lib/hitung-kasir'
 import { wajibIzin } from '@/lib/izin'
 import { punyaIzin } from '@/lib/izin-inti'
 import { ambilPenjualan } from '@/lib/penjualan'
+import { promoBerlaku } from '@/lib/promo'
 import { shiftTerbuka } from '@/lib/shift'
 import { cariMemberAksi, simpanPenjualanAksi } from './aksi'
 import { LayarKasir } from './layar'
@@ -41,7 +42,7 @@ export default async function HalamanKasir({ searchParams }: { searchParams: Pro
 
   // Hanya kategori dan menu yang aktif, diurutkan menurut urutan kategori lalu urutan menu (sama dengan modul Menu).
   // Paket set aktif (beserta menu utama dan minumannya) tampil sebagai kelompok sendiri.
-  const [kategori, menu, paket, metode, lokasi] = await Promise.all([
+  const [kategori, menu, paket, metode, lokasi, promo] = await Promise.all([
     db.menuCategory.findMany({ where: { active: true }, orderBy: [{ sort: 'asc' }, { name: 'asc' }], select: { code: true, name: true } }),
     db.menuItem.findMany({
       where: { active: true, categoryRef: { active: true } },
@@ -57,6 +58,7 @@ export default async function HalamanKasir({ searchParams }: { searchParams: Pro
     }),
     db.paymentMethod.findMany({ where: { active: true }, orderBy: { id: 'asc' }, select: { id: true, name: true, kind: true } }),
     db.location.findUniqueOrThrow({ where: { id: shift.locationId }, include: { branch: true } }),
+    promoBerlaku(db),
   ])
   const bolehJual = punyaIzin(p.izin, 'kasir.layar', 'T')
 
@@ -88,6 +90,7 @@ export default async function HalamanKasir({ searchParams }: { searchParams: Pro
           paket={paket.map((p) => ({ id: p.id, name: p.name, price: Number(p.price), normalPrice: Number(p.normalPrice), minuman: p.drinkItem.name }))}
           metode={metode.map((m) => ({ id: m.id, name: m.name, tunai: m.kind === 'tunai' }))}
           biaya={{ pajak: Number(lokasi.branch.taxPct), service: Number(lokasi.branch.servicePct) }}
+          promo={promo}
           aksi={simpanPenjualanAksi}
           cariMember={cariMemberAksi}
         />

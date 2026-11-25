@@ -76,5 +76,7 @@ jalan audit-ab.mjs
 # Keputusan pemilik 24 November 2026 (KONTRAK 11 butir 155 sampai 157): pembulatan tunai, Aturan Persetujuan, alasan
 # kunjungan member. Sesudah kasir.mjs dan laporan.mjs, sebelum klik.mjs yang mengunci login Admin.
 jalan keputusan.mjs
+# Perbaikan dari panduan (KONTRAK 11 butir 158 sampai 160): Menunggu Persetujuan, setoran, promo otomatis di kasir.
+jalan panduan.mjs
 jalan klik.mjs
 exit $HASIL

@@ -172,7 +172,9 @@ describe('hitungan (sama dengan admin lama)', () => {
       { pajak: 10, service: 5 },
     )
     // Potongan 10% hanya dari 28.000. Net 115.200, service 5.760, pajak 12.096.
-    assert.deepEqual(t, { sub: 118000, disc: 2800, net: 115200, svc: 5760, tax: 12096, total: 133056 })
+    const { sub, disc, net, svc, tax, total } = t
+    assert.deepEqual({ sub, disc, net, svc, tax, total }, { sub: 118000, disc: 2800, net: 115200, svc: 5760, tax: 12096, total: 133056 })
+    assert.deepEqual([t.discPromo, t.pctMember, t.promo], [0, 10, null], 'tanpa promo, potongan member yang dipakai')
     assert.equal(hitungKeranjang([{ harga: 45000, qty: 1, jenis: 'paket' }], 15, { pajak: 0, service: 0 }).disc, 0)
   })
 })

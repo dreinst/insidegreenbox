@@ -4,7 +4,7 @@
 import { useActionState, useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { PesanHasil, TombolKirim } from '@/components/form'
 import { HASIL_AWAL, type HasilAksi } from '@/lib/aksi'
-import { bagiBayar, hitungKeranjang, kenaPotonganMember, rupiah, sisaTunaiBulat, type JenisBaris } from '@/lib/hitung-kasir'
+import { bagiBayar, hitungKeranjang, kenaPotonganMember, labelPromo, rupiah, sisaTunaiBulat, type JenisBaris, type PromoKasir } from '@/lib/hitung-kasir'
 import type { HasilCariMember } from './aksi'
 
 type Kategori = { code: string; name: string }
@@ -26,6 +26,8 @@ type Prop = {
   paket: Paket[]
   metode: Metode[]
   biaya: { pajak: number; service: number }
+  // Promo yang berlaku hari ini (KONTRAK 11 butir 160). Server menghitung ulang saat simpan.
+  promo: PromoKasir[]
   aksi: (sebelum: HasilAksi, fd: FormData) => Promise<HasilAksi>
   cariMember: (wa: string) => Promise<HasilCariMember>
 }
@@ -33,7 +35,7 @@ type Prop = {
 const angka = (s: string) => Number(s.replace(/\D/g, '')) || 0
 const ribuan = (n: number) => (n ? n.toLocaleString('id-ID') : '')
 
-export function LayarKasir({ kategori: semuaKategori, menu, paket, metode, biaya, aksi, cariMember }: Prop) {
+export function LayarKasir({ kategori: semuaKategori, menu, paket, metode, biaya, promo, aksi, cariMember }: Prop) {
   const [hasil, kirim] = useActionState(aksi, HASIL_AWAL)
   const [mode, setMode] = useState<'dinein' | 'takeaway'>('dinein')
   const [meja, setMeja] = useState('')
@@ -73,6 +75,7 @@ export function LayarKasir({ kategori: semuaKategori, menu, paket, metode, biaya
     keranjang.map((b) => ({ harga: perKunci.get(b.kunci)?.price ?? 0, qty: b.qty, jenis: b.jenis })),
     member?.persen ?? 0,
     biaya,
+    promo,
   )
   const masukanBayar = bayar.map((b) => {
     const m = metode.find((x) => x.id === b.metodeId)
@@ -126,6 +129,7 @@ export function LayarKasir({ kategori: semuaKategori, menu, paket, metode, biaya
     baris: keranjang.map((b) => (b.jenis === 'paket' ? { menuSetId: b.id, qty: b.qty, catatan: b.catatan } : { menuItemId: b.id, qty: b.qty, catatan: b.catatan })),
     bayar: masukanBayar.map((b) => ({ metodeId: b.metodeId, jumlah: b.jumlah })),
     totalLayar: t.total,
+    promoLayar: t.promo?.id ?? null,
   })
 
   return (
@@ -205,7 +209,7 @@ export function LayarKasir({ kategori: semuaKategori, menu, paket, metode, biaya
                       {m && !kenaPotonganMember(b.jenis) ? (
                         <small className="lk-baris-ket">
                           {m.sub}
-                          {member?.persen ? ', tanpa potongan member' : ''}
+                          {t.discPromo ? ', tanpa potongan promo' : member?.persen ? ', tanpa potongan member' : ''}
                         </small>
                       ) : null}
                       <div className="lk-baris-bawah">
@@ -227,6 +231,30 @@ export function LayarKasir({ kategori: semuaKategori, menu, paket, metode, biaya
             ) : (
               <p className="redup">Belum ada item. Ketuk menu untuk menambah.</p>
             )}
+            {t.hadiah ? (
+              <p className="lk-hadiah">
+                <b>Hadiah: {t.hadiah.nama}</b>
+                <span>gratis</span>
+              </p>
+            ) : null}
+            {promo.length ? (
+              <div className="lk-promo" aria-live="polite">
+                {t.promo ? (
+                  <p>
+                    <b>{labelPromo(t.promo)}</b> dipakai otomatis{t.promo.syarat ? `. Syarat: ${t.promo.syarat}` : ''}.
+                  </p>
+                ) : (
+                  <p>
+                    Promo hari ini:{' '}
+                    {promo
+                      .map((x) => `${labelPromo(x)}${x.minBelanja ? ` (belanja min ${rupiah(x.minBelanja)})` : ''}`)
+                      .join(', ')}
+                    .
+                  </p>
+                )}
+                {t.alasan ? <p className="redup">{t.alasan}</p> : null}
+              </div>
+            ) : null}
 
             <div className="lk-member">
               {member ? (
@@ -278,9 +306,14 @@ export function LayarKasir({ kategori: semuaKategori, menu, paket, metode, biaya
                 <dt>Subtotal</dt>
                 <dd>{rupiah(t.sub)}</dd>
               </div>
-              {t.disc > 0 ? (
+              {t.discPromo > 0 && t.promo ? (
                 <div>
-                  <dt>Potongan member {member?.persen.toLocaleString('id-ID')}%</dt>
+                  <dt>Potongan {labelPromo(t.promo).replace(/^Promo /, 'promo ')}</dt>
+                  <dd>-{rupiah(t.discPromo)}</dd>
+                </div>
+              ) : t.disc > 0 ? (
+                <div>
+                  <dt>Potongan member {t.pctMember.toLocaleString('id-ID')}%</dt>
                   <dd>-{rupiah(t.disc)}</dd>
                 </div>
               ) : null}
