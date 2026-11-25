@@ -52,6 +52,7 @@ sistem/
         _jual/          tahap 6A: aksi server dokumen penjualan B2B dan pengikat panel status (folder privat)
         profil-usaha/   tahap 6A: profil usaha per cabang (atur.lokasi)
         persetujuan/    aturan persetujuan dokumen (approval_rule), hanya Owner yang mengubah (bagian 11 butir 156)
+        menunggu-persetujuan/   antrean dokumen yang menunggu Setujui atau Posting dari semua modul (bagian 11 butir 158)
         kas/ (aksi.ts dipakai bersama), pindah-dana/   tahap 5C: daftar, baru, [id]
         rekonsiliasi/   tahap 5C: daftar, impor/, baru/, [id] (pencocokan)
         aset/ (kategori/), penyusutan/, pelepasan-aset/, anggaran/, realisasi-anggaran/ (unduh/ untuk CSV)
@@ -95,6 +96,7 @@ sistem/
                         penerimaan.ts, retur.ts, piutang.ts; status lewat ubahStatusBeli di beli/dokumen.ts
       profil.ts         tahap 6A: profil usaha (branch)
       persetujuan.ts    nama jenis dokumen, daftar, dan simpan approval_rule (bagian 11 butir 156)
+      menunggu.ts       satu kueri antrean Menunggu Persetujuan untuk halaman, Beranda, dan lencana sidebar (bagian 11 butir 158)
                         tahap 5C: beli.ts (jurnal dokumen pembelian)
       aset/             tahap 6B: kategori.ts, aset.ts (data, aktivasi berjurnal, pembatalan), penyusutan.ts (dokumen
                         bulanan garis lurus), pelepasan.ts (laba atau rugi pelepasan)
@@ -296,6 +298,8 @@ Tahap 5A menambah Setoran POS (`/setoran`, `kasir.setoran`), Laporan (`/laporan`
 Tahap 5C menambah Kas Masuk/Keluar (`/kas`, `kas.transaksi`, rincian `/kas/[id]`), Pindah Dana (`/pindah-dana`, `kas.pindah`), dan Rekonsiliasi Bank (`/rekonsiliasi`, `kas.rekonsiliasi`, dengan `impor/`, `baru/`, dan `[id]`) di awal grup Keuangan, sebelum Rekening Bank dan Hutang Pemasok. Admin melihat Kas Masuk/Keluar; Pindah Dana dan Rekonsiliasi Bank hanya Owner.
 
 Tahap 5B menambah grup Akuntansi sesudah Keuangan: Akun dan Pemetaan (`/akun`, tab Bagan akun dan Pemetaan, `akun.coa`), Jurnal Umum (`/jurnal`, `akun.jurnal`), Buku Besar (`/buku-besar`, `akun.buku_besar`), Laporan Keuangan (`/laporan-keuangan`, tab Neraca Saldo, Laba Rugi, Neraca, `laporan.keuangan`), dan Tutup Periode (`/tutup-periode`, `akun.tutup_periode`). Dengan matriks bawaan, Owner melihat kelima item, Admin hanya Akun dan Pemetaan (Lihat), dan Kasir tidak melihat grup ini.
+
+Perbaikan dari panduan (25 November 2026) menambah Menunggu Persetujuan (`/menunggu-persetujuan`) di grup tanpa judul sesudah Beranda. Item ini tidak memakai satu kode menu: ia tampil bila peran memegang Setujui di salah satu modul antrean (`bolehLihatMenunggu` di `src/lib/menunggu.ts`, item `khusus: 'menunggu'` di `SIDEBAR_GRUP`), jadi dengan matriks bawaan Owner dan Admin melihatnya (Admin memegang Setujui di Permintaan Pembelian dan Perintah Produksi) dan Kasir tidak. Item membawa lencana kecil berisi jumlah dokumen yang bisa ditindaklanjuti pengguna itu (bagian 11 butir 158).
 
 ## 9. Batas sumber daya produksi
 
@@ -541,6 +545,16 @@ Keputusan pemilik 24 November 2026 sesudah audit (pembulatan tunai, aturan perse
     - Alasan tercatat di `member.ubah`: `after_json.alasanKunjungan`, dan ringkasan menyebut "(kunjungan X menjadi Y). Alasan: ...". `before_json` dan `after_json` tetap berisi `visits` lama dan baru.
     - Formulir mengirim kunjungan yang tampil saat dibuka (`kunjunganAwal`, diikat di aksi server). Bila isian kunjungan sama dengannya, kunjungan dianggap tidak diubah dan nilai di basis data dipertahankan, sehingga penjualan atau void kasir selama formulir terbuka tidak tertimpa dan tidak memaksa alasan. Baris `member` dikunci `FOR UPDATE` selama simpan.
     - Tafsiran: member baru yang dibuat pemegang Ubah `menu.tingkat` dengan kunjungan awal di atas 0 juga wajib beralasan, karena hasilnya sama dengan mengubah kunjungan dari 0; alasannya masuk `member.tambah`. Penambahan dan pengurangan otomatis oleh penjualan dan void (`catatKunjungan`) tidak butuh alasan.
+
+Perbaikan dari temuan saat menulis panduan (25 November 2026, pemilik minta semuanya dibereskan):
+
+158. Halaman Menunggu Persetujuan (`/menunggu-persetujuan`, tanpa migrasi). Satu halaman baca saja yang mengumpulkan dokumen dari semua modul yang menunggu tindakan pemegang Setujui atau Posting, lewat satu kueri bersama (`daftarMenunggu` dan `hitungMenunggu` di `src/lib/menunggu.ts`, satu `UNION ALL` per jenis). Rincian:
+    - Isi antrean: dokumen berstatus Diajukan di semua jenis dokumen yang bisa diajukan; Pembayaran Pembelian, Kas Masuk, Kas Keluar, dan Pindah Dana yang sudah Disetujui tetapi belum Diposting (golongan `pelaksana_setuju`, menunggu pemegang Posting); dan shift lama berstatus "Perlu persetujuan" (butir 121). Daftar jenisnya (`JENIS_MENUNGGU`) disusun dari `JENIS_DOKUMEN` di `status.ts` dengan menu dan jalur dari `DOK_BELI`, `DOK_STOK`, dan `INFO_KAS`; Perintah Produksi, Setoran POS, Jurnal Memorial (`journal.source_type = 'memorial'`), dan shift ditambah di modul itu. Anggaran, Rekonsiliasi Bank, Pelepasan Aset, dan Penyusutan tidak pernah memakai Diajukan dan dicatat di `TANPA_AJUKAN` beserta alasannya.
+    - Tes `tests/menunggu.test.ts` memastikan setiap jenis di `JENIS_DOKUMEN` yang transisinya boleh ke Diajukan, dan setiap tabel berkolom `doc_status` di basis data, ada di antrean atau di `TANPA_AJUKAN`, dan modul yang dikecualikan tidak menulis `'Diajukan'`. Sesudah itu satu baris per jenis disisipkan ke basis data uji dan harus muncul, sementara Draft tidak.
+    - Kolom: jenis dokumen, nomor (tautan ke rincian dokumen tempat menyetujui), tanggal dokumen, pengaju (`submitted_by`, untuk shift kasirnya), nilai (total, jumlah, atau nilai di kepala dokumen; jurnal memorial jumlah debit; dokumen stok tanpa kolom nilai tampil "-"; shift berisi selisih kas), lama menunggu sejak `submitted_at` (yang menunggu posting sejak `approved_at`, shift sejak `closed_at`), dan tindakan. Urutannya dari yang paling lama menunggu, 50 baris per halaman, dengan saringan per jenis beserta jumlahnya.
+    - Izin: halaman dan item sidebar terbuka bagi peran yang memegang Setujui di salah satu menu antrean (`wajibIzinSalahSatu`, penolakan dicatat `izin.ditolak` dengan `doc_id` `<id peran>:menunggu_persetujuan`). Isi daftar mengikuti izin Lihat: jenis yang menunya tidak boleh dilihat tidak ikut, dan shift orang lain hanya untuk yang boleh melihat semua kasir (`lihatSemuaKasir`). Baris yang tidak bisa ditindak pengguna itu (misalnya Pesanan Pembelian bagi Admin) tetap tampil dengan keterangan "Menunggu pemegang izin Setujui".
+    - Bisa ditindak berarti memegang Setujui di menu dokumen untuk yang Diajukan, atau Posting untuk yang Disetujui. Menu tanpa aksi Setujui di katalog (Pindah Stok) memakai Posting. Tafsiran: dokumen pelaksana Diajukan yang tidak terkena aturan persetujuan sebenarnya bisa diposting pemegang Posting saja, tetapi antrean menghitungnya sebagai tugas pemegang Setujui supaya tidak perlu membaca `approval_rule` per dokumen.
+    - Beranda menampilkan kartu "Menunggu persetujuan" berisi jumlah yang bisa ditindak dan jumlah per jenis (tautan ke saringan), dan item sidebar membawa lencana dengan angka yang sama. Persetujuan tetap dilakukan di rincian dokumen, jadi tidak ada aksi atau peristiwa audit baru.
 
 ## 12. Persediaan dan mesin stok (tahap 4A)
 

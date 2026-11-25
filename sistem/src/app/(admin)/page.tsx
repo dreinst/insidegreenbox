@@ -6,6 +6,7 @@ import { db } from '@/lib/db'
 import { wajibMasuk } from '@/lib/izin'
 import { punyaIzin } from '@/lib/izin-inti'
 import { lihatSemua } from '@/lib/jejak'
+import { JENIS_MENUNGGU, bolehLihatMenunggu, hitungMenunggu } from '@/lib/menunggu'
 import { formatWaktu } from '@/lib/waktu'
 
 export const metadata: Metadata = { title: 'Beranda' }
@@ -15,15 +16,19 @@ export default async function Beranda() {
   const bolehPengguna = punyaIzin(p.izin, 'atur.pengguna', 'L')
   const bolehAudit = punyaIzin(p.izin, 'atur.audit', 'L')
   const semua = lihatSemua(p)
+  const bolehMenunggu = bolehLihatMenunggu(p)
 
-  const [peran, hitung, aktivitas, riwayatMasuk] = await Promise.all([
+  const [peran, hitung, aktivitas, riwayatMasuk, menunggu] = await Promise.all([
     bolehPengguna ? db.role.findMany({ orderBy: { id: 'asc' } }) : [],
     bolehPengguna ? db.appUser.groupBy({ by: ['roleId', 'active'], _count: { _all: true } }) : [],
     bolehAudit
       ? db.auditLog.findMany({ where: semua ? {} : { userId: p.id }, orderBy: { id: 'desc' }, take: 8, include: { user: { select: { name: true } } } })
       : [],
     db.auditLog.findMany({ where: { userId: p.id, action: { in: ['masuk.berhasil', 'masuk.gagal', 'masuk.terkunci'] } }, orderBy: { id: 'desc' }, take: 5 }),
+    bolehMenunggu ? hitungMenunggu(db, p) : null,
   ])
+  // Jenis dokumen yang sedang menunggu, urut sesuai daftar antrean (KONTRAK 11 butir 158).
+  const perJenis = menunggu ? JENIS_MENUNGGU.filter((j) => menunggu.perJenis.get(j.kunci)).map((j) => ({ kunci: j.kunci, nama: j.nama, n: menunggu.perJenis.get(j.kunci)! })) : []
   const jumlah = (roleId: number, aktif: boolean) => hitung.find((h) => h.roleId === roleId && h.active === aktif)?._count._all ?? 0
   const totalAktif = hitung.filter((h) => h.active).reduce((n, h) => n + h._count._all, 0)
 
@@ -31,6 +36,28 @@ export default async function Beranda() {
     <>
       <KepalaHalaman judul={`Halo, ${p.name}`} keterangan={`Kamu masuk sebagai ${p.peran.name}.`} />
       <div className="kisi">
+        {menunggu ? (
+          <section className="kartu" aria-labelledby="judul-menunggu">
+            <div className="kartu-kepala">
+              <h2 id="judul-menunggu">Menunggu persetujuan</h2>
+              <Link href="/menunggu-persetujuan">Buka daftar</Link>
+            </div>
+            <p className="angka-besar">{menunggu.bisa}</p>
+            <p className="redup">{menunggu.bisa ? 'dokumen menunggu tindakanmu' : 'Tidak ada dokumen yang menunggu tindakanmu.'}</p>
+            {perJenis.length ? (
+              <ul className="daftar-angka">
+                {perJenis.map((j) => (
+                  <li key={j.kunci}>
+                    <Link href={`/menunggu-persetujuan?jenis=${encodeURIComponent(j.kunci)}`}>{j.nama}</Link>
+                    <span>
+                      <b>{j.n}</b>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </section>
+        ) : null}
         {bolehPengguna ? (
           <section className="kartu" aria-labelledby="judul-pengguna">
             <div className="kartu-kepala">

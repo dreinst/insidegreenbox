@@ -59,6 +59,10 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
 .samping nav a:hover { background: #ffffff14; color: #fff }
 .samping nav a.aktif { color: var(--ink); font-weight: 800; background: linear-gradient(180deg, var(--green-hi), var(--green)); border-bottom: 3px solid var(--green-lo); box-shadow: inset 0 2px 0 rgba(255, 255, 255, .45) }
 .samping :focus-visible { outline-color: var(--green-soft) }
+/* KONTRAK 11 butir 158: ringkasan di halaman Menunggu Persetujuan. */
+.ringkas-menunggu { margin: 0 0 14px }
+/* KONTRAK 11 butir 158: jumlah dokumen yang menunggu tindakan di item Menunggu Persetujuan. */
+.lencana-samping { margin-left: auto; min-width: 22px; height: 22px; padding: 0 7px; border-radius: 999px; background: var(--butter); color: var(--ink); font-size: 12px; font-weight: 800; line-height: 22px; text-align: center; flex: none }
 /* tahap 4B: grup sidebar dengan judul kecil. Di desktop item sedikit lebih rapat supaya satu grup muat sekali pandang. */
 .samping-grup { display: flex; flex-direction: column; gap: 2px }
 .samping-grup + .samping-grup { margin-top: 10px; padding-top: 10px; border-top: 1px solid #ffffff1a }

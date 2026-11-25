@@ -79,6 +79,13 @@ export function Kerangka({ grup, nama, username, peran, children }: Prop) {
                 >
                   <Ikon nama={i.ikon} />
                   {i.label}
+                  {i.lencana ? (
+                    <span className="lencana-samping" title={`${i.lencana} dokumen menunggu tindakanmu`}>
+                      <span className="sr">, </span>
+                      {i.lencana > 99 ? '99+' : i.lencana}
+                      <span className="sr"> menunggu</span>
+                    </span>
+                  ) : null}
                 </Link>
               ))}
             </div>

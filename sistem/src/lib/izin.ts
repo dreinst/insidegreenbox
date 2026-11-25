@@ -38,6 +38,17 @@ export async function wajibIzin(menu: string, aksi: Aksi = 'L'): Promise<Penggun
   return p
 }
 
+// Halaman yang terbuka bila pengguna memegang aksi itu di salah satu menu (Menunggu Persetujuan, KONTRAK 11 butir 158).
+// Penolakan dicatat dengan kode halaman, karena tidak ada satu menu yang mewakili.
+export async function wajibIzinSalahSatu(kode: string, menu: string[], aksi: Aksi): Promise<Pengguna> {
+  const p = await wajibMasuk()
+  if (!menu.some((m) => punyaIzin(p.izin, m, aksi))) {
+    await catatTolak(p, kode, aksi, 'halaman')
+    forbidden()
+  }
+  return p
+}
+
 export async function wajibSaklar(p: Pengguna, kode: string) {
   if (!saklarNyala(p, kode)) {
     await catatTolak(p, `saklar:${kode}`, 'U', 'halaman')

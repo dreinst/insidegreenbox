@@ -181,7 +181,9 @@ export const PERAN_SISTEM: { kode: KodePeranSistem; nama: string }[] = [
 ]
 
 // menu berisi satu kode, beberapa kode (tampil bila salah satunya boleh dilihat), atau null untuk semua pengguna.
-export type ItemSidebar = { href: string; label: string; menu: string | string[] | null; ikon: string }
+// khusus 'menunggu': item Menunggu Persetujuan, tampil bila memegang Setujui di salah satu modul antrean (dihitung di
+// layout lewat bolehLihatMenunggu, KONTRAK 11 butir 158). lencana: angka kecil di kanan label.
+export type ItemSidebar = { href: string; label: string; menu: string | string[] | null; ikon: string; khusus?: 'menunggu'; lencana?: number }
 
 // Hanya halaman yang sudah dibangun (KONTRAK 8). menu null artinya tampil untuk semua pengguna yang masuk.
 // tahap 3B: modul kasir.
@@ -225,14 +227,22 @@ const SIDEBAR_B2B: ItemSidebar[] = [
 const SIDEBAR_PIUTANG: ItemSidebar = { href: '/piutang', label: 'Piutang Pelanggan', menu: 'kas.piutang', ikon: 'piutang' }
 
 // Item tampil bila pengguna memegang Lihat di kode menunya (KONTRAK 8).
-export const itemTampil = (i: ItemSidebar, boleh: (menu: string) => boolean) => i.menu === null || (Array.isArray(i.menu) ? i.menu.some(boleh) : boleh(i.menu))
+// Item khusus tidak tampil lewat aturan ini; layout memutuskannya sendiri.
+export const itemTampil = (i: ItemSidebar, boleh: (menu: string) => boolean) => !i.khusus && (i.menu === null || (Array.isArray(i.menu) ? i.menu.some(boleh) : boleh(i.menu)))
 
 // tahap 4B: sidebar dikelompokkan dengan judul grup supaya lebih dari 20 item mudah dipindai. Grup tanpa item yang boleh
 // dilihat tidak ditampilkan. judul null berarti tanpa judul (Beranda).
 export type GrupSidebar = { judul: string | null; item: ItemSidebar[] }
 
 export const SIDEBAR_GRUP: GrupSidebar[] = [
-  { judul: null, item: [{ href: '/', label: 'Beranda', menu: null, ikon: 'beranda' }] },
+  {
+    judul: null,
+    item: [
+      { href: '/', label: 'Beranda', menu: null, ikon: 'beranda' },
+      // KONTRAK 11 butir 158: antrean dokumen yang menunggu persetujuan atau posting.
+      { href: '/menunggu-persetujuan', label: 'Menunggu Persetujuan', menu: null, ikon: 'menunggu', khusus: 'menunggu' },
+    ],
+  },
   // tahap 3B dan 3A: kasir dan metode bayarnya.
   // tahap 5A: Setoran POS di grup Kasir.
   { judul: 'Kasir', item: [...SIDEBAR_KASIR, SIDEBAR_SETORAN[0], { href: '/metode-bayar', label: 'Metode Bayar', menu: 'akun.metode_bayar', ikon: 'bayar' }] },

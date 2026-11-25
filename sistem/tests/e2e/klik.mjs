@@ -38,8 +38,9 @@ const SIDEBAR_HARAP = {
   // tahap 5A: Setoran POS di grup Kasir, Rekening Bank di grup Keuangan, Laporan di grup Laporan (Owner dan Admin).
   // tahap 5B: grup Akuntansi sesudah Keuangan; Admin hanya Akun dan Pemetaan.
   // tahap 5C: Kas Masuk/Keluar, Pindah Dana, dan Rekonsiliasi Bank di awal grup Keuangan; Admin hanya Kas Masuk/Keluar.
-  owner: ['Beranda', ...KASIR_3B, 'PIN Kasir', 'Setoran POS', 'Metode Bayar', 'Menu dan Harga', 'Promo', 'Member', ...STOK_4A, ...PRODUKSI_4B, ...BELI_4C, ...B2B_6A, 'Kas Masuk/Keluar', 'Pindah Dana', 'Rekonsiliasi Bank', 'Rekening Bank', 'Hutang Pemasok', 'Piutang Pelanggan', ...AKUNTANSI_5B, ...ASET_6B, 'Laporan', 'Lokasi', 'Profil Usaha', 'Pengguna', 'Peran dan Izin', 'Saklar Fitur', 'Aturan Persetujuan', 'Jejak Audit'],
-  admin: ['Beranda', ...KASIR_3B, 'PIN Kasir', 'Setoran POS', 'Metode Bayar', 'Menu dan Harga', 'Promo', 'Member', ...STOK_4A, ...PRODUKSI_4B, ...BELI_4C, ...B2B_6A, 'Kas Masuk/Keluar', 'Rekening Bank', 'Hutang Pemasok', 'Piutang Pelanggan', 'Akun dan Pemetaan', ...ASET_6B_ADMIN, 'Laporan', 'Lokasi', 'Profil Usaha', 'Jejak Audit'],
+  // KONTRAK 11 butir 158: Menunggu Persetujuan sesudah Beranda untuk peran yang memegang Setujui di salah satu modul.
+  owner: ['Beranda', 'Menunggu Persetujuan', ...KASIR_3B, 'PIN Kasir', 'Setoran POS', 'Metode Bayar', 'Menu dan Harga', 'Promo', 'Member', ...STOK_4A, ...PRODUKSI_4B, ...BELI_4C, ...B2B_6A, 'Kas Masuk/Keluar', 'Pindah Dana', 'Rekonsiliasi Bank', 'Rekening Bank', 'Hutang Pemasok', 'Piutang Pelanggan', ...AKUNTANSI_5B, ...ASET_6B, 'Laporan', 'Lokasi', 'Profil Usaha', 'Pengguna', 'Peran dan Izin', 'Saklar Fitur', 'Aturan Persetujuan', 'Jejak Audit'],
+  admin: ['Beranda', 'Menunggu Persetujuan', ...KASIR_3B, 'PIN Kasir', 'Setoran POS', 'Metode Bayar', 'Menu dan Harga', 'Promo', 'Member', ...STOK_4A, ...PRODUKSI_4B, ...BELI_4C, ...B2B_6A, 'Kas Masuk/Keluar', 'Rekening Bank', 'Hutang Pemasok', 'Piutang Pelanggan', 'Akun dan Pemetaan', ...ASET_6B_ADMIN, 'Laporan', 'Lokasi', 'Profil Usaha', 'Jejak Audit'],
   kasir: ['Beranda', ...KASIR_3B, 'Menu dan Harga', 'Member'],
 }
 const LEBAR = [
@@ -113,21 +114,22 @@ for (const { w, h } of LEBAR) {
     await masuk(page, AKUN[peran])
     await bukaLaci(page, w)
     if (w <= 900) await potret(page, `${w}-${peran}-laci`)
-    const label = await page.$$eval('.samping nav a', (a) => a.map((x) => x.textContent.trim()))
+    // Lencana jumlah di item Menunggu Persetujuan bukan bagian dari label.
+    const label = await page.$$eval('.samping nav a', (a) => a.map((x) => [...x.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent).join('').trim()))
     cek(`${w}px ${peran}: sidebar sesuai izin`, JSON.stringify(label) === JSON.stringify(SIDEBAR_HARAP[peran]), label.join(', '))
     if (w <= 900) await page.click('.tutup-laci')
     for (const teks of label) {
       await bukaLaci(page, w)
-      const tautan = page.locator(`.samping nav a:text-is("${teks}")`)
+      const tautan = page.locator('.samping nav a').nth(label.indexOf(teks))
       const href = await tautan.getAttribute('href')
       await tautan.click()
       await page.waitForURL((u) => u.pathname === href, { timeout: 15000 })
       await page.waitForLoadState('networkidle')
-      await page.waitForFunction((t) => document.querySelector('.samping nav a.aktif')?.textContent.trim() === t, teks)
+      await page.waitForFunction((t) => [...(document.querySelector('.samping nav a.aktif')?.childNodes ?? [])].filter((n) => n.nodeType === 3).map((n) => n.textContent).join('').trim() === t, teks)
       await lacitutup(page, w)
       const res = await page.request.get(page.url())
       const h1 = await page.textContent('h1')
-      const aktif = await page.$eval('.samping nav a.aktif', (a) => a.textContent.trim()).catch(() => '')
+      const aktif = await page.$eval('.samping nav a.aktif', (a) => [...a.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent).join('').trim()).catch(() => '')
       const lebih = await luapan(page)
       const slug = teks.toLowerCase().replace(/[^a-z0-9]+/g, '-')
       await potret(page, `${w}-${peran}-${slug}`)

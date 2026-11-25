@@ -325,6 +325,13 @@ const JALUR: Record<string, React.ReactNode> = {
       <path d="M15 3v4h4M9 14l2.5 2.5L16 12" />
     </>
   ),
+  // Menunggu persetujuan: jam pasir.
+  menunggu: (
+    <>
+      <path d="M7 3h10M7 21h10" />
+      <path d="M8 3c0 5 8 5 8 9s-8 4-8 9M16 3c0 5-8 5-8 9s8 4 8 9" />
+    </>
+  ),
   tutup: <path d="M6 6l12 12M18 6L6 18" />,
   keluar: <path d="M14 4h5v16h-5M10 8l-4 4 4 4M6 12h10" />,
 }
