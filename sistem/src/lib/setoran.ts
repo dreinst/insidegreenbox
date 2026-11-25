@@ -161,7 +161,7 @@ async function rekeningBawaan(tx: Tx, metode: { id: number; kind: string }) {
 
 export type HasilBuat = { dibuat: { id: number; no: string; metode: string }[]; diperbarui: { id: number; no: string; metode: string; baru: number }[]; dilewati: { no: string; metode: string; status: string }[] }
 
-// Tombol "Buat setoran hari ini": untuk tiap metode yang punya shift ditutup dan belum disetor pada tanggal itu,
+// Tombol "Buat setoran untuk tanggal ini" (dulu "Buat setoran hari ini", KONTRAK 11 butir 159): untuk tiap metode yang punya shift ditutup dan belum disetor pada tanggal itu,
 // membuat Draft baru, atau menambah baris ke Draft yang sudah ada. Setoran yang sudah diajukan atau diposting
 // dilewati dan dilaporkan.
 export async function buatSetoranHarian(db: Db, k: Konteks, aktor: Aktor, masukan: unknown): Promise<HasilBuat> {

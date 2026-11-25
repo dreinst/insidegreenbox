@@ -152,7 +152,7 @@ const setoran = {}
   await page.goto(`${BASE}/setoran`)
   await potret(page, '1440-admin-setoran-kosong')
   cek('setoran: tanggal bawaan hari ini (WIB)', (await page.inputValue('#k-tanggal')) === hariIni, await page.inputValue('#k-tanggal'))
-  await Promise.all([page.waitForURL(/pesan=setoran-dibuat/), page.click('button:text-is("Buat setoran hari ini")')])
+  await Promise.all([page.waitForURL(/pesan=setoran-dibuat/), page.click('button:text-is("Buat setoran untuk tanggal ini")')])
   const dok = await semua("select s.id, s.no, s.status, m.name metode, s.expected_total, s.bank_account_id from pos_settlement s join payment_method m on m.id=s.payment_method_id where s.date=$1::date order by s.id", [hariIni])
   for (const d of dok) setoran[d.metode] = d
   cek('setoran: satu draf per metode (Tunai, QRIS, Debit)', ['Tunai', 'QRIS', 'Debit'].every((m) => setoran[m]?.status === 'Draft') && dok.length === 3, dok.map((d) => `${d.no} ${d.metode}`).join(', '))
@@ -183,7 +183,7 @@ const setoran = {}
 
   // Tombol kedua tidak membuat dokumen ganda.
   await page.goto(`${BASE}/setoran`)
-  await page.click('button:text-is("Buat setoran hari ini")')
+  await page.click('button:text-is("Buat setoran untuk tanggal ini")')
   await page.waitForSelector('.pesan.galat')
   cek('setoran: tombol kedua ditolak tanpa dokumen ganda', (await page.textContent('.pesan.galat')).includes('Tidak ada shift ditutup') && (await satu('select count(*)::int n from pos_settlement')).n === 3, await page.textContent('.pesan.galat'))
 

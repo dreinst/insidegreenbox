@@ -17,14 +17,14 @@ export function FormBuat({ aksi, awal, maks }: { aksi: Aksi; awal: string; maks:
       <div className="st-buat">
         <div className={`kolom${galat ? ' salah' : ''}`}>
           <label htmlFor="k-tanggal">Tanggal shift</label>
-          <input id="k-tanggal" name="tanggal" type="date" max={maks} defaultValue={nilaiAwal(hasil, 'tanggal', awal)} required aria-invalid={galat ? true : undefined} aria-describedby={galat ? 'k-tanggal-g' : undefined} />
+          <input id="k-tanggal" name="tanggal" type="date" max={maks} defaultValue={nilaiAwal(hasil, 'tanggal', awal)} required aria-invalid={galat ? true : undefined} aria-describedby={galat ? 'k-tanggal-g k-tanggal-bantu' : 'k-tanggal-bantu'} />
           {galat ? (
             <small id="k-tanggal-g" className="galat-kolom">
               {galat}
             </small>
           ) : null}
         </div>
-        <TombolKirim>Buat setoran hari ini</TombolKirim>
+        <TombolKirim>Buat setoran untuk tanggal ini</TombolKirim>
       </div>
     </form>
   )

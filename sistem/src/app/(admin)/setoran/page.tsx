@@ -33,7 +33,9 @@ export default async function DaftarSetoran({ searchParams }: { searchParams: Pr
       {punyaIzin(p.izin, 'kasir.setoran', 'T') ? (
         <section className="kartu" aria-labelledby="j-buat">
           <h2 id="j-buat">Buat setoran</h2>
-          <p className="redup">Membuat satu draf per metode bayar berisi shift yang sudah ditutup dan belum disetor. Draf yang sudah ada ditambah shift barunya.</p>
+          <p className="redup" id="k-tanggal-bantu">
+            Pilih tanggal shift (bawaan hari ini). Sistem membuat satu setoran Draft per metode bayar, berisi shift bertanggal itu yang sudah ditutup dan belum disetor. Draft yang sudah ada untuk tanggal dan metode yang sama ditambah shift barunya, dan shift yang masih buka tidak ikut.
+          </p>
           <FormBuat aksi={buatSetoranAksi} awal={awal} maks={hariIni} />
         </section>
       ) : null}
