@@ -240,7 +240,7 @@ export const SIDEBAR_GRUP: GrupSidebar[] = [
     item: [
       { href: '/', label: 'Beranda', menu: null, ikon: 'beranda' },
       // KONTRAK 11 butir 158: antrean dokumen yang menunggu persetujuan atau posting.
-      { href: '/menunggu-persetujuan', label: 'Menunggu Persetujuan', menu: null, ikon: 'menunggu', khusus: 'menunggu' },
+      { href: '/menunggu-persetujuan', label: 'Perlu Disetujui', menu: null, ikon: 'menunggu', khusus: 'menunggu' },
     ],
   },
   // tahap 3B dan 3A: kasir dan metode bayarnya.
