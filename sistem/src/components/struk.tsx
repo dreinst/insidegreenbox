@@ -1,6 +1,6 @@
 // Isi struk penjualan (tahap 3B), dipakai rincian transaksi dan halaman cetak.
 import { urlFoto } from '@/lib/foto'
-import { rupiah } from '@/lib/hitung-kasir'
+import { namaPromo, rupiah } from '@/lib/hitung-kasir'
 import type { ambilPenjualan } from '@/lib/penjualan'
 import { MODE } from '@/lib/penjualan'
 import { formatWaktu } from '@/lib/waktu'
@@ -72,8 +72,8 @@ export function IsiStruk({ j }: { j: Jual }) {
         </div>
         {j.promoDisc > 0n ? (
           <div>
-            <dt>Potongan promo {j.promoName}</dt>
-            <dd>-{rupiah(j.promoDisc)}</dd>
+            <dt>Potongan promo {namaPromo(j.promoName)}</dt>
+            <dd className="uang">-{rupiah(j.promoDisc)}</dd>
           </div>
         ) : null}
         {j.disc - j.promoDisc > 0n ? (
@@ -84,7 +84,7 @@ export function IsiStruk({ j }: { j: Jual }) {
         ) : null}
         {j.promoName && j.promoDisc === 0n ? (
           <div>
-            <dt>Promo {j.promoName}</dt>
+            <dt>Promo {namaPromo(j.promoName)}</dt>
             <dd>hadiah</dd>
           </div>
         ) : null}

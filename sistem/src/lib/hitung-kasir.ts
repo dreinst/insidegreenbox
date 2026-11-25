@@ -166,7 +166,10 @@ export function hitungKeranjang(baris: { harga: number; qty: number; jenis: Jeni
   }
 }
 
-// Label promo untuk layar, struk, dan rincian: "Promo Hemat 10%", "Promo Potong 5rb", "Hadiah promo Gratis Teh".
-export const labelPromo = (p: Pick<PromoKasir, 'nama' | 'jenis' | 'persen'>) => (p.jenis === 'persen' ? `Promo ${p.nama} ${p.persen.toLocaleString('id-ID')}%` : `Promo ${p.nama}`)
+// Nama promo tanpa kata "Promo" di depan, karena label di layar dan struk sudah diawali "promo" ("Potongan promo Hemat").
+export const namaPromo = (nama: string) => nama.replace(/^promo\s+/i, '') || nama
+
+// Label promo untuk layar kasir: "Hemat 10%", "Potong 5rb", "Gratis Teh".
+export const labelPromo = (p: Pick<PromoKasir, 'nama' | 'jenis' | 'persen'>) => (p.jenis === 'persen' ? `${namaPromo(p.nama)} ${p.persen.toLocaleString('id-ID')}%` : namaPromo(p.nama))
 
 export const rupiah = (n: number | bigint) => `Rp ${Number(n).toLocaleString('id-ID')}`

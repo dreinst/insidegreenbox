@@ -16,9 +16,12 @@ export async function wajibMasuk(): Promise<Pengguna> {
 }
 
 // menu berawalan "saklar:" berarti penolakan karena saklar fitur mati (wajibSaklar atau GalatSaklar dari modul).
+// Halaman tanpa satu kode menu (wajibIzinSalahSatu) memakai nama halamannya di ringkasan.
+const NAMA_HALAMAN: Record<string, string> = { menunggu_persetujuan: 'Menunggu Persetujuan' }
+
 async function catatTolak(p: Pengguna, menu: string, aksi: string, lewat: 'halaman' | 'aksi', pesan?: string) {
   const kodeSaklar = menu.startsWith('saklar:') ? menu.slice(7) : null
-  const namaMenu = kodeSaklar ? `saklar ${SAKLAR.find((s) => s.kode === kodeSaklar)?.nama ?? kodeSaklar}` : (MENU_PER_KODE.get(menu)?.nama ?? menu)
+  const namaMenu = kodeSaklar ? `saklar ${SAKLAR.find((s) => s.kode === kodeSaklar)?.nama ?? kodeSaklar}` : (MENU_PER_KODE.get(menu)?.nama ?? NAMA_HALAMAN[menu] ?? menu)
   await catatAudit(db, await konteksPermintaan(p), {
     action: 'izin.ditolak',
     docType: kodeSaklar ? 'role_feature_switch' : 'role_permission',

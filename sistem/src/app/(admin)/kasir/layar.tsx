@@ -241,7 +241,7 @@ export function LayarKasir({ kategori: semuaKategori, menu, paket, metode, biaya
               <div className="lk-promo" aria-live="polite">
                 {t.promo ? (
                   <p>
-                    <b>{labelPromo(t.promo)}</b> dipakai otomatis{t.promo.syarat ? `. Syarat: ${t.promo.syarat}` : ''}.
+                    Promo <b>{labelPromo(t.promo)}</b> dipakai otomatis{t.promo.syarat ? `. Syarat: ${t.promo.syarat}` : ''}.
                   </p>
                 ) : (
                   <p>
@@ -308,7 +308,7 @@ export function LayarKasir({ kategori: semuaKategori, menu, paket, metode, biaya
               </div>
               {t.discPromo > 0 && t.promo ? (
                 <div>
-                  <dt>Potongan {labelPromo(t.promo).replace(/^Promo /, 'promo ')}</dt>
+                  <dt>Potongan promo {labelPromo(t.promo)}</dt>
                   <dd>-{rupiah(t.discPromo)}</dd>
                 </div>
               ) : t.disc > 0 ? (

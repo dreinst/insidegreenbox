@@ -110,7 +110,7 @@
 .lk-jumlah-dl { margin: 0 0 12px; padding-top: 8px; border-top: 1px solid #E1E4DD }
 .lk-jumlah-dl > div { display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; font-variant-numeric: tabular-nums }
 .lk-jumlah-dl dt { color: var(--muted) }
-.lk-jumlah-dl dd { margin: 0; font-weight: 600 }
+.lk-jumlah-dl dd { margin: 0; font-weight: 600; white-space: nowrap }
 .lk-jumlah-dl .lk-total { margin-top: 4px; padding-top: 8px; border-top: 1px dashed #CBCFC6; font-size: 20px }
 .lk-jumlah-dl .lk-total dt { color: var(--ink); font-weight: 800 }
 .lk-jumlah-dl .lk-total dd { font-family: var(--f-judul); font-weight: 800 }
@@ -166,6 +166,7 @@
 .struk-dl > div { display: flex; justify-content: space-between; gap: 10px }
 .struk-dl dt { color: #4A4D47 }
 .struk-dl dd { margin: 0; text-align: right; overflow-wrap: anywhere; min-width: 0 }
+.struk-dl dd.uang { white-space: nowrap; flex: none }
 .struk-total { margin-top: 4px; font-weight: 800; font-size: 15px }
 .struk-total dt { color: inherit }
 .struk-baris { list-style: none; margin: 0; padding: 0 }

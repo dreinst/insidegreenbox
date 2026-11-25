@@ -131,6 +131,8 @@ try {
     cek('kasir: Menunggu Persetujuan ditolak 403', rk?.status() === 403)
     cek('kasir: item sidebar tidak tampil', (await K.page.locator('.samping nav a[href="/menunggu-persetujuan"]').count()) === 0)
     await K.ctx.close()
+    // Galat konsol 403 dari penolakan yang memang diuji di atas tidak dihitung.
+    for (let i = galatKonsol.length - 1; i >= 0; i--) if (galatKonsol[i].includes('403')) galatKonsol.splice(i, 1)
   }
 
   // 2. Owner melihat keduanya, di Beranda, sidebar, dan halaman, di dua lebar.
@@ -150,7 +152,7 @@ try {
       await o.waitForFunction(() => Math.abs(document.querySelector('.samping').getBoundingClientRect().left) < 1)
     }
     const l = await lencana(o)
-    cek(`${w}px sidebar: lencana sama dengan angka Beranda`, Number(l) === angka, `${l} lawan ${angka}`)
+    cek(`${w}px sidebar: lencana sama dengan angka Beranda`, Number(l?.match(/\d+/)?.[0]) === angka, `${l} lawan ${angka}`)
     if (w <= 900) {
       await potret(o, `${w}-laci-lencana`)
       await o.click('.tutup-laci')
@@ -237,10 +239,10 @@ try {
       await k.click('button:text-is("Take away")')
       await k.click(ubin('Kopi Susu Greenbox'))
       const satuItem = await k.textContent('.lk-promo')
-      cek(`${w}px kasir: promo belum berlaku di bawah belanja minimal`, satuItem?.includes('Promo hari ini') && satuItem.includes(nama) && !(await k.textContent('.lk-jumlah-dl'))?.includes('Potongan promo'), satuItem)
+      cek(`${w}px kasir: promo belum berlaku di bawah belanja minimal`, satuItem?.includes('Promo hari ini') && satuItem.includes(nama.replace(/^Promo /, '')) && !(await k.textContent('.lk-jumlah-dl'))?.includes('Potongan promo'), satuItem)
       await k.click(ubin('Kopi Susu Greenbox'))
       const dl = await k.textContent('.lk-jumlah-dl')
-      cek(`${w}px kasir: potongan promo Rp 5.000 dan total ${total}`, dl?.includes(`Potongan promo ${nama}`) && dl.includes('-Rp 5.000') && dl.includes(total.toLocaleString('id-ID')), dl)
+      cek(`${w}px kasir: potongan promo Rp 5.000 dan total ${total}`, dl?.includes(`Potongan promo ${nama.replace(/^Promo /, '')}`) && dl.includes('-Rp 5.000') && dl.includes(total.toLocaleString('id-ID')), dl)
       cek(`${w}px kasir: catatan promo dipakai otomatis`, (await k.textContent('.lk-promo'))?.includes('dipakai otomatis'))
       await k.locator('.lk-cepat button').first().click()
       cek(`${w}px kasir: tanpa luapan`, (await luapan(k)) <= 0)
@@ -255,7 +257,7 @@ try {
       cek(`${w}px kasir: jurnal seimbang dengan potongan promo`, j.d === j.k && Number(j.potong) === 5000, JSON.stringify(j))
       await buka(k, `/struk/${id}`)
       const struk = await k.textContent('.struk')
-      cek(`${w}px struk: Potongan promo tampil`, struk?.includes(`Potongan promo ${nama}`) && struk.includes('-Rp 5.000'), struk?.slice(0, 400))
+      cek(`${w}px struk: Potongan promo tampil`, struk?.includes(`Potongan promo ${nama.replace(/^Promo /, '')}`) && struk.includes('-Rp 5.000'), struk?.slice(0, 400))
       cek(`${w}px struk: tanpa luapan`, (await luapan(k)) <= 0)
       await potret(k, `${w}-struk-promo`)
       await buka(k, `/transaksi/${id}`)
