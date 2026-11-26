@@ -102,12 +102,14 @@ function susunJenis(): JenisMenunggu[] {
 
 export const JENIS_MENUNGGU: JenisMenunggu[] = susunJenis()
 export const NAMA_MENUNGGU = new Map(JENIS_MENUNGGU.map((j) => [j.kunci, j.nama]))
-export const MENU_MENUNGGU = [...new Set(JENIS_MENUNGGU.map((j) => j.menu))]
-
-// Halaman dan item sidebar tampil untuk peran yang memegang Setujui di salah satu modul antrean.
-export const bolehLihatMenunggu = (p: Pick<Pengguna, 'izin'>) => MENU_MENUNGGU.some((m) => punyaIzin(p.izin, m, 'S'))
 
 export const bisaTindak = (p: Pick<Pengguna, 'izin'>, j: Pick<JenisMenunggu, 'menu' | 'aksi'>) => punyaIzin(p.izin, j.menu, j.aksi)
+
+// Halaman dan item sidebar tampil untuk peran yang bisa menindaklanjuti salah satu jenis antrean: Setujui untuk yang
+// diajukan, atau Posting untuk pembayaran dan kas yang sudah disetujui. Sejak butir 161 pemegang Posting saja (Finance)
+// juga melihatnya; sebelumnya hanya pemegang Setujui.
+export const SYARAT_MENUNGGU = [...new Map(JENIS_MENUNGGU.map((j) => [`${j.menu}:${j.aksi}`, { menu: j.menu, aksi: j.aksi }])).values()]
+export const bolehLihatMenunggu = (p: Pick<Pengguna, 'izin'>) => SYARAT_MENUNGGU.some((x) => bisaTindak(p, x))
 
 // Isi daftar mengikuti izin Lihat pengguna. Shift orang lain hanya untuk yang boleh melihat semua kasir.
 function jenisTerlihat(aktor: Aktor, jenis?: string) {

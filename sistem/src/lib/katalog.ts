@@ -236,8 +236,9 @@ export const PERAN_SISTEM: { kode: KodePeranSistem; nama: string }[] = [
 ]
 
 // menu berisi satu kode, beberapa kode (tampil bila salah satunya boleh dilihat), atau null untuk semua pengguna.
-// khusus 'menunggu': item Menunggu Persetujuan, tampil bila memegang Setujui di salah satu modul antrean (dihitung di
-// layout lewat bolehLihatMenunggu, KONTRAK 11 butir 158). lencana: angka kecil di kanan label.
+// khusus 'menunggu': item Menunggu Persetujuan, tampil bila bisa menindaklanjuti salah satu jenis antrean (Setujui, atau
+// Posting untuk yang sudah disetujui; dihitung di layout lewat bolehLihatMenunggu, KONTRAK 11 butir 158 dan 161).
+// lencana: angka kecil di kanan label.
 export type ItemSidebar = { href: string; label: string; menu: string | string[] | null; ikon: string; khusus?: 'menunggu'; lencana?: number }
 
 // Hanya halaman yang sudah dibangun (KONTRAK 8). menu null artinya tampil untuk semua pengguna yang masuk.
