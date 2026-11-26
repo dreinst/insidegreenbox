@@ -395,6 +395,24 @@ export const SIDEBAR_GRUP: GrupSidebar[] = [
 
 export const SIDEBAR: ItemSidebar[] = SIDEBAR_GRUP.flatMap((g) => g.item)
 
+// KONTRAK 11 butir 162: grup sidebar berjudul bisa dilipat. Pilihan buka atau tutup yang diubah pengguna disimpan di
+// cookie ini (hanya preferensi tampilan, tidak rahasia) supaya server langsung merender keadaan yang sama tanpa kedip.
+export const COOKIE_SAMPING = 'gb_samping'
+
+// Isi cookie berupa JSON { judul grup: terbuka }. Kunci yang bukan judul grup dan nilai yang bukan boolean dibuang,
+// dan isi yang rusak atau terlalu panjang dianggap kosong.
+export const bacaPilihanSamping = (nilai: string | undefined): Record<string, boolean> => {
+  if (!nilai || nilai.length > 2000) return {}
+  try {
+    const isi: unknown = JSON.parse(decodeURIComponent(nilai))
+    if (!isi || typeof isi !== 'object' || Array.isArray(isi)) return {}
+    const judul = new Set(SIDEBAR_GRUP.map((g) => g.judul).filter((j) => j !== null))
+    return Object.fromEntries(Object.entries(isi).filter(([k, v]) => judul.has(k) && typeof v === 'boolean'))
+  } catch {
+    return {}
+  }
+}
+
 export const grupMenu = () => {
   const peta = new Map<string, MenuIzin[]>()
   for (const m of MENU_IZIN) {

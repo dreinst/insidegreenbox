@@ -7,7 +7,7 @@ export default function GalatGlobal({ error, retry }: { error: unknown; retry: (
   return (
     <html lang="id">
       <body>
-        <title>Terjadi galat | Admin Greenbox</title>
+        <title>Terjadi galat | Greenbox Management Page</title>
         <main className="masuk">
           <div className="masuk-kartu">
             <PesanGalat error={error} idJudul="j-galat" />

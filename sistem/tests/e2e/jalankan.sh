@@ -78,5 +78,7 @@ jalan audit-ab.mjs
 jalan keputusan.mjs
 # Perbaikan dari panduan (KONTRAK 11 butir 158 sampai 160): Menunggu Persetujuan, setoran, promo otomatis di kasir.
 jalan panduan.mjs
+# KONTRAK 11 butir 162: sidebar berlipat, lebar isi, dan kaki sidebar; sebelum klik.mjs yang mengunci login Admin.
+jalan lipat.mjs
 jalan klik.mjs
 exit $HASIL

@@ -332,6 +332,8 @@ const JALUR: Record<string, React.ReactNode> = {
       <path d="M8 3c0 5 8 5 8 9s-8 4-8 9M16 3c0 5-8 5-8 9s8 4 8 9" />
     </>
   ),
+  // KONTRAK 11 butir 162: panah grup sidebar, diputar 90 derajat saat grup terbuka.
+  lipat: <path d="M9 6l6 6-6 6" />,
   tutup: <path d="M6 6l12 12M18 6L6 18" />,
   keluar: <path d="M14 4h5v16h-5M10 8l-4 4 4 4M6 12h10" />,
 }

@@ -31,7 +31,6 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
 .logo { display: inline-flex; align-items: center; gap: 10px; color: inherit }
 .logo-kotak { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; flex: none; border-radius: 8px; font-family: var(--f-judul); font-weight: 800; font-size: 18px; color: var(--ink); background: linear-gradient(160deg, var(--green-hi), var(--green) 60%); border-bottom: 3px solid var(--green-lo); box-shadow: inset 0 2px 0 rgba(255, 255, 255, .5) }
 .logo-teks { font-family: var(--f-judul); font-weight: 800; font-size: 17px; letter-spacing: -.01em; line-height: 1 }
-.logo-teks small { display: block; margin-top: 3px; font-family: var(--f-teks); font-weight: 600; font-size: 10.5px; letter-spacing: .18em; text-transform: uppercase; opacity: .7 }
 .logo.kecil .logo-kotak { width: 28px; height: 28px; font-size: 15px }
 .logo.kecil .logo-teks { font-size: 15px }
 
@@ -50,7 +49,15 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
 /* Kerangka */
 /* Latar kolom sidebar ikut memanjang di halaman yang tinggi. */
 .kerangka { display: flex; min-height: 100vh; background: linear-gradient(to right, var(--ink) var(--side), var(--paper) var(--side)) }
-.samping { position: sticky; top: 0; z-index: 30; display: flex; flex-direction: column; width: var(--side); height: 100vh; flex: none; padding: 22px 14px; background: var(--ink); color: #D9DCD4; overflow-y: auto }
+.samping { position: sticky; top: 0; z-index: 30; display: flex; flex-direction: column; width: var(--side); height: 100vh; flex: none; padding: 22px 14px; background: var(--ink); color: #D9DCD4; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #ffffff26 transparent }
+/* KONTRAK 11 butir 162: bilah gulir sidebar tipis dan menyatu dengan warna sidebar (cadangan untuk Safari lama). */
+.samping::-webkit-scrollbar { width: 6px }
+.samping::-webkit-scrollbar-track { background: transparent }
+.samping::-webkit-scrollbar-thumb { border-radius: 3px; background: #ffffff26 }
+/* Nama halaman di kaki sidebar, menempel di bawah walau sidebar digulir. scroll-padding menjaga item aktif yang digulir
+   ke pandangan tidak tertutup kaki ini. */
+.samping { scroll-padding: 12px 0 72px }
+.samping-kaki { position: sticky; bottom: -22px; margin: auto -14px -22px; padding: 14px 26px 18px; border-top: 1px solid #ffffff14; background: var(--ink); color: #8E9389; font-size: 12px; font-weight: 600; letter-spacing: .02em }
 .samping-atas { display: flex; align-items: center; justify-content: space-between; padding: 0 6px 22px }
 .samping-logo { color: var(--paper2); text-decoration: none }
 .samping-logo:hover { color: #fff }
@@ -65,10 +72,22 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
 .lencana-samping { margin-left: auto; min-width: 22px; height: 22px; padding: 0 7px; border-radius: 999px; background: var(--butter); color: var(--ink); font-size: 12px; font-weight: 800; line-height: 22px; text-align: center; flex: none }
 /* tahap 4B: grup sidebar dengan judul kecil. Di desktop item sedikit lebih rapat supaya satu grup muat sekali pandang. */
 .samping-grup { display: flex; flex-direction: column; gap: 2px }
-.samping-grup + .samping-grup { margin-top: 10px; padding-top: 10px; border-top: 1px solid #ffffff1a }
-.samping-judul { margin: 0 0 4px; padding: 0 12px; color: #8E9389; font-size: 11.5px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase }
+/* KONTRAK 11 butir 162: grup berjudul bisa dilipat (details dan summary). Beranda dan Perlu Disetujui di atas tanpa grup. */
+.samping-utama + .samping-grup { margin-top: 8px; padding-top: 8px; border-top: 1px solid #ffffff1a }
+.samping-lipat > summary { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 10px 0 12px; border-radius: 10px; color: #A3A79E; list-style: none; cursor: pointer; user-select: none }
+.samping-lipat > summary::-webkit-details-marker { display: none }
+.samping-lipat > summary:hover { background: #ffffff14; color: #fff }
+.samping-lipat[open] > summary { color: #E4E6E0 }
+.samping-judul { flex: 1; min-width: 0; color: inherit; font-size: 11.5px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase }
+.samping-jumlah { min-width: 22px; padding: 0 6px; border-radius: 999px; background: #ffffff12; color: #B9BCB4; font-size: 11.5px; font-weight: 700; line-height: 20px; text-align: center }
+.samping-lipat > summary .ikon { width: 16px; height: 16px; transition: transform .2s var(--ease) }
+.samping-lipat[open] > summary .ikon { transform: rotate(90deg) }
+.samping-isi { display: flex; flex-direction: column; gap: 2px; padding: 2px 0 8px }
+.samping-lipat[open] > .samping-isi { animation: samping-buka .2s var(--ease) }
+@keyframes samping-buka { from { opacity: 0; transform: translateY(-4px) } }
 @media (min-width: 901px) {
   .samping nav a { min-height: 38px }
+  .samping-lipat > summary { min-height: 36px }
 }
 .ikon { width: 20px; height: 20px; flex: none }
 .tutup-laci, .tombol-menu, .atas-logo { display: none }
@@ -81,7 +100,9 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
 .akun-nama b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
 .akun-nama small { color: var(--muted); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
 .akun form { margin: 0 }
-.isi { width: 100%; max-width: 1240px; padding: 28px 32px 64px }
+.isi { width: 100%; padding: 28px clamp(32px, 2.5vw, 56px) 64px }
+/* KONTRAK 11 butir 162: wadah isi memenuhi lebar layar; hanya paragraf penjelasan yang dibatasi supaya enak dibaca. */
+.isi p:not(.kosong, .pesan) { max-width: 88ch }
 .isi:focus { outline: none }
 
 /* Kepala halaman */
@@ -92,7 +113,8 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
 .jejak-balik { display: inline-block; margin-bottom: 8px; font-size: 14px; font-weight: 600; text-decoration: none }
 
 /* Kartu dan kisi */
-.kisi { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-bottom: 16px }
+/* KONTRAK 11 butir 162: paling banyak tiga kolom, supaya di layar lebar kartu tetap mengisi baris bila ada kartu .lebar. */
+.kisi { display: grid; grid-template-columns: repeat(auto-fit, minmax(max(300px, calc((100% - 32px) / 3)), 1fr)); gap: 16px; margin-bottom: 16px }
 .kartu { background: var(--paper2); border-radius: 14px; padding: 20px; box-shadow: inset 0 2px 0 #fff, 0 14px 24px -18px rgba(39, 41, 36, .45); margin-bottom: 16px; min-width: 0 }
 .kisi > .kartu { margin-bottom: 0 }
 .kartu.lebar { grid-column: 1 / -1 }
@@ -219,12 +241,13 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
 
 @media (prefers-reduced-motion: reduce) {
   .samping, .laci-buka .samping { transition: none }
+  .samping-lipat > summary .ikon { transition: none }
+  .samping-lipat[open] > .samping-isi { animation: none }
 }
 
 @media (max-width: 640px) {
   h1 { font-size: 22px }
   .atas { gap: 8px }
-  .atas-logo .logo-teks small { display: none }
   .akun { gap: 8px }
   .akun-inisial { display: none }
   .akun-nama b { max-width: 34vw }

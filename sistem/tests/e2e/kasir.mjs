@@ -7,6 +7,7 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { randomInt } from 'node:crypto'
 import pg from 'pg'
 import { chromium } from 'playwright'
+import { bukaSemuaGrupSamping, klikSamping } from './sidebar.mjs'
 
 const BASE = process.env.BASE_URL || 'http://127.0.0.1:3241'
 const DB_URL = process.env.E2E_DATABASE_URL || process.env.DATABASE_URL
@@ -346,6 +347,7 @@ for (const [w, h] of [
 
   // Sidebar Owner berisi semua menu sampai tahap 4. Sejak tahap 4A itemnya lebih dari 20, jadi di 1440 x 900 pun
   // sidebar digulir: item terakhir harus bisa dicapai dengan menggulir sidebar, di desktop maupun di laci HP.
+  // KONTRAK 11 butir 162: grup bisa dilipat, jadi semua grup dibuka dulu supaya yang diuji adalah sidebar terpanjang.
   {
     const p = owner.page
     const ukur = () =>
@@ -357,6 +359,7 @@ for (const [w, h] of [
       })
     if (w > 820) {
       await p.goto(`${BASE}/`)
+      await bukaSemuaGrupSamping(p)
       await p.screenshot({ path: `${POTRET}${w}-owner-sidebar.png` })
       await p.mouse.move(120, 400)
       await p.mouse.wheel(0, 6000)
@@ -379,6 +382,8 @@ for (const [w, h] of [
         await p.click('.tombol-menu')
         await p.waitForSelector('.laci-buka .samping')
         await p.waitForTimeout(350)
+        await bukaSemuaGrupSamping(p)
+        await p.evaluate(() => document.querySelector('.samping').scrollTo(0, 0))
         await p.screenshot({ path: `${POTRET}${w}x${tinggi}-owner-laci-atas.png` })
         await p.mouse.move(120, tinggi / 2)
         await p.mouse.wheel(0, 6000)
@@ -386,7 +391,7 @@ for (const [w, h] of [
         const s = await ukur()
         cek(`${w} x ${tinggi} owner: laci bisa digulir sampai item terakhir`, s.n >= 13 && s.bawah <= s.tinggi && s.atas >= 0 && s.oy === 'auto', JSON.stringify(s))
         await p.screenshot({ path: `${POTRET}${w}x${tinggi}-owner-laci-bawah.png` })
-        await Promise.all([p.waitForURL('**/audit'), p.click('.samping nav a[href="/audit"]')])
+        await Promise.all([p.waitForURL('**/audit'), klikSamping(p, '/audit')])
         cek(`${w} x ${tinggi} owner: item terakhir laci bisa diketuk dan laci menutup`, !(await p.$('.laci-buka')))
       }
       await p.setViewportSize({ width: w, height: h })

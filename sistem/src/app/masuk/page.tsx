@@ -21,7 +21,7 @@ export default async function HalamanMasuk({ searchParams }: { searchParams: Pro
     <main className="masuk">
       <div className="masuk-kartu">
         <Logo />
-        <h1>Masuk ke admin</h1>
+        <h1>Masuk ke Greenbox</h1>
         <nav className="tab tab-masuk" aria-label="Cara masuk">
           <Link href="/masuk" className={pin ? undefined : 'aktif'} aria-current={pin ? undefined : 'page'}>
             Sandi

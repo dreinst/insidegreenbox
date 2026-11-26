@@ -9,6 +9,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { randomInt } from 'node:crypto'
 import pg from 'pg'
 import { chromium } from 'playwright'
+import { klikSamping } from './sidebar.mjs'
 
 const BASE = process.env.BASE_URL || 'http://127.0.0.1:3241'
 const DB_URL = process.env.E2E_DATABASE_URL || process.env.DATABASE_URL
@@ -345,7 +346,7 @@ for (const [w, h] of [
       cek(`${w}px ${peran}: sidebar memuat ${label}`, (await page.$$(`.samping nav a[href="${href}"]`)).length === 1)
     }
     if (w < 900) {
-      await Promise.all([page.waitForURL('**/laporan'), page.click('.samping nav a[href="/laporan"]')])
+      await Promise.all([page.waitForURL('**/laporan'), klikSamping(page, '/laporan')])
       cek(`${w}px ${peran}: item Laporan di laci bisa diketuk`, !(await page.$('.laci-buka')) && (await teks(page)).includes('Rekap Penjualan'))
     }
     cek(`${w}px ${peran}: halaman baru tanpa galat konsol`, galat.length === 0, galat.slice(0, 3).join(' | '))

@@ -5,9 +5,8 @@ export function Logo({ kecil }: { kecil?: boolean }) {
       <span className="logo-kotak" aria-hidden="true">
         G
       </span>
-      <span className="logo-teks">
-        Greenbox<small>admin</small>
-      </span>
+      {/* KONTRAK 11 butir 162: tanpa sublabel peran; nama halaman ada di kaki sidebar. */}
+      <span className="logo-teks">Greenbox</span>
     </span>
   )
 }

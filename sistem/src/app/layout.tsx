@@ -7,7 +7,8 @@ const teks = Bricolage_Grotesque({ subsets: ['latin'], variable: '--f-teks', dis
 const judul = Unbounded({ subsets: ['latin'], weight: ['700', '800'], variable: '--f-judul', display: 'swap' })
 
 export const metadata: Metadata = {
-  title: { default: 'Admin Greenbox', template: '%s | Admin Greenbox' },
+  // KONTRAK 11 butir 162: nama aplikasi Greenbox Management Page, bukan nama peran Admin.
+  title: { default: 'Greenbox Management Page', template: '%s | Greenbox Management Page' },
   robots: { index: false, follow: false },
 }
 

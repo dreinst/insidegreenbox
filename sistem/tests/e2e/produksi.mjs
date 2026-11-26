@@ -116,7 +116,7 @@ for (const { w, h, menu } of LEBAR) {
   }
   const judul = await p.$$eval('.samping-judul', (x) => x.map((e) => e.textContent.trim()))
   cek(`${w}px owner: judul grup sidebar`, JSON.stringify(judul) === JSON.stringify(GRUP_HARAP.owner), judul.join(', '))
-  const produksiItem = await p.$$eval('#grup-produksi ~ a', (a) => a.map((x) => x.textContent.trim()))
+  const produksiItem = await p.$$eval('.samping-grup:has(#grup-produksi) a', (a) => a.map((x) => x.textContent.trim()))
   cek(`${w}px owner: grup Produksi berisi empat menu`, JSON.stringify(produksiItem) === JSON.stringify(['Perintah Produksi', 'Pengeluaran Bahan', 'Hasil Produksi', 'Produksi Cepat']), produksiItem.join(', '))
   await p.screenshot({ path: `${POTRET}${w}-p-sidebar-grup.png` })
   if (w <= 900) {

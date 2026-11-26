@@ -6,6 +6,7 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { randomInt } from 'node:crypto'
 import pg from 'pg'
 import { chromium } from 'playwright'
+import { bukaGrupSamping } from './sidebar.mjs'
 
 const BASE = process.env.BASE_URL || 'http://127.0.0.1:3241'
 const DB_URL = process.env.E2E_DATABASE_URL || process.env.DATABASE_URL
@@ -131,7 +132,8 @@ for (const { w, h } of LEBAR) {
     if (w <= 900) await page.click('.tutup-laci')
     for (const teks of label) {
       await bukaLaci(page, w)
-      const tautan = page.locator('.samping nav a').nth(label.indexOf(teks))
+      // KONTRAK 11 butir 162: grup yang tertutup dibuka dulu lewat judulnya.
+      const tautan = await bukaGrupSamping(page, page.locator('.samping nav a').nth(label.indexOf(teks)))
       const href = await tautan.getAttribute('href')
       await tautan.click()
       await page.waitForURL((u) => u.pathname === href, { timeout: 15000 })

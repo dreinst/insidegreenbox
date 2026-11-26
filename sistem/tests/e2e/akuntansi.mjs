@@ -8,6 +8,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { randomInt } from 'node:crypto'
 import pg from 'pg'
 import { chromium } from 'playwright'
+import { klikSamping } from './sidebar.mjs'
 
 const BASE = process.env.BASE_URL || 'http://127.0.0.1:3241'
 const DB_URL = process.env.E2E_DATABASE_URL || process.env.DATABASE_URL
@@ -237,7 +238,7 @@ const idKasLaci = await akunId('1-1100')
 {
   const { ctx, page, galat } = await konteks(1440, 900)
   await masuk(page, AKUN.admin)
-  const judul = await page.$$eval('#grup-akuntansi ~ a', (a) => a.map((x) => x.textContent.trim()))
+  const judul = await page.$$eval('.samping-grup:has(#grup-akuntansi) a', (a) => a.map((x) => x.textContent.trim()))
   cek('admin: grup Akuntansi hanya berisi Akun dan Pemetaan', JSON.stringify(judul) === JSON.stringify(['Akun dan Pemetaan']), judul.join(', '))
   for (const jalur of ['/laporan-keuangan/unduh?jenis=neraca', '/jurnal', '/jurnal/baru', `/jurnal/${idJurnalJual}`, '/buku-besar', '/laporan-keuangan', '/laporan-keuangan/laba-rugi', '/laporan-keuangan/neraca', '/tutup-periode', '/akun/baru']) {
     const r = await page.goto(`${BASE}${jalur}`)
@@ -297,7 +298,7 @@ for (const [w, h] of [
       await page.goto(`${BASE}/`)
       await page.click('.tombol-menu')
       await page.waitForSelector('.laci-buka .samping')
-      await Promise.all([page.waitForURL('**/akun'), page.click('.samping nav a[href="/akun"]')])
+      await Promise.all([page.waitForURL('**/akun'), klikSamping(page, '/akun')])
       cek(`${w}px ${peran}: item Akun dan Pemetaan di laci bisa diketuk`, !(await page.$('.laci-buka')) && (await teks(page)).includes('Bagan Akun'))
     }
     cek(`${w}px ${peran}: halaman akuntansi tanpa galat konsol`, galat.length === 0, galat.slice(0, 3).join(' | '))
