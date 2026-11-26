@@ -165,6 +165,7 @@ const idKasLaci = await akunId('1-1100')
   await page.waitForSelector('.pesan.galat')
   cek('memorial: satu baris ditolak saat diajukan', (await page.textContent('.pesan.galat')).includes('minimal dua baris'))
   await tambahBaris('3-1000 Modal Pemilik', '', '250.000', 'Tambahan modal pemilik')
+  await page.locator('td[data-label="Keterangan"]', { hasText: 'Tambahan modal pemilik' }).waitFor({ timeout: 30000 })
   const barisMemo = (await sql.query('select memo from journal_line where journal_id=$1 order by id', [idMemorial])).rows.map((r) => r.memo)
   const kepalaMemo = (await satu('select memo from journal where id=$1', [idMemorial])).memo
   cek('memorial: keterangan tiap baris tersimpan di barisnya, kepala tetap terpisah', JSON.stringify(barisMemo) === JSON.stringify(['Kas masuk dari pemilik', 'Tambahan modal pemilik']) && kepalaMemo === 'Setoran modal pemilik ke kas besar', JSON.stringify({ barisMemo, kepalaMemo }))
