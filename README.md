@@ -32,7 +32,14 @@ Semua harga dan menu ada di `src/data.ts`. Minuman memakai label nutrition level
 
 Foto produk sebaiknya PNG tanpa latar yang dikonversi ke WebP, lalu ditaruh di `public/img/`.
 
+## Sistem admin baru
+
+`sistem/` berisi Greenbox Management Page, pengganti ESB Core (Next.js 16, Prisma 7, PostgreSQL 18), tayang di https://admin.insidegreenbox.com. Kontrak teknisnya di `sistem/KONTRAK.md`, status proyek di `SERAH-TERIMA.md`.
+
+## Agen
+
+Pekerjaan lanjutan dikerjakan Antigravity dengan aturan di `AGENTS.md` dan penjaga di `.agents/penjaga/`. Claude menulis tugas di `tugas/` dan mengaudit hasilnya di `audit/`. Antigravity menulis laporan di `laporan/`.
+
 ## Belum ada
 
-- Halaman admin. Perlu backend dulu, jadi ditunda sampai harga memang perlu diubah lewat web.
 - Banner cookie. Situs ini belum memasang cookie. Tambahkan kalau nanti ada analitik atau embed TikTok.
