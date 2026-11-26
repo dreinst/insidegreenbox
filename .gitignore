@@ -1,2 +1,6 @@
 node_modules
 dist
+# Log keputusan penjaga Antigravity
+.agents/penjaga/log.jsonl
+__pycache__/
+.agents/penjaga/lokal.json

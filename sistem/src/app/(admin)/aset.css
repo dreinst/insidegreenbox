@@ -1,0 +1,49 @@
+/* Gaya halaman aset tetap, penyusutan, pelepasan, anggaran, dan realisasi tahap 6B. Melengkapi globals.css,
+   master.css, dan beli.css (ringkasan angka). */
+
+.as-tindakan { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-start }
+.as-tindakan details { min-width: min(320px, 100%) }
+.as-tindakan summary, .bl-lipat.as-lipat > summary { display: inline-flex; align-items: center; min-height: 40px; font-weight: 700; cursor: pointer; text-decoration: underline; text-underline-offset: 3px }
+.as-jarak { margin-top: 22px; padding-top: 16px; border-top: 1px solid #E1E4DD }
+.as-catatan { margin: 0 0 12px; color: var(--muted); font-size: 14px }
+.as-hitung { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 18px }
+.as-hitung .kolom { min-width: 200px }
+.as-hitung .tombol-baris { margin-top: 0 }
+.as-pratinjau { margin-top: 14px }
+.tabel tfoot td { font-weight: 800; background: #ECEEE9; border-top: 1px solid #DEE1DA }
+.as-minus { color: var(--red) }
+.as-tabel tfoot td:empty { padding: 0 }
+.as-plus { color: #0B5E09 }
+
+/* Rincian anggaran: 12 bulan per akun. Di layar lebar digulir di dalam kartunya. */
+/* position relative: label .sr (absolute) di dalam sel ikut terpotong wadah gulir, tidak melebarkan halaman. */
+.kartu.ag-gulir { position: relative; overflow-x: auto }
+.ag-tabel { min-width: 1500px }
+.ag-tabel th:first-child, .ag-tabel td:first-child { position: sticky; left: 0; z-index: 1; background: var(--paper2) }
+.ag-tabel thead th:first-child { background: #ECEEE9 }
+.ag-tabel th, .ag-tabel td { padding: 8px 6px }
+.ag-tabel th:first-child, .ag-tabel td:first-child { padding-left: 16px; min-width: 190px }
+.ag-tabel .bl-isian { min-width: 0; width: 100%; padding: 0 6px; font-size: 14px }
+.ag-tabel td.ag-total { font-weight: 800; white-space: nowrap; text-align: right; padding-right: 16px }
+.ag-petunjuk { margin: 0 0 8px; color: var(--muted); font-size: 13.5px }
+
+/* Realisasi: batang persen kecil. */
+.rl-batang { display: block; width: 100%; max-width: 120px; height: 8px; margin-top: 4px; border: 0; border-radius: 4px; background: #E1E4DD; overflow: hidden; appearance: none }
+.rl-batang::-webkit-progress-bar { background: #E1E4DD; border-radius: 4px }
+.rl-batang::-webkit-progress-value { background: var(--green); border-radius: 4px }
+.rl-batang::-moz-progress-bar { background: var(--green); border-radius: 4px }
+.rl-batang.lewat::-webkit-progress-value { background: var(--red) }
+.rl-batang.lewat::-moz-progress-bar { background: var(--red) }
+
+@media (max-width: 640px) {
+  .kartu.ag-gulir { overflow-x: visible }
+  .ag-petunjuk { display: none }
+  .ag-tabel th:first-child, .ag-tabel td:first-child { position: static }
+  .as-tabel td { grid-template-columns: 150px minmax(0, 1fr) }
+  .as-tabel tfoot td:empty { display: none }
+  .ag-tabel { min-width: 0 }
+  .ag-tabel th:first-child, .ag-tabel td:first-child { padding-left: 0; min-width: 0 }
+  .ag-tabel td.ag-total { text-align: left; padding-right: 0 }
+  .ag-tabel .bl-isian { font-size: 16px }
+  .as-hitung .kolom { min-width: 0; width: 100% }
+}

@@ -1,0 +1,529 @@
+// Setoran POS (tahap 5A, RANCANGAN 6.2): satu dokumen per tanggal per metode bayar, berisi shift yang sudah ditutup
+// dan belum disetor untuk metode itu. Dokumen pelaksana: Draft -> Diposting, atau Draft -> Diajukan -> Diposting bila
+// butuh Owner. tahap 5B: jurnal dibentuk saat Diposting dan dibalik saat Batal dari Diposting (KONTRAK 14.3).
+// Tanggal shift = tanggal WIB saat shift dibuka. Tanpa Next, dipanggil aksi server dan tes.
+import { z } from 'zod'
+import type { Prisma } from '@/generated/prisma/client'
+import { GalatAturan, GalatSaklar } from './aksi'
+import { balikJurnalSetoran, jurnalSetoran } from './akuntansi/dokumen'
+import { tanggalJurnal } from './akuntansi/jurnal'
+import { catatAudit, type Konteks } from './audit'
+import type { Db, DbAtauTx, Tx } from './db'
+import { rupiah } from './hitung-kasir'
+import { pastikanIzin, punyaIzin, saklarNyala, type Pengguna } from './izin-inti'
+import { mdrPerShift } from './mdr'
+import { PER_HALAMAN, sesuaiHalaman } from './master'
+import { ambilNomor } from './nomor'
+import { transisiSah, type StatusDokumen } from './status'
+import { akhirHari, awalHari, tanggalIso } from './waktu'
+
+type Aktor = Pick<Pengguna, 'id' | 'izin' | 'saklar' | 'peran'>
+const MENU = 'kasir.setoran'
+const BATAS_UANG = 1_000_000_000
+
+// Shift yang dianggap sudah ditutup untuk setoran. "Perlu persetujuan" (hanya shift lama sebelum tahap 6C) boleh
+// masuk, tetapi setorannya butuh Owner.
+const STATUS_TUTUP = ['Tutup', 'PerluPersetujuan'] as const
+
+const tanggalSah = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s) && new Date(`${s}T00:00:00Z`).toISOString().slice(0, 10) === s
+// Kolom date disimpan sebagai tengah malam UTC.
+export const keKolomTanggal = (iso: string) => new Date(`${iso}T00:00:00Z`)
+export const dariKolomTanggal = (d: Date) => d.toISOString().slice(0, 10)
+
+export const skemaBuat = z.object({
+  tanggal: z
+    .string()
+    .trim()
+    .refine(tanggalSah, 'Pilih tanggal yang sah.')
+    .refine((t) => t <= tanggalIso(new Date()), 'Tanggal setoran tidak boleh di masa depan.'),
+})
+
+// Metode tunai yang memegang setoran laci: metode berjenis tunai dengan id terkecil (yang aktif lebih dulu).
+// Uang laci satu wadah, jadi setoran tunai hanya dibuat untuk satu metode ini.
+export async function metodeTunaiUtama(db: DbAtauTx) {
+  return (
+    (await db.paymentMethod.findFirst({ where: { kind: 'tunai', active: true }, orderBy: { id: 'asc' } })) ??
+    (await db.paymentMethod.findFirst({ where: { kind: 'tunai' }, orderBy: { id: 'asc' } }))
+  )
+}
+
+// Shift yang dibuka pada tanggal WIB tertentu.
+export const syaratShiftTanggal = (iso: string): Prisma.ShiftWhereInput => ({ openedAt: { gte: awalHari(iso), lte: akhirHari(iso) } })
+
+type ShiftNilai = { id: number; openCash: bigint; countedCash: bigint | null; status: string }
+
+// Nilai menurut sistem dan MDR bawaan per shift untuk satu metode. Tunai: kas dihitung dikurangi modal yang ditinggal
+// di laci untuk shift berikutnya (RANCANGAN 6.2 dan 11.2 butir 4), tanpa MDR. Non tunai: jumlah sale_payment metode
+// itu dari penjualan yang tidak void, dan MDR dihitung per transaksi memakai tarif yang berlaku pada tanggal
+// penjualan (tahap 6C, KONTRAK 11 butir 124).
+export async function nilaiDanMdr(db: DbAtauTx, shifts: ShiftNilai[], metode: { id: number; kind: string }) {
+  if (metode.kind !== 'tunai') return mdrPerShift(db, metode.id, shifts.map((s) => s.id))
+  return new Map(shifts.map((s) => [s.id, { nilai: Number(s.countedCash ?? 0) - Number(s.openCash), mdr: 0 }]))
+}
+
+export async function nilaiSistem(db: DbAtauTx, shifts: ShiftNilai[], metode: { id: number; kind: string }) {
+  const per = await nilaiDanMdr(db, shifts, metode)
+  return new Map([...per].map(([id, v]) => [id, v.nilai]))
+}
+
+// Shift tanggal itu yang sudah ditutup, belum masuk setoran aktif untuk metode itu (selain setoran kecuali), beserta
+// nilai dan MDR bawaannya. Non tunai hanya shift yang punya penjualan metode itu.
+export async function calonBaris(db: DbAtauTx, iso: string, metode: { id: number; kind: string }, kecuali?: number) {
+  const shifts = await db.shift.findMany({
+    where: {
+      ...syaratShiftTanggal(iso),
+      status: { in: [...STATUS_TUTUP] },
+      posSettlementLines: { none: { paymentMethodId: metode.id, cancelled: false, ...(kecuali ? { NOT: { posSettlementId: kecuali } } : {}) } },
+    },
+    orderBy: { id: 'asc' },
+    select: { id: true, openCash: true, countedCash: true, status: true },
+  })
+  const per = await nilaiDanMdr(db, shifts, metode)
+  return shifts
+    .map((s) => ({ shiftId: s.id, expected: per.get(s.id)?.nilai ?? 0, mdr: per.get(s.id)?.mdr ?? 0 }))
+    .filter((c) => metode.kind === 'tunai' || c.expected !== 0)
+}
+
+type Kepala = { id: number; mdrFee: bigint }
+
+// Menghitung ulang total kepala dari baris. Selisih = disetor + MDR - sistem (RANCANGAN 6.2: dana kurang di luar MDR).
+async function hitungUlang(tx: Tx, setoranId: number, mdrFee: bigint) {
+  const t = await tx.posSettlementLine.aggregate({ where: { posSettlementId: setoranId }, _sum: { expected: true, actual: true } })
+  const expectedTotal = t._sum.expected ?? 0n
+  const actualTotal = t._sum.actual ?? 0n
+  return tx.posSettlement.update({ where: { id: setoranId }, data: { expectedTotal, actualTotal, mdrFee, diff: actualTotal + mdrFee - expectedTotal } })
+}
+
+// Nilai sistem dan MDR terbaru untuk shift-shift yang sudah menjadi baris setoran, termasuk shift yang nilainya kini 0
+// karena semua transaksinya di-void (calonBaris membuang shift non tunai bernilai 0).
+async function nilaiBarisKini(tx: DbAtauTx, shiftIds: number[], metode: { id: number; kind: string }) {
+  if (!shiftIds.length) return new Map<number, { nilai: number; mdr: number }>()
+  const shifts = await tx.shift.findMany({ where: { id: { in: shiftIds } }, select: { id: true, openCash: true, countedCash: true, status: true } })
+  const per = await nilaiDanMdr(tx, shifts, metode)
+  return new Map(shiftIds.map((id) => [id, per.get(id) ?? { nilai: 0, mdr: 0 }]))
+}
+
+// Menambah baris shift yang belum ada dan memperbarui baris yang nilai sistemnya berubah (misalnya ada void).
+// MDR kepala ikut ditambah sebesar MDR bawaan baris baru (jumlah MDR per transaksi shift itu). Temuan audit A-3:
+// baris yang berubah ikut menghitung ulang MDR bawaannya (selisihnya masuk MDR kepala), dan nilai disetornya ikut
+// dihitung ulang bila masih sama dengan bawaan lama (nilai sistem lama dikurangi MDR bawaan lama). Nilai disetor yang
+// sudah diubah user, atau baris lama yang MDR bawaannya tidak tersimpan, tidak ditimpa dan dilaporkan di `periksa`.
+async function segarkanBaris(tx: Tx, st: Kepala & { date: Date; paymentMethod: { id: number; kind: string } }) {
+  const iso = dariKolomTanggal(st.date)
+  const calon = await calonBaris(tx, iso, st.paymentMethod, st.id)
+  const lama = await tx.posSettlementLine.findMany({ where: { posSettlementId: st.id }, orderBy: { shiftId: 'asc' } })
+  const kini = await nilaiBarisKini(tx, lama.map((l) => l.shiftId), st.paymentMethod)
+  let tambahMdr = 0n
+  const baru: number[] = []
+  const berubah: number[] = []
+  const periksa: number[] = []
+  for (const l of lama) {
+    const v = kini.get(l.shiftId)!
+    const expected = BigInt(v.nilai)
+    if (l.expected === expected) continue
+    const bawaan = l.mdr !== null && l.actual === l.expected - l.mdr
+    const mdr = l.mdr === null ? null : BigInt(v.mdr)
+    const actual = bawaan ? expected - mdr! : l.actual
+    if (mdr !== null) tambahMdr += mdr - l.mdr!
+    await tx.posSettlementLine.update({ where: { id: l.id }, data: { expected, actual, diff: actual - expected, mdr } })
+    berubah.push(l.shiftId)
+    if (!bawaan) periksa.push(l.shiftId)
+  }
+  const ada = new Set(lama.map((l) => l.shiftId))
+  for (const c of calon) {
+    if (ada.has(c.shiftId)) continue
+    tambahMdr += BigInt(c.mdr)
+    const actual = c.expected - c.mdr
+    await tx.posSettlementLine.create({ data: { posSettlementId: st.id, shiftId: c.shiftId, paymentMethodId: st.paymentMethod.id, expected: BigInt(c.expected), actual: BigInt(actual), diff: BigInt(actual - c.expected), mdr: BigInt(c.mdr) } })
+    baru.push(c.shiftId)
+  }
+  const mdrKepala = st.mdrFee + tambahMdr
+  const kepala = await hitungUlang(tx, st.id, mdrKepala < 0n ? 0n : mdrKepala)
+  return { kepala, baru, berubah, periksa }
+}
+
+const ringkasMuat = (no: string, s: { baru: number[]; berubah: number[]; periksa: number[] }) =>
+  `Memuat ulang baris setoran ${no}: ${s.baru.length} shift baru` +
+  (s.berubah.length ? `, nilai sistem shift ${s.berubah.map((x) => `#${x}`).join(', ')} berubah` : '') +
+  (s.periksa.length ? `, nilai disetor shift ${s.periksa.map((x) => `#${x}`).join(', ')} perlu diperiksa` : '')
+
+const kunciTanggal = (tx: Tx, iso: string) => tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`setoran:${iso}`}))`
+
+// Rekening bawaan: rekening setoran terakhir metode itu yang masih aktif, lalu rekening aktif pertama untuk non tunai.
+// Tunai boleh tanpa rekening (disimpan di Kas Besar). Kolom akun tujuan di metode bayar menunjuk COA yang baru ada
+// di modul akuntansi, jadi belum dipakai (KONTRAK 11).
+async function rekeningBawaan(tx: Tx, metode: { id: number; kind: string }) {
+  const lalu = await tx.posSettlement.findFirst({ where: { paymentMethodId: metode.id, bankAccountId: { not: null }, bankAccount: { active: true } }, orderBy: { id: 'desc' }, select: { bankAccountId: true } })
+  if (lalu) return lalu.bankAccountId
+  if (metode.kind === 'tunai') return null
+  return (await tx.bankAccount.findFirst({ where: { active: true }, orderBy: { id: 'asc' }, select: { id: true } }))?.id ?? null
+}
+
+export type HasilBuat = { dibuat: { id: number; no: string; metode: string }[]; diperbarui: { id: number; no: string; metode: string; baru: number }[]; dilewati: { no: string; metode: string; status: string }[] }
+
+// Tombol "Buat setoran untuk tanggal ini" (dulu "Buat setoran hari ini", KONTRAK 11 butir 159): untuk tiap metode yang punya shift ditutup dan belum disetor pada tanggal itu,
+// membuat Draft baru, atau menambah baris ke Draft yang sudah ada. Setoran yang sudah diajukan atau diposting
+// dilewati dan dilaporkan.
+export async function buatSetoranHarian(db: Db, k: Konteks, aktor: Aktor, masukan: unknown): Promise<HasilBuat> {
+  pastikanIzin(aktor, MENU, 'T')
+  const { tanggal } = skemaBuat.parse(masukan)
+  return db.$transaction(async (tx) => {
+    await kunciTanggal(tx, tanggal)
+    const tunai = await metodeTunaiUtama(tx)
+    const nonTunai = await tx.paymentMethod.findMany({ where: { kind: { not: 'tunai' } }, orderBy: { id: 'asc' } })
+    const daftar = [...(tunai ? [tunai] : []), ...nonTunai]
+    const hasil: HasilBuat = { dibuat: [], diperbarui: [], dilewati: [] }
+    for (const m of daftar) {
+      const ada = await tx.posSettlement.findFirst({ where: { date: keKolomTanggal(tanggal), paymentMethodId: m.id, status: { not: 'Batal' } } })
+      if (ada) {
+        if (ada.status !== 'Draft') {
+          if ((await calonBaris(tx, tanggal, m, ada.id)).length) hasil.dilewati.push({ no: ada.no, metode: m.name, status: ada.status })
+          continue
+        }
+        const s = await segarkanBaris(tx, { ...ada, paymentMethod: m })
+        if (s.baru.length || s.berubah.length) {
+          await tx.posSettlement.update({ where: { id: ada.id }, data: { updatedBy: aktor.id } })
+          await catatAudit(tx, k, {
+            action: 'setoran.ubah',
+            docType: 'pos_settlement',
+            docId: ada.id,
+            summary: ringkasMuat(ada.no, s),
+            before: { expectedTotal: ada.expectedTotal, actualTotal: ada.actualTotal, mdrFee: ada.mdrFee },
+            after: { expectedTotal: s.kepala.expectedTotal, actualTotal: s.kepala.actualTotal, mdrFee: s.kepala.mdrFee, shiftBaru: s.baru, shiftBerubah: s.berubah, shiftPerluDiperiksa: s.periksa },
+          })
+          hasil.diperbarui.push({ id: ada.id, no: ada.no, metode: m.name, baru: s.baru.length })
+        }
+        continue
+      }
+      const calon = await calonBaris(tx, tanggal, m)
+      if (!calon.length) continue
+      const no = await ambilNomor(tx, 'pos_settlement', 'ST', awalHari(tanggal))
+      const st = await tx.posSettlement.create({
+        data: { no, date: keKolomTanggal(tanggal), paymentMethodId: m.id, bankAccountId: await rekeningBawaan(tx, m), createdBy: aktor.id, updatedBy: aktor.id },
+      })
+      const s = await segarkanBaris(tx, { ...st, paymentMethod: m })
+      await catatAudit(tx, k, {
+        action: 'setoran.tambah',
+        docType: 'pos_settlement',
+        docId: st.id,
+        summary: `Membuat setoran ${no} ${m.name} tanggal ${tanggal}: ${s.baru.length} shift, sistem ${rupiah(s.kepala.expectedTotal)}`,
+        after: { no, date: tanggal, paymentMethodId: m.id, bankAccountId: st.bankAccountId, shift: s.baru, expectedTotal: s.kepala.expectedTotal, actualTotal: s.kepala.actualTotal, mdrFee: s.kepala.mdrFee },
+      })
+      hasil.dibuat.push({ id: st.id, no, metode: m.name })
+    }
+    if (!hasil.dibuat.length && !hasil.diperbarui.length) {
+      throw new GalatAturan(
+        hasil.dilewati.length
+          ? `Ada shift ditutup yang belum disetor, tetapi setoran ${hasil.dilewati.map((d) => `${d.no} (${d.metode})`).join(', ')} sudah ${hasil.dilewati[0].status === 'Diposting' ? 'diposting' : 'diajukan'}. Kembalikan atau batalkan dulu setoran itu.`
+          : `Tidak ada shift ditutup yang belum disetor pada tanggal ${tanggal}.`,
+        'tanggal',
+      )
+    }
+    return hasil
+  })
+}
+
+// Mengunci baris kepala setoran sampai transaksi selesai, lalu memuatnya bersama metode dan barisnya.
+async function kunciSetoran(tx: Tx, id: number) {
+  await tx.$queryRaw`SELECT id FROM pos_settlement WHERE id = ${id} FOR UPDATE`
+  const st = await tx.posSettlement.findUnique({ where: { id }, include: { paymentMethod: true, posSettlementLines: { include: { shift: { select: { id: true, status: true } } }, orderBy: { shiftId: 'asc' } } } })
+  if (!st) throw new GalatAturan('Setoran tidak ditemukan.')
+  return st
+}
+
+const uangIsian = (pesan: string, opsi: { negatif?: boolean } = {}) =>
+  z.preprocess(
+    (v) => String(v ?? '').trim(),
+    z
+      .string()
+      .min(1, pesan)
+      .transform((t, ctx) => {
+        const minus = opsi.negatif && t.startsWith('-')
+        const angka = t.replace(/[^\d]/g, '')
+        if (!angka) {
+          ctx.addIssue({ code: 'custom', message: pesan })
+          return z.NEVER
+        }
+        const n = Number(angka) * (minus ? -1 : 1)
+        if (Math.abs(n) > BATAS_UANG) {
+          ctx.addIssue({ code: 'custom', message: 'Nilai terlalu besar.' })
+          return z.NEVER
+        }
+        return n
+      }),
+  )
+
+export const skemaUbah = z.object({
+  bankAccountId: z.preprocess((v) => (v === '' || v === undefined || v === null ? null : v), z.coerce.number().int().positive().nullable()),
+  mdrFee: uangIsian('Isi biaya MDR, boleh 0.'),
+  note: z.string().trim().max(300, 'Catatan paling panjang 300 huruf.').default(''),
+})
+
+// Nilai disetor dan catatan per baris dibaca dari isian actual_<id baris> dan catatan_<id baris>.
+function bacaBaris(masukan: Record<string, unknown>, ids: number[]) {
+  const galat: Record<string, string> = {}
+  const hasil = new Map<number, { actual: number; note: string }>()
+  for (const id of ids) {
+    const a = uangIsian('Isi nilai disetor.', { negatif: true }).safeParse(masukan[`actual_${id}`])
+    const c = z.string().trim().max(120, 'Catatan baris paling panjang 120 huruf.').safeParse(String(masukan[`catatan_${id}`] ?? ''))
+    if (!a.success) galat[`actual_${id}`] = a.error.issues[0].message
+    if (!c.success) galat[`catatan_${id}`] = c.error.issues[0].message
+    if (a.success && c.success) hasil.set(id, { actual: a.data, note: c.data })
+  }
+  const kunci = Object.keys(galat)
+  if (kunci.length) throw new GalatAturan(galat[kunci[0]], kunci[0])
+  return hasil
+}
+
+// Ubah kepala dan baris setoran Draft. bukti: undefined artinya tidak berubah, null artinya dihapus.
+export async function ubahSetoran(db: Db, k: Konteks, aktor: Aktor, id: number, masukan: Record<string, unknown>, bukti?: string | null) {
+  pastikanIzin(aktor, MENU, 'U')
+  const d = skemaUbah.parse(masukan)
+  return db.$transaction(async (tx) => {
+    const st = await kunciSetoran(tx, id)
+    if (st.status !== 'Draft') throw new GalatAturan('Setoran hanya bisa diubah saat masih Draft.')
+    if (d.bankAccountId !== null && d.bankAccountId !== st.bankAccountId) {
+      const r = await tx.bankAccount.findUnique({ where: { id: d.bankAccountId } })
+      if (!r || !r.active) throw new GalatAturan('Rekening tujuan tidak ditemukan atau sudah nonaktif.', 'bankAccountId')
+    }
+    const baris = bacaBaris(masukan, st.posSettlementLines.map((l) => l.id))
+    const sebelum: Record<string, unknown> = {}
+    const sesudah: Record<string, unknown> = {}
+    for (const l of st.posSettlementLines) {
+      const b = baris.get(l.id)!
+      if (Number(l.actual) === b.actual && l.note === b.note) continue
+      await tx.posSettlementLine.update({ where: { id: l.id }, data: { actual: BigInt(b.actual), diff: BigInt(b.actual) - l.expected, note: b.note } })
+      sebelum[`shift_${l.shiftId}`] = { actual: l.actual, note: l.note }
+      sesudah[`shift_${l.shiftId}`] = { actual: b.actual, note: b.note }
+    }
+    const kepala: Prisma.PosSettlementUpdateInput = {}
+    if (d.bankAccountId !== st.bankAccountId) {
+      kepala.bankAccount = d.bankAccountId ? { connect: { id: d.bankAccountId } } : { disconnect: true }
+      sebelum.bankAccountId = st.bankAccountId
+      sesudah.bankAccountId = d.bankAccountId
+    }
+    if (d.note !== st.note) {
+      kepala.note = d.note
+      sebelum.note = st.note
+      sesudah.note = d.note
+    }
+    if (bukti !== undefined && bukti !== st.proofFile) {
+      kepala.proofFile = bukti
+      sebelum.proofFile = st.proofFile
+      sesudah.proofFile = bukti
+    }
+    if (BigInt(d.mdrFee) !== st.mdrFee) {
+      sebelum.mdrFee = st.mdrFee
+      sesudah.mdrFee = d.mdrFee
+    }
+    if (!Object.keys(sesudah).length) return { st, berubah: 0, buktiLama: null }
+    await tx.posSettlement.update({ where: { id }, data: { ...kepala, updatedBy: aktor.id } })
+    const baru = await hitungUlang(tx, id, BigInt(d.mdrFee))
+    sesudah.diff = baru.diff
+    await catatAudit(tx, k, { action: 'setoran.ubah', docType: 'pos_settlement', docId: id, summary: `Mengubah setoran ${st.no}: disetor ${rupiah(baru.actualTotal)}, MDR ${rupiah(baru.mdrFee)}, selisih ${rupiah(baru.diff)}`, before: sebelum, after: sesudah })
+    return { st: baru, berubah: Object.keys(sesudah).length, buktiLama: bukti !== undefined && bukti !== st.proofFile ? st.proofFile : null }
+  })
+}
+
+export async function muatUlangSetoran(db: Db, k: Konteks, aktor: Aktor, id: number) {
+  pastikanIzin(aktor, MENU, 'U')
+  return db.$transaction(async (tx) => {
+    const st = await kunciSetoran(tx, id)
+    if (st.status !== 'Draft') throw new GalatAturan('Baris hanya bisa dimuat ulang saat setoran masih Draft.')
+    await kunciTanggal(tx, dariKolomTanggal(st.date))
+    const s = await segarkanBaris(tx, st)
+    if (!s.baru.length && !s.berubah.length) return { baru: 0, berubah: 0, periksa: 0 }
+    await tx.posSettlement.update({ where: { id }, data: { updatedBy: aktor.id } })
+    await catatAudit(tx, k, {
+      action: 'setoran.ubah',
+      docType: 'pos_settlement',
+      docId: id,
+      summary: ringkasMuat(st.no, s),
+      before: { expectedTotal: st.expectedTotal, actualTotal: st.actualTotal, mdrFee: st.mdrFee },
+      after: { expectedTotal: s.kepala.expectedTotal, actualTotal: s.kepala.actualTotal, mdrFee: s.kepala.mdrFee, shiftBaru: s.baru, shiftBerubah: s.berubah, shiftPerluDiperiksa: s.periksa },
+    })
+    return { baru: s.baru.length, berubah: s.berubah.length, periksa: s.periksa.length }
+  })
+}
+
+type SetoranTerkunci = Awaited<ReturnType<typeof kunciSetoran>>
+
+// Alasan setoran butuh Owner. Sejak tahap 6C selisih setoran tidak lagi butuh Owner (saklar pos.batas_selisih_kas
+// dihapus, KONTRAK 11 butir 122). Yang tersisa hanya shift lama yang masih "Perlu persetujuan".
+export function alasanButuhOwner(st: { posSettlementLines: { shift: { id: number; status: string } }[] }) {
+  const alasan: string[] = []
+  const tunggu = st.posSettlementLines.filter((l) => l.shift.status === 'PerluPersetujuan').map((l) => `#${l.shift.id}`)
+  if (tunggu.length) alasan.push(`shift ${tunggu.join(', ')} masih perlu persetujuan`)
+  return alasan
+}
+
+// Syarat posting yang tidak bergantung pada pelaku.
+async function periksaPosting(tx: Tx, st: SetoranTerkunci) {
+  const iso = dariKolomTanggal(st.date)
+  if (!st.posSettlementLines.length) throw new GalatAturan('Setoran belum punya baris shift.')
+  if (st.paymentMethod.kind === 'tunai') {
+    const buka = await tx.shift.findMany({ where: { ...syaratShiftTanggal(iso), status: 'Buka' }, select: { id: true } })
+    if (buka.length) throw new GalatAturan(`Setoran tunai tanggal ${iso} baru bisa diposting sesudah semua shift tanggal itu ditutup. Masih buka: ${buka.map((b) => `#${b.id}`).join(', ')}.`)
+  } else if (!st.bankAccountId) {
+    throw new GalatAturan('Pilih rekening tujuan dulu. Bila belum ada, minta Owner menambahnya di menu Rekening Bank.', 'bankAccountId')
+  }
+  if (st.bankAccountId) {
+    const r = await tx.bankAccount.findUnique({ where: { id: st.bankAccountId }, select: { active: true } })
+    if (!r?.active) throw new GalatAturan('Rekening tujuan sudah nonaktif. Pilih rekening lain.', 'bankAccountId')
+  }
+  const sisa = await calonBaris(tx, iso, st.paymentMethod, st.id)
+  const kurang = sisa.filter((c) => !st.posSettlementLines.some((l) => l.shiftId === c.shiftId))
+  if (kurang.length) throw new GalatAturan(`Shift ${kurang.map((c) => `#${c.shiftId}`).join(', ')} sudah ditutup tetapi belum masuk setoran ini. ${st.status === 'Draft' ? 'Tekan Muat ulang baris dulu.' : 'Kembalikan ke Draft lalu muat ulang baris.'}`)
+  const kini = await nilaiBarisKini(tx, st.posSettlementLines.map((l) => l.shiftId), st.paymentMethod)
+  const berubah = st.posSettlementLines.filter((l) => Number(l.expected) !== kini.get(l.shiftId)!.nilai)
+  if (berubah.length) throw new GalatAturan(`Nilai sistem shift ${berubah.map((l) => `#${l.shiftId}`).join(', ')} berubah sesudah setoran dibuat (ada void). ${st.status === 'Draft' ? 'Tekan Muat ulang baris dulu.' : 'Kembalikan ke Draft lalu muat ulang baris.'}`)
+}
+
+const jejak = (st: { status: string }) => ({ status: st.status })
+
+export async function ajukanSetoran(db: Db, k: Konteks, aktor: Aktor, id: number) {
+  pastikanIzin(aktor, MENU, 'U')
+  return db.$transaction(async (tx) => {
+    const st = await kunciSetoran(tx, id)
+    if (!transisiSah('pelaksana', st.status as StatusDokumen, 'Diajukan')) throw new GalatAturan('Setoran ini tidak bisa diajukan dari status sekarang.')
+    if (!st.posSettlementLines.length) throw new GalatAturan('Setoran belum punya baris shift.')
+    const b = await tx.posSettlement.update({ where: { id }, data: { status: 'Diajukan', submittedBy: aktor.id, submittedAt: new Date(), updatedBy: aktor.id } })
+    await catatAudit(tx, k, { action: 'setoran.ajukan', docType: 'pos_settlement', docId: id, summary: `Mengajukan setoran ${st.no} ke Owner`, before: jejak(st), after: jejak(b) })
+    return b
+  })
+}
+
+export const skemaCatatan = z.object({ catatan: z.string().trim().max(200, 'Catatan paling panjang 200 huruf.').default('') })
+
+// Dikembalikan ke Draft oleh penyetuju atau oleh pengajunya sendiri (RANCANGAN 2.1).
+export async function kembalikanSetoran(db: Db, k: Konteks, aktor: Aktor, id: number, masukan: unknown) {
+  const d = skemaCatatan.parse(masukan)
+  return db.$transaction(async (tx) => {
+    const st = await kunciSetoran(tx, id)
+    if (!punyaIzin(aktor.izin, MENU, 'S') && !(st.submittedBy === aktor.id && punyaIzin(aktor.izin, MENU, 'U'))) pastikanIzin(aktor, MENU, 'S')
+    if (!transisiSah('pelaksana', st.status as StatusDokumen, 'Draft')) throw new GalatAturan('Hanya setoran Diajukan yang bisa dikembalikan ke Draft.')
+    const b = await tx.posSettlement.update({ where: { id }, data: { status: 'Draft', submittedBy: null, submittedAt: null, updatedBy: aktor.id } })
+    await catatAudit(tx, k, { action: 'setoran.kembalikan', docType: 'pos_settlement', docId: id, summary: `Mengembalikan setoran ${st.no} ke Draft${d.catatan ? `: ${d.catatan}` : ''}`, before: jejak(st), after: { ...jejak(b), catatan: d.catatan } })
+    return b
+  })
+}
+
+// Posting. Bila butuh Owner, pelaku wajib memegang Setujui; dari Draft langsung lewat Diajukan dalam transaksi yang
+// sama ("Setujui dan posting", RANCANGAN 2.2). Jurnal dibentuk di modul akuntansi dari dokumen Diposting.
+export async function postingSetoran(db: Db, k: Konteks, aktor: Aktor, id: number) {
+  pastikanIzin(aktor, MENU, 'P')
+  return db.$transaction(async (tx) => {
+    const st = await kunciSetoran(tx, id)
+    const dari = st.status as StatusDokumen
+    if (!transisiSah('pelaksana', dari, 'Diposting')) throw new GalatAturan('Setoran ini tidak bisa diposting dari status sekarang.')
+    await periksaPosting(tx, st)
+    const alasan = alasanButuhOwner(st)
+    const butuhSetuju = alasan.length > 0
+    const sekarang = new Date()
+    const data: Prisma.PosSettlementUpdateInput = { status: 'Diposting', postedBy: aktor.id, postedAt: sekarang, updatedBy: aktor.id }
+    if (butuhSetuju) {
+      if (!punyaIzin(aktor.izin, MENU, 'S')) throw new GalatAturan(`Setoran ini butuh persetujuan Owner karena ${alasan.join(' dan ')}. ${dari === 'Draft' ? 'Ajukan dulu ke Owner.' : 'Tunggu Owner menyetujui.'}`)
+      if (dari === 'Draft') {
+        data.submittedBy = aktor.id
+        data.submittedAt = sekarang
+      }
+      data.approvedBy = aktor.id
+      data.approvedAt = sekarang
+    }
+    const b = await tx.posSettlement.update({ where: { id }, data })
+    const jurnal = await jurnalSetoran(tx, id, aktor.id)
+    if (butuhSetuju) {
+      await catatAudit(tx, k, { action: 'setoran.setujui', docType: 'pos_settlement', docId: id, summary: `Menyetujui setoran ${st.no}: ${alasan.join(', ')}`, before: jejak(st), after: { approvedBy: aktor.id, alasan } })
+    }
+    await catatAudit(tx, k, {
+      action: 'setoran.posting',
+      docType: 'pos_settlement',
+      docId: id,
+      summary: `Memposting setoran ${st.no} ${st.paymentMethod.name}: disetor ${rupiah(st.actualTotal)}, MDR ${rupiah(st.mdrFee)}, selisih ${rupiah(st.diff)}`,
+      before: jejak(st),
+      after: { status: b.status, expectedTotal: st.expectedTotal, actualTotal: st.actualTotal, mdrFee: st.mdrFee, diff: st.diff, shift: st.posSettlementLines.map((l) => l.shiftId), jurnal: jurnal?.no ?? null },
+    })
+    return b
+  })
+}
+
+export const skemaBatal = z.object({ alasan: z.string().trim().min(3, 'Alasan pembatalan minimal 3 huruf.').max(200, 'Alasan paling panjang 200 huruf.') })
+
+// Batal dari Draft, Diajukan, atau Disetujui butuh Ubah. Batal dari Diposting butuh Posting dan saklar
+// dok.batal_posting (RANCANGAN 2.2, 8.3). Baris ikut ditandai batal sehingga shift-nya bisa disetor ulang.
+export async function batalSetoran(db: Db, k: Konteks, aktor: Aktor, id: number, masukan: unknown) {
+  pastikanIzin(aktor, MENU, 'U')
+  const d = skemaBatal.parse(masukan)
+  return db.$transaction(async (tx) => {
+    const st = await kunciSetoran(tx, id)
+    if (!transisiSah('pelaksana', st.status as StatusDokumen, 'Batal')) throw new GalatAturan('Setoran ini sudah Batal.')
+    if (st.status === 'Diposting') {
+      pastikanIzin(aktor, MENU, 'P')
+      if (!saklarNyala(aktor, 'dok.batal_posting')) throw new GalatSaklar('dok.batal_posting', 'Membatalkan setoran yang sudah diposting butuh saklar Batalkan dokumen diposting. Minta Owner.')
+    }
+    const b = await tx.posSettlement.update({ where: { id }, data: { status: 'Batal', cancelledBy: aktor.id, cancelledAt: new Date(), cancelReason: d.alasan, updatedBy: aktor.id } })
+    await tx.posSettlementLine.updateMany({ where: { posSettlementId: id }, data: { cancelled: true } })
+    const jurnal = st.status === 'Diposting' ? await balikJurnalSetoran(tx, id, tanggalJurnal(new Date()), aktor.id) : null
+    await catatAudit(tx, k, { action: 'setoran.batal', docType: 'pos_settlement', docId: id, summary: `Membatalkan setoran ${st.no} (${st.status}): ${d.alasan}`, before: jejak(st), after: { status: 'Batal', cancelReason: d.alasan, jurnalBalik: jurnal?.no ?? null } })
+    return b
+  })
+}
+
+// Hapus hanya untuk Draft. Nomor yang sudah keluar tidak dipakai ulang (KONTRAK 3.3).
+export async function hapusSetoran(db: Db, k: Konteks, aktor: Aktor, id: number) {
+  pastikanIzin(aktor, MENU, 'H')
+  return db.$transaction(async (tx) => {
+    const st = await kunciSetoran(tx, id)
+    if (st.status !== 'Draft') throw new GalatAturan('Hanya setoran Draft yang bisa dihapus. Setoran lain dibatalkan.')
+    await tx.posSettlement.delete({ where: { id } })
+    await catatAudit(tx, k, {
+      action: 'setoran.hapus',
+      docType: 'pos_settlement',
+      docId: id,
+      summary: `Menghapus draf setoran ${st.no}`,
+      before: { no: st.no, date: dariKolomTanggal(st.date), paymentMethodId: st.paymentMethodId, shift: st.posSettlementLines.map((l) => l.shiftId), expectedTotal: st.expectedTotal, actualTotal: st.actualTotal },
+    })
+    return st
+  })
+}
+
+export const NAMA_STATUS_SETORAN: Record<string, string> = { Draft: 'Draft', Diajukan: 'Diajukan', Disetujui: 'Disetujui', Diposting: 'Diposting', Batal: 'Batal' }
+
+export type SaringSetoran = { dari?: string; sampai?: string; metode?: string; status?: string; hal?: string }
+
+export async function daftarSetoran(db: Db, s: SaringSetoran) {
+  const hal = sesuaiHalaman(s.hal)
+  const where: Prisma.PosSettlementWhereInput = {}
+  const dari = s.dari && tanggalSah(s.dari) ? s.dari : undefined
+  const sampai = s.sampai && tanggalSah(s.sampai) ? s.sampai : undefined
+  if (dari || sampai) where.date = { ...(dari ? { gte: keKolomTanggal(dari) } : {}), ...(sampai ? { lte: keKolomTanggal(sampai) } : {}) }
+  if (Number(s.metode) > 0) where.paymentMethodId = Number(s.metode)
+  if (s.status && s.status in NAMA_STATUS_SETORAN) where.status = s.status as StatusDokumen
+  const [baris, total] = await Promise.all([
+    db.posSettlement.findMany({
+      where,
+      orderBy: [{ date: 'desc' }, { id: 'desc' }],
+      skip: (hal - 1) * PER_HALAMAN,
+      take: PER_HALAMAN,
+      include: { paymentMethod: { select: { name: true, kind: true } }, bankAccount: { select: { bankName: true, accountNo: true } }, _count: { select: { posSettlementLines: true } } },
+    }),
+    db.posSettlement.count({ where }),
+  ])
+  return { baris, total, hal, jumlahHal: Math.max(1, Math.ceil(total / PER_HALAMAN)) }
+}
+
+export async function ambilSetoran(db: Db, id: number) {
+  const st = await db.posSettlement.findUnique({
+    where: { id },
+    include: {
+      paymentMethod: true,
+      bankAccount: true,
+      posSettlementLines: { orderBy: { shiftId: 'asc' }, include: { shift: { select: { id: true, status: true, reasonMissing: true, openedAt: true, closedAt: true, openCash: true, countedCash: true, cashDiff: true, user: { select: { name: true } } } } } },
+    },
+  })
+  if (!st) return null
+  const ids = [st.createdBy, st.submittedBy, st.approvedBy, st.postedBy, st.cancelledBy].filter((x): x is number => !!x)
+  const orang = new Map((await db.appUser.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } })).map((u) => [u.id, u.name]))
+  const nama = (x: number | null) => (x ? (orang.get(x) ?? `#${x}`) : null)
+  return { ...st, oleh: { dibuat: nama(st.createdBy), diajukan: nama(st.submittedBy), disetujui: nama(st.approvedBy), diposting: nama(st.postedBy), dibatalkan: nama(st.cancelledBy) } }
+}

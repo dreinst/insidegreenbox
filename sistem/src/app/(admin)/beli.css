@@ -1,0 +1,40 @@
+/* Gaya modul pembelian tahap 4C: pemasok, permintaan, pesanan, penerimaan, faktur, retur, pembelian langsung,
+   pembayaran, dan hutang pemasok. Melengkapi globals.css, master.css, dan stok.css. */
+.bl-isian { width: 100%; min-width: 96px; min-height: 40px; padding: 0 10px; border: 0; border-radius: 10px; font: inherit; font-size: 16px; text-align: right; color: var(--ink); background: #fff; box-shadow: inset 0 2px 5px rgba(0, 0, 0, .08), inset 0 0 0 1px #D9DCD4 }
+.bl-isian:focus { outline: none; box-shadow: inset 0 2px 5px rgba(0, 0, 0, .08), inset 0 0 0 2px var(--ink) }
+.bl-isian[aria-invalid='true'] { box-shadow: inset 0 2px 5px rgba(0, 0, 0, .08), inset 0 0 0 2px var(--red) }
+.bl-isian:disabled { background: #EDEFEA; color: var(--muted) }
+.bl-tabel td { vertical-align: middle }
+.bl-tabel .bl-galat { display: block; margin-top: 4px; color: var(--red); font-size: 12.5px; font-weight: 600; text-align: right }
+.bl-total td { font-weight: 800; background: #ECEEE9 }
+
+/* Ringkasan angka dokumen */
+.bl-ringkas { display: flex; flex-wrap: wrap; gap: 10px 26px; margin: 0 0 14px; padding: 14px 18px; background: var(--paper2); border-radius: 14px; box-shadow: inset 0 2px 0 #fff }
+.bl-ringkas div { display: flex; flex-direction: column; gap: 2px; min-width: 0 }
+.bl-ringkas dt { color: var(--muted); font-size: 12.5px; font-weight: 600 }
+.bl-ringkas dd { margin: 0; font-family: var(--f-judul); font-weight: 800; font-size: 18px; overflow-wrap: anywhere }
+.bl-ringkas dd.minus { color: var(--red) }
+
+/* Formulir sebaris (tarik penerimaan, buat pesanan dari permintaan) */
+.bl-sebaris { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin-top: 4px }
+.bl-sebaris .kolom { flex: 1 1 240px }
+.bl-sebaris .tombol-baris { margin-top: 0 }
+.bl-lipat { margin-top: 14px; padding-top: 12px; border-top: 1px solid #E1E4DD }
+.bl-lipat > summary { display: inline-flex; align-items: center; min-height: 40px; font-weight: 700; cursor: pointer }
+.bl-lipat > summary + * { margin-top: 10px }
+.bl-turunan { display: flex; flex-wrap: wrap; gap: 6px 12px; margin: 0; padding: 0; list-style: none; font-size: 14px }
+.bl-turunan li { display: inline-flex; align-items: center; gap: 6px }
+
+/* Lencana progres dan status bayar */
+.lencana.biru { background: #E3ECF7; color: #1F4E8C }
+
+@media (max-width: 640px) {
+  .bl-isian { min-width: 0; text-align: left }
+  .bl-tabel .bl-galat { text-align: left }
+  .bl-ringkas { padding: 12px 14px }
+  .bl-ringkas dd { font-size: 16px }
+  .bl-sebaris > * { flex: 1 1 100% }
+  .bl-sebaris .btn { width: 100% }
+  .bl-total td { background: transparent }
+  .bl-tabel tr.bl-total { background: #ECEEE9; border-radius: 10px }
+}

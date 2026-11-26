@@ -1,0 +1,12 @@
+{
+  "penjaga-greenbox": {
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          { "type": "command", "command": "python3 -I ./penjaga/penjaga.py", "timeout": 15 }
+        ]
+      }
+    ]
+  }
+}

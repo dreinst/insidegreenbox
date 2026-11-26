@@ -1,0 +1,58 @@
+/* Gaya halaman akuntansi tahap 5B: bagan akun, pemetaan, jurnal, buku besar, laporan keuangan, tutup periode.
+   Melengkapi globals.css, master.css, dan laporan.css. */
+
+/* Pohon akun: anak menjorok sesuai tingkat, akun induk tebal. */
+.ak-nama { display: block; overflow-wrap: anywhere }
+.ak-t1 { padding-left: 20px } .ak-t2 { padding-left: 40px } .ak-t3 { padding-left: 60px } .ak-t4 { padding-left: 80px } .ak-t5 { padding-left: 100px }
+.ak-induk .ak-nama { font-weight: 800 }
+.ak-kode { font-variant-numeric: tabular-nums; white-space: nowrap }
+.ak-kunci { display: flex; flex-wrap: wrap; gap: 4px }
+.ak-kunci code { padding: 1px 6px; border-radius: 6px; background: #ECEEE9; font-size: 12.5px; white-space: nowrap }
+.tabel tr.ak-nonaktif td { color: var(--muted) }
+
+/* Formulir pemetaan: satu baris per kunci. */
+.peta-kelompok { margin: 0 0 18px }
+.peta-kelompok h3 { margin: 18px 0 8px; font-size: 16px }
+.peta-baris { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 6px 18px; align-items: start; padding: 12px 0; border-bottom: 1px solid #E5E8E1 }
+.peta-baris:last-child { border-bottom: 0 }
+.peta-baris label { font-weight: 700 }
+.peta-baris small { display: block; color: var(--muted); font-size: 13px; font-weight: 400 }
+.peta-baris select { width: 100% }
+.peta-baris .galat-kolom { grid-column: 2 }
+
+/* Jurnal: total di kaki tabel. */
+.jr-tabel tfoot td { font-weight: 800; background: #ECEEE9; border-top: 1px solid #DEE1DA }
+.jr-kredit .ak-nama { padding-left: 20px }
+
+/* Laporan keuangan: judul kelompok, baris akun, jumlah, dan hasil. */
+.lk-tabel td, .lk-tabel th { white-space: normal }
+.lk-tabel tr.lk-judul td { padding-top: 18px; font-family: var(--f-judul); font-weight: 800; font-size: 15px; background: none; border-bottom: 1px solid #DEE1DA }
+.lk-tabel tr.lk-akun td:first-child { padding-left: 28px }
+.lk-tabel tr.lk-jumlah td { font-weight: 800 }
+.lk-tabel tr.lk-hasil td { font-weight: 800; background: #E4F3DF; border-top: 2px solid var(--ink) }
+.lk-status { display: inline-flex; align-items: center; gap: 8px; margin: 0 0 14px; padding: 8px 12px; border-radius: 10px; font-weight: 700 }
+.lk-status.ok { background: #E4F3DF; color: #0B5B09 }
+.lk-status.salah { background: #FBE3DF; color: #8A1F0F }
+
+/* Tutup periode */
+.periode-tindakan { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start; justify-content: flex-end }
+.periode-tindakan details { min-width: min(320px, 100%); text-align: left }
+.periode-tindakan summary { cursor: pointer; font-weight: 700 }
+
+@media (max-width: 640px) {
+  .peta-baris { grid-template-columns: minmax(0, 1fr) }
+  .peta-baris .galat-kolom { grid-column: 1 }
+  .lk-tabel tr.lk-akun td:first-child { padding-left: 0 }
+  .lk-tabel tr.lk-judul td { padding-top: 6px; border: 0 }
+  .lk-tabel tr.lk-judul td:not(:first-child) { display: none }
+  .ak-t1 { padding-left: 10px } .ak-t2 { padding-left: 20px } .ak-t3 { padding-left: 30px } .ak-t4 { padding-left: 40px } .ak-t5 { padding-left: 50px }
+  .periode-tindakan { justify-content: flex-start }
+  .jr-kredit .ak-nama { padding-left: 0 }
+  .jr-tabel tfoot { display: block }
+  .jr-tabel tfoot tr { display: block; padding: 10px 14px; background: #ECEEE9 }
+  .jr-tabel tfoot td { background: none; border: 0 }
+  .jr-tabel tfoot td.jr-jumlah { display: none }
+}
+
+/* audit C-4: pelanggan atau pemasok baris jurnal */
+.jr-pihak { display: block }
