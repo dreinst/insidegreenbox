@@ -1,0 +1,14 @@
+# Dipakai BuildKit untuk sistem/Dockerfile (konteks akar repo). Hanya yang dibutuhkan image yang dikirim.
+*
+!sistem
+!src/data.ts
+!public/img
+sistem/node_modules
+sistem/.next
+sistem/src/generated
+sistem/data
+sistem/tests/potret
+sistem/tests/hasil
+sistem/.env
+sistem/.env.*
+sistem/*.tsbuildinfo
