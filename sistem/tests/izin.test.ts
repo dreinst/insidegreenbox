@@ -4,7 +4,7 @@ import { after, before, describe, test } from 'node:test'
 import { GalatAturan, GalatIzin } from '../src/lib/aksi'
 import type { Db } from '../src/lib/db'
 import { muatIzin, muatSaklar, punyaIzin, type Pengguna } from '../src/lib/izin-inti'
-import { MENU_IZIN, SAKLAR } from '../src/lib/katalog'
+import { MENU_IZIN, SAKLAR, type KodePeranSistem } from '../src/lib/katalog'
 import { aturUlangSandi, izinTercakup, peranBolehDiberi, tambahPengguna, ubahPengguna, ubahStatusPengguna } from '../src/lib/pengguna'
 import { simpanIzinPeran, simpanSaklarPeran, tambahPeran, ubahStatusPeran } from '../src/lib/peran'
 import { buatAktor, k, muatAktor, siapkanDbUji } from './db-uji'
@@ -32,7 +32,7 @@ describe('matriks bawaan RANCANGAN 8.2', () => {
   test('setiap peran sistem punya izin persis sesuai katalog', async () => {
     for (const p of [owner, admin, kasir]) {
       for (const m of MENU_IZIN) {
-        const harap = m.bawaan[p.peran.code as 'owner' | 'admin' | 'kasir']
+        const harap = m.bawaan[p.peran.code as KodePeranSistem]
         assert.equal(p.izin[m.kode] ?? '', harap, `${p.peran.code} ${m.kode}`)
       }
     }
@@ -66,7 +66,7 @@ describe('saklar fitur RANCANGAN 8.3', () => {
     for (const p of [owner, admin, kasir]) {
       const s = await muatSaklar(db, p.peran.id)
       for (const def of SAKLAR) {
-        const b = def.bawaan[p.peran.code as 'owner' | 'admin' | 'kasir']
+        const b = def.bawaan[p.peran.code as KodePeranSistem]
         assert.equal(s[def.kode].nyala, b.nyala, `${p.peran.code} ${def.kode}`)
         if (def.satuan) assert.equal(s[def.kode].batas, b.batas, `batas ${p.peran.code} ${def.kode}`)
       }
@@ -180,10 +180,10 @@ describe('pengaman Owner aktif terakhir dan diri sendiri', () => {
     await db.appUser.update({ where: { id: o2.id }, data: { active: true } })
     await ubahPengguna(db, k(o2), o2, owner.id, { name: owner.name, username: owner.username, roleId: await idPeran('admin') })
     // owner2 kini Owner aktif terakhir.
-    await assert.rejects(ubahStatusPengguna(db, k(owner), { ...owner, peran: o2.peran, izin: o2.izin }, o2.id, false), /Owner aktif terakhir/)
+    await assert.rejects(ubahStatusPengguna(db, k(owner), { ...owner, peran: o2.peran, izin: o2.izin }, o2.id, false), /aktif terakhir berperan Owner atau Superadmin/)
     await assert.rejects(
       ubahPengguna(db, k(owner), { ...owner, peran: o2.peran, izin: o2.izin }, o2.id, { name: 'owner2', username: 'owner2', roleId: await idPeran('kasir') }),
-      /Owner aktif terakhir/,
+      /aktif terakhir berperan Owner atau Superadmin/,
     )
     // Kembalikan owner1 ke Owner.
     await ubahPengguna(db, k(o2), o2, owner.id, { name: owner.name, username: owner.username, roleId: owner.peran.id })

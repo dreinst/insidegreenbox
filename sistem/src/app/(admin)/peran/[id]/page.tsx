@@ -5,7 +5,7 @@ import { KepalaHalaman, Lencana, PesanFlash } from '@/components/umum'
 import { db } from '@/lib/db'
 import { wajibIzin } from '@/lib/izin'
 import { hurufIzin, isOwner, punyaIzin } from '@/lib/izin-inti'
-import { MENU_TERKUNCI_OWNER, grupMenu } from '@/lib/katalog'
+import { MENU_TERKUNCI_OWNER, grupMenu, setaraOwner } from '@/lib/katalog'
 import { izinPeranAksi, statusPeranAksi, ubahPeranAksi } from '../aksi'
 import { FormMatriks, FormNamaPeran, FormStatusPeran } from '../form'
 
@@ -18,12 +18,12 @@ export default async function RincianPeran({ params, searchParams }: { params: P
   const [r, { pesan }] = await Promise.all([db.role.findUnique({ where: { id }, include: { permissions: true, _count: { select: { users: true } } } }), searchParams])
   if (!r) notFound()
   const bolehUbah = punyaIzin(p.izin, 'atur.peran', 'U')
-  const bolehUbahNama = bolehUbah && (r.code !== 'owner' || isOwner(p))
+  const bolehUbahNama = bolehUbah && (!setaraOwner(r.code) || isOwner(p))
   const bolehMatriks = bolehUbahNama && (r.id !== p.peran.id || isOwner(p))
   const punya = new Map(r.permissions.map((x) => [x.menuCode, hurufIzin(x)]))
   const grup = grupMenu().map(([nama, menu]) => ({
     grup: nama,
-    menu: menu.map((m) => ({ kode: m.kode, nama: m.nama, aksi: m.aksi, punya: punya.get(m.kode) ?? '', kunci: r.code === 'owner' && MENU_TERKUNCI_OWNER.includes(m.kode) })),
+    menu: menu.map((m) => ({ kode: m.kode, nama: m.nama, aksi: m.aksi, punya: punya.get(m.kode) ?? '', kunci: setaraOwner(r.code) && MENU_TERKUNCI_OWNER.includes(m.kode) })),
   }))
 
   return (
@@ -73,8 +73,10 @@ export default async function RincianPeran({ params, searchParams }: { params: P
 
       <section className="kartu" aria-labelledby="j-izin">
         <h2 id="j-izin">Izin per menu</h2>
-        {r.code === 'owner' ? <p className="redup">Izin Pengguna, Peran dan izin, Saklar fitur, dan Jejak audit milik Owner dikunci supaya pengelolaan akun tidak hilang.</p> : null}
-        {!bolehMatriks && bolehUbah ? <p className="redup">{r.id === p.peran.id ? 'Izin peranmu sendiri hanya bisa diubah Owner.' : 'Izin peran Owner hanya bisa diubah Owner.'}</p> : null}
+        {setaraOwner(r.code) ? (
+          <p className="redup">Izin Pengguna, Peran dan izin, Saklar fitur, Aturan persetujuan, dan Jejak audit milik {r.name} dikunci supaya pengelolaan akun tidak hilang.</p>
+        ) : null}
+        {!bolehMatriks && bolehUbah ? <p className="redup">{r.id === p.peran.id ? 'Izin peranmu sendiri hanya bisa diubah Owner atau Superadmin.' : `Izin peran ${r.name} hanya bisa diubah Owner atau Superadmin.`}</p> : null}
         <FormMatriks aksi={izinPeranAksi.bind(null, r.id)} grup={grup} bisaUbah={bolehMatriks} />
       </section>
     </>

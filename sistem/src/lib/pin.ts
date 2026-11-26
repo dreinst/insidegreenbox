@@ -8,6 +8,7 @@ import { GalatAturan } from './aksi'
 import { catatAudit, type Konteks } from './audit'
 import type { Db, DbAtauTx } from './db'
 import { isOwner, muatIzin, muatSaklar, pastikanIzin, punyaIzin, type PetaIzin, type Pengguna } from './izin-inti'
+import { setaraOwner } from './katalog'
 import { batalkanPercobaan, pesanPercobaan, PESAN_MASUK, tandaiBerhasil, type HasilMasuk } from './masuk'
 import { BIAYA_BCRYPT } from './seed-inti'
 import { UMUR_SESI_JAM } from './sesi-token'
@@ -21,10 +22,10 @@ export const kunciPin = (username: string) => `pin:${username}`
 let hashTiruan: Promise<string> | null = null
 const ambilHashTiruan = () => (hashTiruan ??= bcrypt.hash(randomBytes(8).toString('hex'), BIAYA_BCRYPT))
 
-// Masuk dengan PIN hanya untuk peran yang tidak memegang menu Pengaturan apa pun (Owner dan Admin tetap memakai
-// sandi, RANCANGAN 8.1), dan perannya harus bisa memakai layar kasir.
+// Masuk dengan PIN hanya untuk peran yang tidak memegang menu Pengaturan apa pun (Owner, Superadmin, dan Admin tetap
+// memakai sandi, RANCANGAN 8.1), dan perannya harus bisa memakai layar kasir.
 export const bolehMasukPin = (kodePeran: string, izin: PetaIzin) =>
-  kodePeran !== 'owner' && punyaIzin(izin, 'kasir.layar', 'T') && !Object.keys(izin).some((m) => m.startsWith('atur.'))
+  !setaraOwner(kodePeran) && punyaIzin(izin, 'kasir.layar', 'T') && !Object.keys(izin).some((m) => m.startsWith('atur.'))
 
 type Aktor = Pick<Pengguna, 'id' | 'izin' | 'peran' | 'sesiId'>
 
@@ -33,11 +34,11 @@ async function izinPeran(db: DbAtauTx, roleId: number, cache: Map<number, PetaIz
   return cache.get(roleId)!
 }
 
-// Owner boleh mengatur PIN siapa saja. Pemegang kasir.pin lain hanya PIN dirinya sendiri dan PIN pengguna yang
+// Owner dan Superadmin boleh mengatur PIN siapa saja. Pemegang kasir.pin lain hanya PIN dirinya sendiri dan PIN pengguna yang
 // perannya boleh masuk dengan PIN, supaya PIN tidak bisa dipakai menyamar sebagai Admin lain.
 export async function bolehAturPinUntuk(db: DbAtauTx, aktor: Aktor, target: { id: number; roleId: number; role: { code: string } }, cache = new Map<number, PetaIzin>()) {
   if (isOwner(aktor)) return true
-  if (target.role.code === 'owner') return false
+  if (setaraOwner(target.role.code)) return false
   if (target.id === aktor.id) return true
   return bolehMasukPin(target.role.code, await izinPeran(db, target.roleId, cache))
 }

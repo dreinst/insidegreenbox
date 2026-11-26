@@ -10,7 +10,8 @@ import { FormAturan, type BarisForm } from './form'
 
 export const metadata: Metadata = { title: 'Aturan Persetujuan' }
 
-// Keputusan pemilik 24 November 2026 (KONTRAK 11 butir 156): hanya Owner yang mengubah aturan persetujuan.
+// Keputusan pemilik 24 November 2026 (KONTRAK 11 butir 156): hanya Owner (termasuk Superadmin, butir 161) yang mengubah aturan
+// persetujuan.
 export default async function HalamanPersetujuan({ searchParams }: { searchParams: Promise<{ pesan?: string }> }) {
   const p = await wajibIzin('atur.persetujuan', 'L')
   const [aturan, { pesan }] = await Promise.all([daftarAturan(db), searchParams])
@@ -43,7 +44,7 @@ export default async function HalamanPersetujuan({ searchParams }: { searchParam
         <p className="redup">
           Saklar menyala berarti dokumen jenis itu wajib disetujui. Batas kosong berarti semua nilai. Mematikan persetujuan tidak menghapus batasnya. Perubahan langsung berlaku untuk dokumen yang diproses sesudahnya, termasuk dokumen yang sedang Draft atau Diajukan.
         </p>
-        {!bisaUbah && punyaIzin(p.izin, 'atur.persetujuan', 'U') ? <p className="redup">Aturan persetujuan hanya bisa diubah pengguna berperan Owner.</p> : null}
+        {!bisaUbah && punyaIzin(p.izin, 'atur.persetujuan', 'U') ? <p className="redup">Aturan persetujuan hanya bisa diubah pengguna berperan Owner atau Superadmin.</p> : null}
         {baris.length ? <FormAturan aksi={simpanAturanAksi} baris={baris} bisaUbah={bisaUbah} /> : <p className="kosong">Belum ada aturan persetujuan.</p>}
       </section>
     </>

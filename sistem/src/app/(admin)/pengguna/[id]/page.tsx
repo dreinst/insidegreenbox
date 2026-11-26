@@ -5,6 +5,7 @@ import { KepalaHalaman, Lencana, PesanFlash } from '@/components/umum'
 import { db } from '@/lib/db'
 import { wajibIzin } from '@/lib/izin'
 import { isOwner, punyaIzin } from '@/lib/izin-inti'
+import { setaraOwner } from '@/lib/katalog'
 import { peranBolehDiberi, peranTercakup } from '@/lib/pengguna'
 import { formatWaktu } from '@/lib/waktu'
 import { sandiPenggunaAksi, statusPenggunaAksi, ubahPenggunaAksi } from '../aksi'
@@ -24,7 +25,7 @@ export default async function RincianPengguna({ params, searchParams }: { params
     peranTercakup(db, p, u.role),
   ])
   // Pengguna berperan lebih kuat dari kamu (Owner, atau peran dengan izin yang tidak kamu miliki) hanya dibaca (temuan audit A-2).
-  const bolehUbah = punyaIzin(p.izin, 'atur.pengguna', 'U') && (u.role.code !== 'owner' || isOwner(p)) && tercakup
+  const bolehUbah = punyaIzin(p.izin, 'atur.pengguna', 'U') && (!setaraOwner(u.role.code) || isOwner(p)) && tercakup
   const diriSendiri = u.id === p.id
   const pilihan = peran.map((r) => ({ nilai: String(r.id), label: r.active ? r.name : `${r.name} (nonaktif)` }))
 
@@ -50,7 +51,7 @@ export default async function RincianPengguna({ params, searchParams }: { params
               {punyaIzin(p.izin, 'atur.pengguna', 'U') && !tercakup ? (
                 <>
                   <dt>Ubah</dt>
-                  <dd className="redup">Peran {u.role.name} punya izin atau saklar yang tidak kamu miliki, jadi pengguna ini hanya bisa diubah Owner.</dd>
+                  <dd className="redup">Peran {u.role.name} punya izin atau saklar yang tidak kamu miliki, jadi pengguna ini hanya bisa diubah Owner atau Superadmin.</dd>
                 </>
               ) : null}
               <dt>Nama</dt>

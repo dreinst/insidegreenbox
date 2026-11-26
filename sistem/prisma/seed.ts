@@ -1,8 +1,10 @@
-// Seed produksi dan lokal: peran Owner, Admin, Kasir, matriks izin (RANCANGAN 8.2), saklar (8.3), dan Owner pertama.
+// Seed produksi dan lokal: peran Owner, Admin, Kasir, Superadmin, Finance, matriks izin (RANCANGAN 8.2 dan KONTRAK 11
+// butir 161), saklar (8.3), dan Owner pertama.
 // Nama pengguna dan sandi Owner dibaca dari env, tidak pernah ditulis di kode.
 import 'dotenv/config'
 import { buatKlien } from '../src/lib/db'
 import { isiMetodeBayar } from '../src/lib/impor-menu'
+import { KODE_SETARA_OWNER } from '../src/lib/katalog'
 import { isiPeranDanIzin, pastikanPengguna } from '../src/lib/seed-inti'
 // tahap 4A
 import { isiBawaanStok } from '../src/lib/stok/bawaan'
@@ -19,9 +21,10 @@ async function main() {
   await isiBawaanStok(db)
   // tahap 5B: bagan akun dan kunci umum sudah dari migrasi; di sini kliring per metode QRIS dan Debit.
   await pasangBawaanAkuntansi(db)
-  const adaOwner = await db.appUser.count({ where: { role: { code: 'owner' } } })
+  // Superadmin setara Owner, jadi Owner pertama tidak dibuat bila salah satunya sudah ada.
+  const adaOwner = await db.appUser.count({ where: { role: { code: { in: [...KODE_SETARA_OWNER] } } } })
   if (adaOwner > 0) {
-    console.log('Peran, izin, dan saklar siap. Owner sudah ada, tidak dibuat ulang.')
+    console.log('Peran, izin, dan saklar siap. Owner atau Superadmin sudah ada, Owner pertama tidak dibuat ulang.')
     return
   }
   const username = process.env.SEED_OWNER_USERNAME?.trim()
