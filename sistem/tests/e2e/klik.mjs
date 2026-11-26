@@ -18,6 +18,9 @@ const AKUN = {
   owner: { u: process.env.SEED_OWNER_USERNAME, p: process.env.SEED_OWNER_PASSWORD },
   admin: { u: process.env.SEED_ADMIN_USERNAME, p: process.env.SEED_ADMIN_PASSWORD },
   kasir: { u: process.env.SEED_KASIR_USERNAME, p: process.env.SEED_KASIR_PASSWORD },
+  // KONTRAK 11 butir 161: akun contoh dari seed:contoh, env SEED_SUPERADMIN_* dan SEED_FINANCE_*.
+  superadmin: { u: process.env.SEED_SUPERADMIN_USERNAME, p: process.env.SEED_SUPERADMIN_PASSWORD },
+  finance: { u: process.env.SEED_FINANCE_USERNAME, p: process.env.SEED_FINANCE_PASSWORD },
 }
 // tahap 3A dan 3B menambah modul kasir (Layar Kasir, Shift, Transaksi, PIN Kasir) dan master (Menu dan Harga, Promo, Member, Metode Bayar) sesuai izin tiap peran.
 // tahap 4A: tujuh item persediaan dan lokasi.
@@ -42,7 +45,11 @@ const SIDEBAR_HARAP = {
   owner: ['Beranda', 'Perlu Disetujui', ...KASIR_3B, 'PIN Kasir', 'Setoran POS', 'Metode Bayar', 'Menu dan Harga', 'Promo', 'Member', ...STOK_4A, ...PRODUKSI_4B, ...BELI_4C, ...B2B_6A, 'Kas Masuk/Keluar', 'Pindah Dana', 'Rekonsiliasi Bank', 'Rekening Bank', 'Hutang Pemasok', 'Piutang Pelanggan', ...AKUNTANSI_5B, ...ASET_6B, 'Laporan', 'Lokasi', 'Profil Usaha', 'Pengguna', 'Peran dan Izin', 'Saklar Fitur', 'Aturan Persetujuan', 'Jejak Audit'],
   admin: ['Beranda', 'Perlu Disetujui', ...KASIR_3B, 'PIN Kasir', 'Setoran POS', 'Metode Bayar', 'Menu dan Harga', 'Promo', 'Member', ...STOK_4A, ...PRODUKSI_4B, ...BELI_4C, ...B2B_6A, 'Kas Masuk/Keluar', 'Rekening Bank', 'Hutang Pemasok', 'Piutang Pelanggan', 'Akun dan Pemetaan', ...ASET_6B_ADMIN, 'Laporan', 'Lokasi', 'Profil Usaha', 'Jejak Audit'],
   kasir: ['Beranda', ...KASIR_3B, 'Menu dan Harga', 'Member'],
+  // KONTRAK 11 butir 161: Superadmin sama dengan Owner. Finance melihat menu keuangan, akuntansi, aset, laporan, dan
+  // Jejak Audit; Perlu Disetujui tampil karena Finance memegang Posting kas yang sudah disetujui.
+  finance: ['Beranda', 'Perlu Disetujui', 'Setoran POS', 'Metode Bayar', 'Faktur', 'Pembayaran', 'Terima Pembayaran', 'Kas Masuk/Keluar', 'Pindah Dana', 'Rekonsiliasi Bank', 'Rekening Bank', 'Hutang Pemasok', 'Piutang Pelanggan', ...AKUNTANSI_5B, ...ASET_6B, 'Laporan', 'Jejak Audit'],
 }
+SIDEBAR_HARAP.superadmin = SIDEBAR_HARAP.owner
 const LEBAR = [
   { w: 1440, h: 900 },
   { w: 390, h: 844 },
@@ -109,7 +116,11 @@ async function potret(page, nama) {
 
 // 1. Setiap peran di dua lebar: sidebar sesuai izin, tiap item terbuka tanpa galat, potret.
 for (const { w, h } of LEBAR) {
-  for (const peran of ['owner', 'admin', 'kasir']) {
+  for (const peran of ['owner', 'admin', 'kasir', 'superadmin', 'finance']) {
+    if (!AKUN[peran].u || !AKUN[peran].p) {
+      cek(`${w}px ${peran}: akun uji tersedia`, false, `isi SEED_${peran.toUpperCase()}_USERNAME dan SEED_${peran.toUpperCase()}_PASSWORD di .env`)
+      continue
+    }
     const { ctx, page, galat } = await konteks(w, h)
     await masuk(page, AKUN[peran])
     await bukaLaci(page, w)
@@ -136,8 +147,8 @@ for (const { w, h } of LEBAR) {
       cek(`${w}px ${peran}: klik ${teks}`, aktif === teks && !/Akses ditolak|tidak ditemukan|Galat/i.test(h1) && (!res || res.status() < 400), `h1 "${h1}"`)
       cek(`${w}px ${peran}: ${teks} tanpa luapan horizontal`, lebih <= 1, `lebih ${lebih}px`)
     }
-    // Halaman turunan untuk Owner.
-    if (peran === 'owner') {
+    // Halaman turunan untuk Owner dan Superadmin.
+    if (peran === 'owner' || peran === 'superadmin') {
       const idKasir = (await satu("select id from role where code='kasir'")).id
       const idOwnerUser = (await satu("select u.id from app_user u join role r on r.id=u.role_id where r.code='owner' order by u.id limit 1")).id
       const idAudit = (await satu('select max(id) as id from audit_log')).id
@@ -151,10 +162,24 @@ for (const { w, h } of LEBAR) {
         const r = await page.goto(`${BASE}${jalur}`)
         await page.waitForLoadState('networkidle')
         const lebih = await luapan(page)
-        await potret(page, `${w}-owner-${nama}`)
-        cek(`${w}px owner: buka ${jalur}`, r.status() === 200, `status ${r.status()}`)
-        cek(`${w}px owner: ${jalur} tanpa luapan horizontal`, lebih <= 1, `lebih ${lebih}px`)
+        await potret(page, `${w}-${peran}-${nama}`)
+        cek(`${w}px ${peran}: buka ${jalur}`, r.status() === 200, `status ${r.status()}`)
+        cek(`${w}px ${peran}: ${jalur} tanpa luapan horizontal`, lebih <= 1, `lebih ${lebih}px`)
       }
+      // Superadmin bisa mengubah pengguna Owner (formulir ubah dan sandi tampil).
+      if (peran === 'superadmin') {
+        await page.goto(`${BASE}/pengguna/${idOwnerUser}`)
+        cek(`${w}px superadmin: formulir ubah pengguna Owner tampil`, (await page.locator('#k-sandi').count()) > 0 && (await page.locator('select#k-roleId').count()) > 0)
+      }
+    }
+    // Finance: halaman di luar matriksnya ditolak (403) walau dibuka lewat alamat.
+    if (peran === 'finance') {
+      for (const jalur of ['/pengguna', '/kasir', '/stok', '/persetujuan']) {
+        const r = await page.goto(`${BASE}${jalur}`)
+        const h1 = await page.textContent('h1')
+        cek(`${w}px finance: ${jalur} ditolak`, r.status() === 403 && /Akses ditolak/.test(h1), `status ${r.status()}, h1 "${h1}"`)
+      }
+      galat.splice(0, galat.length, ...galat.filter((g) => !/403/.test(g)))
     }
     cek(`${w}px ${peran}: tanpa galat konsol`, galat.length === 0, galat.slice(0, 3).join(' | '))
     await ctx.close()
