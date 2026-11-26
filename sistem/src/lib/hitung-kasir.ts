@@ -36,6 +36,29 @@ export function sisaTunaiBulat(total: number, nonTunai: number, adaTunai: boolea
   return { sisa, bulat, pembulatan: bulat - sisa }
 }
 
+// Baris pembayaran di layar kasir. otomatis berarti jumlahnya belum diketik kasir, jadi mengikuti total terbaru.
+export type BarisBayarLayar = { tunai: boolean; otomatis: boolean; jumlah: number }
+
+// Jumlah yang berlaku untuk tiap baris pembayaran di layar. Baris yang sudah diketik kasir (otomatis false) dipakai
+// apa adanya. Baris non tunai otomatis menutup sisa total sesudah baris non tunai yang diketik (baris otomatis
+// berikutnya mendapat 0). Baris tunai otomatis ("Uang pas") menutup sisa sesudah semua non tunai, dibulatkan ke Rp 500.
+// Dengan begitu pesanan yang ditambah sesudah QRIS dipilih tidak meninggalkan jumlah QRIS yang basi.
+export function jumlahBayarLayar(total: number, baris: BarisBayarLayar[]): number[] {
+  const hasil = baris.map((b) => b.jumlah)
+  let sisa = Math.max(0, total - baris.reduce((a, b) => a + (!b.tunai && !b.otomatis ? b.jumlah : 0), 0))
+  baris.forEach((b, i) => {
+    if (b.tunai || !b.otomatis) return
+    hasil[i] = sisa
+    sisa = 0
+  })
+  const nonTunai = baris.reduce((a, b, i) => a + (b.tunai ? 0 : hasil[i]), 0)
+  const tunaiOtomatis = sisaTunaiBulat(total, nonTunai, true).bulat
+  baris.forEach((b, i) => {
+    if (b.tunai && b.otomatis) hasil[i] = tunaiOtomatis
+  })
+  return hasil
+}
+
 // Membagi pembayaran ke total. Non tunai dicatat sebesar jumlahnya dan tidak boleh melebihi total.
 // Tunai menutup sisa yang sudah dibulatkan ke Rp 500; kelebihannya menjadi kembalian. amount = bagian yang masuk ke
 // penjualan, jadi jumlah amount = total + pembulatan.
@@ -52,7 +75,7 @@ export function bagiBayar(total: number, bayar: MasukanBayar[]): { ok: true; bar
   if (tunai.length > 1) return { ok: false, pesan: 'Pembayaran tunai hanya boleh satu baris.' }
   const nonTunai = isi.filter((b) => !b.tunai)
   const jumlahNonTunai = nonTunai.reduce((a, b) => a + b.jumlah, 0)
-  if (jumlahNonTunai > total) return { ok: false, pesan: 'Pembayaran non tunai melebihi total.' }
+  if (jumlahNonTunai > total) return { ok: false, pesan: `Pembayaran non tunai lebih Rp ${(jumlahNonTunai - total).toLocaleString('id-ID')} dari total.` }
   const sisa = total - jumlahNonTunai
   const baris: HasilBayar[] = nonTunai.map((b) => ({ metodeId: b.metodeId, tunai: false, amount: b.jumlah, paid: b.jumlah, change: 0 }))
   if (tunai.length) {

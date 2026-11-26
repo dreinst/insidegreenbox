@@ -268,6 +268,90 @@ try {
     await sql.query('update promo set active = false where id = $1', [promoId])
   }
 
+  // 6. Jumlah non tunai yang terisi otomatis mengikuti total saat pesanan ditambah sesudah metode dipilih (KONTRAK 11 butir 164).
+  {
+    const K = await konteks(1440, 900)
+    const k = K.page
+    await masuk(k, AKUN.kasir)
+    const kasirId = (await satu('select id from app_user where username = $1', [AKUN.kasir.u])).id
+    if (!(await satu("select id from shift where user_id = $1 and status = 'Buka'", [kasirId]))) {
+      await buka(k, '/shift')
+      await k.fill('#k-modal', '0')
+      await Promise.all([k.waitForURL(/\/shift\/\d+\?pesan=shift-buka/, { timeout: 30000 }), k.click('button:text-is("Buka shift")')])
+    }
+    const biaya = await satu("select b.tax_pct::float pajak, b.service_pct::float svc from shift s join location l on l.id = s.location_id join branch b on b.id = l.branch_id where s.user_id = $1 and s.status = 'Buka'", [kasirId])
+    const harga = Number((await satu("select price from menu_item where name = 'Kopi Susu Greenbox'")).price)
+    const tot = (n) => {
+      const net = harga * n
+      const svc = Math.round((net * biaya.svc) / 100)
+      return net + svc + Math.round(((net + svc) * biaya.pajak) / 100)
+    }
+    const bulat = (n) => Math.floor((n + 250) / 500) * 500
+    const fmt = (n) => n.toLocaleString('id-ID')
+    const bayarKe = async (sebelum) => {
+      await Promise.all([k.waitForURL((u) => Number(u.searchParams.get('selesai')) > sebelum, { timeout: 30000 }), k.click('button.lk-tombol-bayar')])
+      return Number(new URL(k.url()).searchParams.get('selesai'))
+    }
+    const maks = async () => Number((await satu('select coalesce(max(id),0) n from sale')).n)
+    const bayarDb = async (id) => (await sql.query('select m.kind, p.amount, p.change from sale_payment p join payment_method m on m.id = p.payment_method_id where p.sale_id = $1 order by p.id', [id])).rows
+
+    for (const [w, h] of LEBAR) {
+      await k.setViewportSize({ width: w, height: h })
+      // a. QRIS dipilih dulu, pesanan ditambah sesudahnya: jumlah QRIS ikut total terbaru dan bayar langsung berhasil.
+      await buka(k, '/kasir')
+      await k.click('button:text-is("Take away")')
+      await k.click(ubin('Kopi Susu Greenbox'))
+      await k.selectOption('#k-metode-0', { label: 'QRIS' })
+      cek(`${w}px kasir: QRIS terisi sebesar total satu item`, (await k.inputValue('#k-jumlah-0')) === fmt(tot(1)), await k.inputValue('#k-jumlah-0'))
+      await k.click(ubin('Kopi Susu Greenbox'))
+      cek(`${w}px kasir: jumlah QRIS ikut total sesudah pesanan ditambah`, (await k.inputValue('#k-jumlah-0')) === fmt(tot(2)), `${await k.inputValue('#k-jumlah-0')} lawan ${fmt(tot(2))}`)
+      cek(`${w}px kasir: tanpa pesan pembayaran kurang`, (await k.locator('.lk-selisih').count()) === 0 && !(await k.textContent('.lk-bayar'))?.includes('kurang'), await k.locator('.lk-selisih').allTextContents().then((t) => t.join('|')))
+      await k.locator('#keranjang').scrollIntoViewIfNeeded()
+      await potret(k, `${w}-kasir-qris-otomatis`)
+      const idA = await bayarKe(await maks())
+      const bA = await bayarDb(idA)
+      const totA = Number((await satu('select total from sale where id = $1', [idA])).total)
+      cek(`${w}px kasir: penjualan QRIS tersimpan sebesar total terbaru`, bA.length === 1 && bA[0].kind === 'qris' && Number(bA[0].amount) === totA && totA >= tot(2), JSON.stringify({ bA, totA }))
+
+      // b. Jumlah yang diketik kasir tidak ditimpa. Kurangnya disebut dengan angkanya, dan tombol menyamakannya dengan total.
+      await buka(k, '/kasir')
+      await k.click('button:text-is("Take away")')
+      await k.click(ubin('Kopi Susu Greenbox'))
+      await k.selectOption('#k-metode-0', { label: 'QRIS' })
+      await k.fill('#k-jumlah-0', '10.000')
+      await k.click(ubin('Kopi Susu Greenbox'))
+      cek(`${w}px kasir: jumlah QRIS ketikan kasir tidak ditimpa`, (await k.inputValue('#k-jumlah-0')) === '10.000', await k.inputValue('#k-jumlah-0'))
+      const kurang = await k.textContent('.lk-selisih')
+      cek(`${w}px kasir: kurang bayar disebut dengan angkanya`, kurang === `Pembayaran kurang Rp ${fmt(tot(2) - 10000)}.`, kurang)
+      await potret(k, `${w}-kasir-qris-kurang`)
+      await k.click('button:text-is("Samakan dengan total")')
+      cek(`${w}px kasir: Samakan dengan total mengembalikan jumlah QRIS ke total`, (await k.inputValue('#k-jumlah-0')) === fmt(tot(2)) && (await k.locator('.lk-selisih').count()) === 0)
+      await k.fill('#k-jumlah-0', '999.999')
+      const lebih = await k.textContent('.lk-selisih')
+      cek(`${w}px kasir: kelebihan non tunai disebut dengan angkanya`, lebih === `Pembayaran non tunai lebih Rp ${fmt(999999 - tot(2))} dari total.`, lebih)
+    }
+
+    // c. Bayar campuran: QRIS diketik 20.000, tunai Uang pas mengikuti sisa yang dibulatkan walau pesanan ditambah.
+    await k.setViewportSize({ width: 1440, height: 900 })
+    await buka(k, '/kasir')
+    await k.click('button:text-is("Take away")')
+    await k.click(ubin('Kopi Susu Greenbox'))
+    await k.selectOption('#k-metode-0', { label: 'QRIS' })
+    await k.fill('#k-jumlah-0', '20.000')
+    await k.click('button:text-is("+ Tambah metode bayar")')
+    await k.selectOption('#k-metode-1', { label: 'Tunai' })
+    await k.click('.lk-cepat button:text-is("Uang pas")')
+    cek('campuran: Uang pas mengisi sisa dibulatkan', (await k.inputValue('#k-jumlah-1')) === fmt(bulat(tot(1) - 20000)), await k.inputValue('#k-jumlah-1'))
+    await k.click(ubin('Kopi Susu Greenbox'))
+    cek('campuran: tunai Uang pas ikut total baru, QRIS tetap 20.000', (await k.inputValue('#k-jumlah-1')) === fmt(bulat(tot(2) - 20000)) && (await k.inputValue('#k-jumlah-0')) === '20.000', `${await k.inputValue('#k-jumlah-1')} lawan ${fmt(bulat(tot(2) - 20000))}`)
+    cek('campuran: kembalian Rp 0 dan tanpa pesan kurang', (await k.textContent('.lk-kembali'))?.includes('Rp 0') && (await k.locator('.lk-selisih').count()) === 0)
+    await potret(k, '1440-kasir-campuran-otomatis')
+    const idC = await bayarKe(await maks())
+    const bC = await bayarDb(idC)
+    cek('campuran: tersimpan QRIS 20.000 dan tunai sisa dibulatkan tanpa kembalian', bC.some((b) => b.kind === 'qris' && Number(b.amount) === 20000) && bC.some((b) => b.kind === 'tunai' && Number(b.amount) === bulat(tot(2) - 20000) && Number(b.change) === 0), JSON.stringify(bC))
+    await K.ctx.close()
+  }
+
   cek('tanpa galat konsol', galatKonsol.length === 0, galatKonsol.slice(0, 3).join(' | '))
 } catch (e) {
   cek('uji berjalan sampai selesai', false, String(e?.stack ?? e).slice(0, 800))

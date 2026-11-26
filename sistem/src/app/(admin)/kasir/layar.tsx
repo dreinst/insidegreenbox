@@ -4,7 +4,7 @@
 import { useActionState, useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { PesanHasil, TombolKirim } from '@/components/form'
 import { HASIL_AWAL, type HasilAksi } from '@/lib/aksi'
-import { bagiBayar, hitungKeranjang, kenaPotonganMember, labelPromo, rupiah, sisaTunaiBulat, type JenisBaris, type PromoKasir } from '@/lib/hitung-kasir'
+import { bagiBayar, hitungKeranjang, jumlahBayarLayar, kenaPotonganMember, labelPromo, rupiah, sisaTunaiBulat, type JenisBaris, type PromoKasir } from '@/lib/hitung-kasir'
 import type { HasilCariMember } from './aksi'
 
 type Kategori = { code: string; name: string }
@@ -14,7 +14,8 @@ type Metode = { id: number; name: string; tunai: boolean }
 // Ubin dan baris keranjang dikenali lewat kunci "menu:<id>" atau "paket:<id>" (admin lama: kind + id).
 type Ubin = { kunci: string; jenis: JenisBaris; id: number; name: string; sub: string; price: number; normal?: number; kelompok: string }
 type Baris = { kunci: string; jenis: JenisBaris; id: number; qty: number; catatan: string }
-type Bayar = { kunci: number; metodeId: number; jumlah: string }
+// otomatis: jumlahnya belum diketik kasir, jadi mengikuti total terbaru (lihat jumlahBayarLayar). Mengetik membuatnya manual.
+type Bayar = { kunci: number; metodeId: number; jumlah: string; otomatis: boolean }
 type Member = Extract<HasilCariMember, { ok: true }>['member']
 
 // Kelompok paket di pilihan kategori. Diawali tanda yang tidak mungkin ada di kode kategori.
@@ -47,7 +48,12 @@ export function LayarKasir({ kategori: semuaKategori, menu, paket, metode, biaya
   const [pesanMember, setPesanMember] = useState('')
   const [mencari, mulaiCari] = useTransition()
   const tunai = metode.find((m) => m.tunai)
-  const [bayar, setBayar] = useState<Bayar[]>([{ kunci: 1, metodeId: (tunai ?? metode[0])?.id ?? 0, jumlah: '' }])
+  // Baris pembayaran pertama: tunai kosong menunggu uang diterima; non tunai (bila tak ada metode tunai) langsung mengikuti total.
+  const barisBayarAwal = (kunci: number): Bayar => {
+    const m = tunai ?? metode[0]
+    return { kunci, metodeId: m?.id ?? 0, jumlah: '', otomatis: !m?.tunai }
+  }
+  const [bayar, setBayar] = useState<Bayar[]>([barisBayarAwal(1)])
 
   // Bilah total di HP hanya tampil selama panel pesanan belum terlihat, supaya tidak menutupi tombol bayar.
   const panel = useRef<HTMLElement>(null)
@@ -77,15 +83,20 @@ export function LayarKasir({ kategori: semuaKategori, menu, paket, metode, biaya
     biaya,
     promo,
   )
-  const masukanBayar = bayar.map((b) => {
+  const jumlahBayar = jumlahBayarLayar(
+    t.total,
+    bayar.map((b) => ({ tunai: !!metode.find((x) => x.id === b.metodeId)?.tunai, otomatis: b.otomatis, jumlah: angka(b.jumlah) })),
+  )
+  const masukanBayar = bayar.map((b, i) => {
     const m = metode.find((x) => x.id === b.metodeId)
-    return { metodeId: b.metodeId, jumlah: angka(b.jumlah), tunai: !!m?.tunai, nama: m?.name }
+    return { metodeId: b.metodeId, jumlah: jumlahBayar[i], tunai: !!m?.tunai, nama: m?.name }
   })
+  const adaBarisTunai = masukanBayar.some((b) => b.tunai)
   const bagi = keranjang.length ? bagiBayar(t.total, masukanBayar) : null
   const nonTunai = masukanBayar.filter((b) => !b.tunai).reduce((a, b) => a + b.jumlah, 0)
   // Bagian tunai dibulatkan ke Rp 500 (KONTRAK 11 butir 155). Sisa di bawah Rp 250 menjadi 0 dan ditolak bagiBayar,
   // jadi pembulatannya tidak ditampilkan.
-  const tunaiBulat = sisaTunaiBulat(t.total, nonTunai, masukanBayar.some((b) => b.tunai))
+  const tunaiBulat = sisaTunaiBulat(t.total, nonTunai, adaBarisTunai)
   const sisaTunai = tunaiBulat.bulat
   const pembulatan = tunaiBulat.bulat > 0 ? tunaiBulat.pembulatan : 0
   const totalBayar = t.total + pembulatan
@@ -106,7 +117,7 @@ export function LayarKasir({ kategori: semuaKategori, menu, paket, metode, biaya
     setMember(null)
     setWa('')
     setPesanMember('')
-    setBayar([{ kunci: Date.now(), metodeId: (tunai ?? metode[0])?.id ?? 0, jumlah: '' }])
+    setBayar([barisBayarAwal(Date.now())])
   }
   const cariWa = () =>
     mulaiCari(async () => {
@@ -365,9 +376,11 @@ export function LayarKasir({ kategori: semuaKategori, menu, paket, metode, biaya
                         value={b.metodeId}
                         onChange={(e) => {
                           const baru = metode.find((x) => x.id === Number(e.target.value))
-                          // Non tunai bawaannya sebesar sisa yang belum dibayar.
-                          const sisa = Math.max(0, t.total - masukanBayar.filter((x, j) => j !== i && !x.tunai).reduce((a, x) => a + x.jumlah, 0))
-                          ubahBayar(b.kunci, { metodeId: Number(e.target.value), jumlah: baru && !baru.tunai && !angka(b.jumlah) ? ribuan(sisa) : b.jumlah })
+                          // Non tunai yang dipilih pada baris kosong atau baris otomatis langsung mengikuti total. Jumlah yang
+                          // sudah diketik kasir dibiarkan. Pindah ke tunai mengosongkan baris otomatis, karena uang diterima
+                          // selalu diisi kasir.
+                          const ikut = b.otomatis || !angka(b.jumlah)
+                          ubahBayar(b.kunci, baru?.tunai ? { metodeId: Number(e.target.value), otomatis: false, jumlah: b.otomatis ? '' : b.jumlah } : { metodeId: Number(e.target.value), otomatis: ikut, jumlah: ikut ? '' : b.jumlah })
                         }}
                       >
                         {metode.map((x) => (
@@ -385,9 +398,9 @@ export function LayarKasir({ kategori: semuaKategori, menu, paket, metode, biaya
                           id={`k-jumlah-${i}`}
                           inputMode="numeric"
                           autoComplete="off"
-                          value={b.jumlah}
+                          value={b.otomatis ? ribuan(jumlahBayar[i]) : b.jumlah}
                           maxLength={15}
-                          onChange={(e) => ubahBayar(b.kunci, { jumlah: ribuan(angka(e.target.value)) })}
+                          onChange={(e) => ubahBayar(b.kunci, { jumlah: ribuan(angka(e.target.value)), otomatis: false })}
                           placeholder={m?.tunai ? 'Uang diterima' : 'Jumlah'}
                         />
                       </span>
@@ -400,10 +413,18 @@ export function LayarKasir({ kategori: semuaKategori, menu, paket, metode, biaya
                     {m?.tunai && cepat.length ? (
                       <div className="lk-cepat">
                         {cepat.map((n) => (
-                          <button key={n} type="button" className="btn kecil sekunder" onClick={() => ubahBayar(b.kunci, { jumlah: ribuan(n) })}>
+                          // Uang pas tetap mengikuti total bila pesanan ditambah; nominal lain dianggap diketik kasir.
+                          <button key={n} type="button" className="btn kecil sekunder" onClick={() => ubahBayar(b.kunci, n === sisaTunai ? { jumlah: '', otomatis: true } : { jumlah: ribuan(n), otomatis: false })}>
                             {n === sisaTunai ? 'Uang pas' : ribuan(n)}
                           </button>
                         ))}
+                      </div>
+                    ) : null}
+                    {!m?.tunai && !b.otomatis && !adaBarisTunai && keranjang.length > 0 && jumlahBayar[i] !== Math.max(0, t.total - (nonTunai - jumlahBayar[i])) ? (
+                      <div className="lk-cepat">
+                        <button type="button" className="btn kecil sekunder" onClick={() => ubahBayar(b.kunci, { jumlah: '', otomatis: true })}>
+                          Samakan dengan total
+                        </button>
                       </div>
                     ) : null}
                   </div>
@@ -416,7 +437,7 @@ export function LayarKasir({ kategori: semuaKategori, menu, paket, metode, biaya
                   onClick={() => {
                     const dipakai = new Set(bayar.map((b) => b.metodeId))
                     const lain = metode.find((m) => !dipakai.has(m.id))
-                    if (lain) setBayar((s) => [...s, { kunci: Date.now(), metodeId: lain.id, jumlah: lain.tunai ? '' : ribuan(Math.max(0, t.total - nonTunai)) }])
+                    if (lain) setBayar((s) => [...s, { kunci: Date.now(), metodeId: lain.id, jumlah: '', otomatis: !lain.tunai }])
                   }}
                 >
                   + Tambah metode bayar
@@ -430,7 +451,7 @@ export function LayarKasir({ kategori: semuaKategori, menu, paket, metode, biaya
                   Kembalian <b>{rupiah(bagi.kembalian)}</b>
                 </p>
               ) : (
-                <p className="redup kecil" role="status">
+                <p className={masukanBayar.some((b) => b.jumlah > 0) ? 'lk-selisih' : 'redup kecil'} role="status">
                   {bagi.pesan}
                 </p>
               )

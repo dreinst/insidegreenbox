@@ -123,6 +123,8 @@
 .lk-hapus { width: 40px; height: 40px; border: 0; border-radius: 10px; font: inherit; font-size: 22px; color: var(--red); background: var(--red-tint); cursor: pointer }
 .lk-cepat { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px }
 .lk-kembali { margin: 6px 0 0; font-size: 17px; font-variant-numeric: tabular-nums }
+/* Pembayaran kurang atau lebih dari total: ditebalkan dan berwarna galat supaya tidak terlewat. */
+.lk-selisih { margin: 6px 0 0; font-size: 15px; font-weight: 700; color: var(--red); font-variant-numeric: tabular-nums }
 .lk-tombol-bayar { min-height: 52px; font-size: 16px }
 .lk-keranjang .tombol-baris { flex-direction: column; align-items: stretch; gap: 6px; margin-top: 12px }
 .lk-keranjang .tombol-baris .tautan-tombol { align-self: center }

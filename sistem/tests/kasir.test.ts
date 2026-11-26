@@ -4,7 +4,7 @@ import { after, before, describe, test } from 'node:test'
 import bcrypt from 'bcryptjs'
 import { GalatAturan, GalatIzin } from '../src/lib/aksi'
 import type { Db } from '../src/lib/db'
-import { bagiBayar, bulatTunai, hitungKeranjang, hitungTotal, kasSeharusnya, kembalian, sisaTunaiBulat, totalPecahan } from '../src/lib/hitung-kasir'
+import { bagiBayar, bulatTunai, hitungKeranjang, hitungTotal, jumlahBayarLayar, kasSeharusnya, kembalian, sisaTunaiBulat, totalPecahan } from '../src/lib/hitung-kasir'
 import type { Pengguna } from '../src/lib/izin-inti'
 import { BATAS_GAGAL_NAMA } from '../src/lib/masuk'
 import { potonganMember, ubahStatusMember, ubahStatusTingkat } from '../src/lib/member'
@@ -134,6 +134,35 @@ describe('hitungan (sama dengan admin lama)', () => {
     // Pratinjau layar kasir memakai aturan yang sama.
     assert.deepEqual(sisaTunaiBulat(32340, 20000, true), { sisa: 12340, bulat: 12500, pembulatan: 160 })
     assert.deepEqual(sisaTunaiBulat(32340, 0, false), { sisa: 32340, bulat: 32340, pembulatan: 0 })
+  })
+  test('pembayaran otomatis di layar mengikuti total terbaru, yang diketik kasir tidak ditimpa', () => {
+    // QRIS dipilih lalu pesanan ditambah: jumlah QRIS ikut total baru, bukan tertinggal di total lama.
+    const qris = [{ tunai: false, otomatis: true, jumlah: 0 }]
+    for (const total of [33264, 71000, 0]) {
+      assert.deepEqual(jumlahBayarLayar(total, qris), [total])
+      const r = bagiBayar(total, [{ metodeId: 2, tunai: false, jumlah: jumlahBayarLayar(total, qris)[0] }])
+      assert.ok(total === 0 ? r.ok && r.baris.length === 0 : r.ok && r.pembulatan === 0, `QRIS otomatis lunas untuk total ${total}`)
+    }
+    // Campuran: QRIS diketik 20.000, tunai "Uang pas" mengikuti sisa yang dibulatkan ke Rp 500.
+    const campuran = [
+      { tunai: false, otomatis: false, jumlah: 20000 },
+      { tunai: true, otomatis: true, jumlah: 0 },
+    ]
+    assert.deepEqual(jumlahBayarLayar(32340, campuran), [20000, 12500])
+    assert.deepEqual(jumlahBayarLayar(45600, campuran), [20000, 25500])
+    const c = bagiBayar(45600, campuran.map((b, i) => ({ metodeId: i + 1, nama: 'x', tunai: b.tunai, jumlah: jumlahBayarLayar(45600, campuran)[i] })))
+    assert.ok(c.ok && c.kembalian === 0)
+    // QRIS otomatis bersama tunai diketik: QRIS menutup semua sisa dan tunai tidak bisa dipakai lagi.
+    assert.deepEqual(jumlahBayarLayar(30000, [{ tunai: false, otomatis: true, jumlah: 0 }, { tunai: true, otomatis: false, jumlah: 5000 }]), [30000, 5000])
+    // Dua baris non tunai otomatis: yang pertama menutup, yang kedua 0. Non tunai yang diketik didahulukan.
+    assert.deepEqual(jumlahBayarLayar(30000, [{ tunai: false, otomatis: true, jumlah: 0 }, { tunai: false, otomatis: false, jumlah: 10000 }]), [20000, 10000])
+    assert.deepEqual(jumlahBayarLayar(30000, [{ tunai: false, otomatis: true, jumlah: 0 }, { tunai: false, otomatis: true, jumlah: 0 }]), [30000, 0])
+    // Jumlah yang diketik kasir tidak berubah walau total berganti; kurang dan lebihnya disebut dengan angkanya.
+    const manual = [{ tunai: false, otomatis: false, jumlah: 33264 }]
+    const kurang = bagiBayar(48000, manual.map((b) => ({ metodeId: 2, tunai: b.tunai, jumlah: jumlahBayarLayar(48000, manual)[0] })))
+    assert.ok(!kurang.ok && kurang.pesan === 'Pembayaran kurang Rp 14.736.')
+    const lebih = bagiBayar(20000, manual.map((b) => ({ metodeId: 2, tunai: b.tunai, jumlah: jumlahBayarLayar(20000, manual)[0] })))
+    assert.ok(!lebih.ok && lebih.pesan === 'Pembayaran non tunai lebih Rp 13.264 dari total.')
   })
   test('bagi bayar menolak kurang bayar, non tunai berlebih, dan metode ganda', () => {
     assert.equal(bagiBayar(10000, [{ metodeId: 1, tunai: true, jumlah: 9000 }]).ok, false)
