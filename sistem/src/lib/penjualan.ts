@@ -10,6 +10,7 @@ import { catatAudit, type Konteks } from './audit'
 import type { Db, DbAtauTx } from './db'
 import { bagiBayar, hitungKeranjang, namaPromo, rupiah, type JenisBaris } from './hitung-kasir'
 import { isOwner, pastikanIzin, punyaIzin, saklarNyala, type Pengguna } from './izin-inti'
+import { setaraOwner } from './katalog'
 import { catatKunjungan, potonganMember, tingkatUntuk } from './member'
 import { ambilNomor } from './nomor'
 import { periksaPenyetujuVoid } from './pin'
@@ -305,8 +306,8 @@ async function cekBisaVoid(db: DbAtauTx, aktor: Aktor, saleId: number, penyetuju
   const jual = await db.sale.findUnique({ where: { id: saleId }, include: { shift: { select: { userId: true, status: true } } } })
   if (!jual || (jual.shift.userId !== aktor.id && !lihatSemuaKasir(aktor))) throw new GalatAturan('Transaksi tidak ditemukan.')
   if (jual.status === 'Void') throw new GalatAturan('Transaksi ini sudah void.')
-  const pemberiIzinOwner = penyetuju ? penyetuju.roleCode === 'owner' : isOwner(aktor)
-  if (jual.shift.status !== 'Buka' && !pemberiIzinOwner) throw new GalatAturan('Shift transaksi ini sudah ditutup. Void sesudah shift ditutup hanya bisa oleh Owner.')
+  const pemberiIzinOwner = penyetuju ? setaraOwner(penyetuju.roleCode) : isOwner(aktor)
+  if (jual.shift.status !== 'Buka' && !pemberiIzinOwner) throw new GalatAturan('Shift transaksi ini sudah ditutup. Void sesudah shift ditutup hanya bisa oleh Owner atau Superadmin.')
   return jual
 }
 

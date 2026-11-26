@@ -1,7 +1,7 @@
 // Logika izin tanpa Next (KONTRAK 4.5). Dipakai halaman, aksi server, dan tes.
 import { GalatIzin } from './aksi'
 import type { DbAtauTx } from './db'
-import { AKSI, KOLOM_AKSI, MENU_PER_KODE, type Aksi } from './katalog'
+import { AKSI, KOLOM_AKSI, MENU_PER_KODE, setaraOwner, type Aksi } from './katalog'
 
 // Kode menu -> huruf aksi yang dimiliki, misalnya { 'atur.pengguna': 'LTU' }.
 export type PetaIzin = Record<string, string>
@@ -54,4 +54,5 @@ export function pastikanIzin(p: Pick<Pengguna, 'izin'>, menu: string, aksi: Aksi
   if (!punyaIzin(p.izin, menu, aksi)) throw new GalatIzin(menu, aksi)
 }
 
-export const isOwner = (p: Pick<Pengguna, 'peran'>) => p.peran.code === 'owner'
+// Benar untuk Owner dan Superadmin (KONTRAK 4.1 dan 4.6): semua pengecekan "hanya Owner" memakai fungsi ini.
+export const isOwner = (p: Pick<Pengguna, 'peran'>) => setaraOwner(p.peran.code)

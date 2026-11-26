@@ -5,14 +5,14 @@ import { Halaman, KepalaHalaman } from '@/components/umum'
 import { db } from '@/lib/db'
 import { wajibIzinSalahSatu } from '@/lib/izin'
 import { formatRupiah } from '@/lib/master'
-import { MENU_MENUNGGU, daftarMenunggu, lamaMenunggu, type SaringMenunggu } from '@/lib/menunggu'
+import { SYARAT_MENUNGGU, daftarMenunggu, lamaMenunggu, type SaringMenunggu } from '@/lib/menunggu'
 
 export const metadata: Metadata = { title: 'Menunggu Persetujuan' }
 
 // Antrean dokumen dari semua modul yang menunggu Setujui atau Posting (KONTRAK 11 butir 158). Persetujuan tetap
 // dilakukan di rincian dokumennya, jadi halaman ini hanya membaca.
 export default async function MenungguPersetujuan({ searchParams }: { searchParams: Promise<SaringMenunggu> }) {
-  const p = await wajibIzinSalahSatu('menunggu_persetujuan', MENU_MENUNGGU, 'S')
+  const p = await wajibIzinSalahSatu('menunggu_persetujuan', SYARAT_MENUNGGU, 'S')
   const s = await searchParams
   const h = await daftarMenunggu(db, p, s)
   const sekarang = new Date()

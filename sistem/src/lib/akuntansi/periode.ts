@@ -60,7 +60,7 @@ export async function tutupPeriode(db: Db, k: Konteks, aktor: Aktor, bulan: unkn
 // wajib alasan.
 export async function bukaPeriode(db: Db, k: Konteks, aktor: Aktor, bulan: unknown, masukan: unknown) {
   pastikanIzin(aktor, MENU, 'H')
-  if (!isOwner(aktor)) throw new GalatAturan('Periode yang sudah ditutup hanya bisa dibuka lagi oleh Owner.')
+  if (!isOwner(aktor)) throw new GalatAturan('Periode yang sudah ditutup hanya bisa dibuka lagi oleh Owner atau Superadmin.')
   const ym = skemaBulan.parse(bulan)
   const d = skemaBuka.parse(masukan)
   return db.$transaction(async (tx) => {

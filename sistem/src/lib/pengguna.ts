@@ -5,13 +5,13 @@ import { GalatAturan } from './aksi'
 import { catatAudit, selisih, type Konteks } from './audit'
 import type { Db, DbAtauTx, Tx } from './db'
 import { isOwner, muatIzin, muatSaklar, pastikanIzin, punyaIzin, type PetaIzin, type PetaSaklar, type Pengguna } from './izin-inti'
-import type { Aksi } from './katalog'
+import { KODE_SETARA_OWNER, setaraOwner, type Aksi } from './katalog'
 import { cabutSemuaSesi } from './masuk'
 import { BIAYA_BCRYPT } from './seed-inti'
 
 type Aktor = Pick<Pengguna, 'id' | 'izin' | 'peran' | 'sesiId' | 'saklar'>
 
-// Temuan audit A-2 (KONTRAK 4.6 dan 11 butir 130): bukan Owner hanya boleh memberi peran, mengubah, menonaktifkan, atau
+// Temuan audit A-2 (KONTRAK 4.6 dan 11 butir 130): bukan Owner (Owner di sini termasuk Superadmin, butir 161) hanya boleh memberi peran, mengubah, menonaktifkan, atau
 // mengatur ulang sandi pengguna yang perannya tercakup izinnya sendiri. Tercakup berarti setiap izin peran itu juga
 // dipegang aktor, setiap saklar yang nyala di peran itu juga nyala untuk aktor, dan batas saklarnya tidak lebih longgar
 // (kosong berarti tanpa batas). Pemeriksaan yang sama dengan salin izin saat membuat peran.
@@ -28,7 +28,7 @@ export function izinTercakup(aktor: Pick<Pengguna, 'izin' | 'saklar'>, izin: Pet
 
 export async function peranTercakup(db: DbAtauTx, aktor: Pick<Pengguna, 'izin' | 'saklar' | 'peran'>, peran: { id: number; code: string }) {
   if (isOwner(aktor)) return true
-  if (peran.code === 'owner') return false
+  if (setaraOwner(peran.code)) return false
   if (peran.id === aktor.peran.id) return true
   const [izin, saklar] = await Promise.all([muatIzin(db, peran.id), muatSaklar(db, peran.id)])
   return izinTercakup(aktor, izin, saklar)
@@ -63,14 +63,15 @@ export const skemaSandi = z
   .object({ sandi, ulangiSandi: z.string() })
   .refine((d) => d.sandi === d.ulangiSandi, { path: ['ulangiSandi'], message: 'Ulangi sandi tidak sama dengan sandi.' })
 
-const idOwner = async (tx: Tx) => (await tx.role.findUniqueOrThrow({ where: { code: 'owner' } })).id
-
-// Mengunci baris Owner aktif sampai transaksi selesai, supaya dua perubahan bersamaan tidak menghabiskan Owner.
+// Pengaman "Owner aktif terakhir" dihitung atas gabungan pengguna aktif berperan Owner dan Superadmin (KONTRAK 4.6).
+// Semua baris itu dikunci sampai transaksi selesai, supaya dua perubahan bersamaan tidak menghabiskannya.
 async function jumlahOwnerAktif(tx: Tx) {
-  const roleId = await idOwner(tx)
-  const baris = await tx.$queryRaw<{ id: number }[]>`SELECT id FROM app_user WHERE role_id = ${roleId} AND active FOR UPDATE`
+  const baris = await tx.$queryRaw<{ id: number }[]>`SELECT u.id FROM app_user u JOIN role r ON r.id = u.role_id
+    WHERE r.code = ANY(${[...KODE_SETARA_OWNER]}::text[]) AND u.active ORDER BY u.id FOR UPDATE OF u`
   return baris.length
 }
+
+const PESAN_HANYA_OWNER = 'Hanya Owner atau Superadmin yang bisa memberi peran Owner atau Superadmin.'
 
 const pesanUnik = (e: unknown) => (e as { code?: string })?.code === 'P2002'
 
@@ -79,7 +80,7 @@ export async function tambahPengguna(db: Db, k: Konteks, aktor: Aktor, masukan: 
   const d = skemaPenggunaBaru.parse(masukan)
   const peran = await db.role.findUnique({ where: { id: d.roleId } })
   if (!peran || !peran.active) throw new GalatAturan('Peran tidak ditemukan atau sedang nonaktif.', 'roleId')
-  if (peran.code === 'owner' && !isOwner(aktor)) throw new GalatAturan('Hanya Owner yang bisa memberi peran Owner.', 'roleId')
+  if (setaraOwner(peran.code) && !isOwner(aktor)) throw new GalatAturan(PESAN_HANYA_OWNER, 'roleId')
   if (!(await peranTercakup(db, aktor, peran))) throw new GalatAturan(PESAN_LEBIH_KUAT, 'roleId')
   if (await db.appUser.findUnique({ where: { username: d.username } })) throw new GalatAturan('Nama pengguna sudah dipakai.', 'username')
   const passwordHash = await bcrypt.hash(d.sandi, BIAYA_BCRYPT)
@@ -104,8 +105,8 @@ export async function tambahPengguna(db: Db, k: Konteks, aktor: Aktor, masukan: 
 async function ambilTarget(tx: Db | Tx, aktor: Aktor, id: number) {
   const u = await tx.appUser.findUnique({ where: { id }, include: { role: true } })
   if (!u) throw new GalatAturan('Pengguna tidak ditemukan.')
-  if (u.role.code === 'owner' && !isOwner(aktor)) throw new GalatAturan('Hanya Owner yang bisa mengubah pengguna berperan Owner.')
-  if (!(await peranTercakup(tx, aktor, u.role))) throw new GalatAturan(`Peran ${u.role.name} punya izin atau saklar yang tidak kamu miliki, jadi pengguna ini hanya bisa diubah Owner.`)
+  if (setaraOwner(u.role.code) && !isOwner(aktor)) throw new GalatAturan(`Hanya Owner atau Superadmin yang bisa mengubah pengguna berperan ${u.role.name}.`)
+  if (!(await peranTercakup(tx, aktor, u.role))) throw new GalatAturan(`Peran ${u.role.name} punya izin atau saklar yang tidak kamu miliki, jadi pengguna ini hanya bisa diubah Owner atau Superadmin.`)
   return u
 }
 
@@ -119,10 +120,11 @@ export async function ubahPengguna(db: Db, k: Konteks, aktor: Aktor, id: number,
       if (!peranBaru || (!peranBaru.active && peranBaru.id !== u.roleId)) throw new GalatAturan('Peran tidak ditemukan atau sedang nonaktif.', 'roleId')
       if (peranBaru.id !== u.roleId) {
         if (u.id === aktor.id) throw new GalatAturan('Kamu tidak bisa mengganti peranmu sendiri.', 'roleId')
-        if (peranBaru.code === 'owner' && !isOwner(aktor)) throw new GalatAturan('Hanya Owner yang bisa memberi peran Owner.', 'roleId')
+        if (setaraOwner(peranBaru.code) && !isOwner(aktor)) throw new GalatAturan(PESAN_HANYA_OWNER, 'roleId')
         if (!(await peranTercakup(tx, aktor, peranBaru))) throw new GalatAturan(PESAN_LEBIH_KUAT, 'roleId')
-        if (u.role.code === 'owner' && u.active && (await jumlahOwnerAktif(tx)) <= 1) {
-          throw new GalatAturan('Ini Owner aktif terakhir, jadi perannya tidak bisa diganti.', 'roleId')
+        // Pindah antara Owner dan Superadmin tidak mengurangi jumlahnya, jadi hanya turun ke peran lain yang dicek.
+        if (setaraOwner(u.role.code) && !setaraOwner(peranBaru.code) && u.active && (await jumlahOwnerAktif(tx)) <= 1) {
+          throw new GalatAturan('Ini pengguna aktif terakhir berperan Owner atau Superadmin, jadi perannya tidak bisa diganti ke peran lain.', 'roleId')
         }
       }
       if (d.username !== u.username && (await tx.appUser.findUnique({ where: { username: d.username } }))) {
@@ -176,8 +178,8 @@ export async function ubahStatusPengguna(db: Db, k: Konteks, aktor: Aktor, id: n
     const u = await ambilTarget(tx, aktor, id)
     if (u.active === aktif) return u
     if (aktif && !u.role.active) throw new GalatAturan(`Peran ${u.role.name} sedang nonaktif. Aktifkan perannya dulu atau ganti peran pengguna ini.`)
-    if (!aktif && u.role.code === 'owner' && (await jumlahOwnerAktif(tx)) <= 1) {
-      throw new GalatAturan('Ini Owner aktif terakhir, jadi tidak bisa dinonaktifkan.')
+    if (!aktif && setaraOwner(u.role.code) && (await jumlahOwnerAktif(tx)) <= 1) {
+      throw new GalatAturan('Ini pengguna aktif terakhir berperan Owner atau Superadmin, jadi tidak bisa dinonaktifkan.')
     }
     const baru = await tx.appUser.update({ where: { id }, data: { active: aktif, updatedBy: aktor.id } })
     const dicabut = aktif ? { count: 0 } : await cabutSemuaSesi(tx, id)

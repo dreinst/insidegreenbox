@@ -10,7 +10,7 @@ import { buatKlien, type Db } from '../src/lib/db'
 import type { Pengguna } from '../src/lib/izin-inti'
 import { muatIzin, muatSaklar } from '../src/lib/izin-inti'
 import { isiPeranDanIzin, pastikanPengguna } from '../src/lib/seed-inti'
-import type { KodePeranSistem } from '../src/lib/katalog'
+import { PERAN_SISTEM, type KodePeranSistem } from '../src/lib/katalog'
 
 export async function siapkanDbUji(awalan: string) {
   const dasar = process.env.TEST_DATABASE_URL || process.env.DATABASE_URL
@@ -49,7 +49,7 @@ export const KONTEKS_UJI: Konteks = { userId: null, actorName: 'uji', ip: '10.0.
 
 // Membuat pengguna lalu mengembalikan objek Pengguna seperti hasil sesi, untuk dipakai sebagai aktor.
 export async function buatAktor(db: Db, roleCode: KodePeranSistem | string, username: string): Promise<Pengguna> {
-  if (['owner', 'admin', 'kasir'].includes(roleCode)) {
+  if (PERAN_SISTEM.some((p) => p.kode === roleCode)) {
     await pastikanPengguna(db, { username, name: username, password: 'sandi-uji-123', roleCode: roleCode as KodePeranSistem })
   } else {
     const r = await db.role.findUniqueOrThrow({ where: { code: roleCode } })

@@ -7,6 +7,7 @@ import { KepalaHalaman, PesanFlash } from '@/components/umum'
 import { db } from '@/lib/db'
 import { wajibIzin } from '@/lib/izin'
 import { isOwner, punyaIzin, saklarNyala } from '@/lib/izin-inti'
+import { setaraOwner } from '@/lib/katalog'
 import { ambilPenjualan, bolehVoidLangsung } from '@/lib/penjualan'
 import { daftarPenyetujuVoid } from '@/lib/pin'
 import { formatNilai } from '@/lib/stok/angka'
@@ -26,7 +27,7 @@ export default async function RincianTransaksi({ params, searchParams }: { param
   const langsung = bolehVoidLangsung(p)
   const shiftBuka = j.shift.status === 'Buka'
   // Sesudah shift ditutup, void hanya lewat Owner: Owner sendiri, atau penyetuju Owner lewat PIN.
-  const penyetuju = langsung ? null : (await daftarPenyetujuVoid(db, p.id)).filter((u) => shiftBuka || u.kodePeran === 'owner')
+  const penyetuju = langsung ? null : (await daftarPenyetujuVoid(db, p.id)).filter((u) => shiftBuka || setaraOwner(u.kodePeran))
   const bisaVoid = j.status === 'Selesai' && (langsung ? shiftBuka || isOwner(p) : (penyetuju?.length ?? 0) > 0)
   // tahap 4B: HPP dari bahan resep yang dipotong mesin stok; baris tanpa gerak berarti menu tanpa resep.
   const lihatHpp = saklarNyala(p, 'stok.lihat_nilai')

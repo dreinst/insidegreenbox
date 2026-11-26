@@ -131,7 +131,7 @@ const tampilAturan = (x: { wajib: boolean; nominal: bigint | null; persen: strin
   return 'wajib'
 }
 
-// Menyimpan semua baris yang berubah dalam satu transaksi. Hanya pengguna berperan Owner yang memegang Ubah
+// Menyimpan semua baris yang berubah dalam satu transaksi. Hanya pengguna berperan Owner atau Superadmin yang memegang Ubah
 // atur.persetujuan yang boleh, walau peran lain diberi izinnya. Satu baris audit persetujuan.ubah per jenis dokumen.
 // Batas tidak dihapus saat persetujuan dimatikan, supaya menyalakannya lagi memakai batas yang sama.
 export async function simpanAturan(db: Db, k: Konteks, aktor: Aktor, masukan: Record<string, unknown>) {

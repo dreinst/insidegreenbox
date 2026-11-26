@@ -4,7 +4,7 @@ import { GalatAturan } from './aksi'
 import { catatAudit, type Konteks } from './audit'
 import type { Db } from './db'
 import { hurufIzin, isOwner, pastikanIzin, punyaIzin, saklarNyala, type Pengguna } from './izin-inti'
-import { AKSI, MENU_IZIN, MENU_PER_KODE, MENU_TERKUNCI_OWNER, SAKLAR_TERKUNCI_OWNER, type Aksi } from './katalog'
+import { AKSI, MENU_IZIN, MENU_PER_KODE, MENU_TERKUNCI_OWNER, SAKLAR_TERKUNCI_OWNER, setaraOwner, type Aksi } from './katalog'
 import { barisIzin } from './seed-inti'
 
 type Aktor = Pick<Pengguna, 'id' | 'izin' | 'peran' | 'saklar'>
@@ -21,9 +21,9 @@ export const skemaPeranBaru = z.object({
 
 export const skemaUbahPeran = z.object({ name: z.string().trim().min(2, 'Nama peran minimal 2 huruf.').max(60, 'Nama peran paling panjang 60 huruf.') })
 
-// Pengaman bersama untuk mengubah izin atau saklar sebuah peran.
+// Pengaman bersama untuk mengubah izin atau saklar sebuah peran. Owner dan Superadmin saling setara (KONTRAK 4.6).
 function cekBolehAturPeran(aktor: Aktor, peran: { id: number; code: string }) {
-  if (peran.code === 'owner' && !isOwner(aktor)) throw new GalatAturan('Hanya Owner yang bisa mengubah peran Owner.')
+  if (setaraOwner(peran.code) && !isOwner(aktor)) throw new GalatAturan('Hanya Owner atau Superadmin yang bisa mengubah peran Owner dan Superadmin.')
   if (peran.id === aktor.peran.id && !isOwner(aktor)) throw new GalatAturan('Kamu tidak bisa mengubah izin atau saklar peranmu sendiri.')
 }
 
@@ -77,7 +77,7 @@ export async function ubahPeran(db: Db, k: Konteks, aktor: Aktor, id: number, ma
   return db.$transaction(async (tx) => {
     const r = await tx.role.findUnique({ where: { id } })
     if (!r) throw new GalatAturan('Peran tidak ditemukan.')
-    if (r.code === 'owner' && !isOwner(aktor)) throw new GalatAturan('Hanya Owner yang bisa mengubah peran Owner.')
+    if (setaraOwner(r.code) && !isOwner(aktor)) throw new GalatAturan('Hanya Owner atau Superadmin yang bisa mengubah peran Owner dan Superadmin.')
     if (r.name === d.name) return r
     const baru = await tx.role.update({ where: { id }, data: { name: d.name, updatedBy: aktor.id } })
     await catatAudit(tx, k, { action: 'peran.ubah', docType: 'role', docId: id, summary: `Mengganti nama peran ${r.name} menjadi ${d.name}`, before: { name: r.name }, after: { name: d.name } })
@@ -91,7 +91,7 @@ export async function ubahStatusPeran(db: Db, k: Konteks, aktor: Aktor, id: numb
     const r = await tx.role.findUnique({ where: { id } })
     if (!r) throw new GalatAturan('Peran tidak ditemukan.')
     if (r.active === aktif) return r
-    if (r.isSystem) throw new GalatAturan('Peran sistem (Owner, Admin, Kasir) tidak bisa dinonaktifkan.')
+    if (r.isSystem) throw new GalatAturan('Peran sistem (Owner, Superadmin, Admin, Kasir, Finance) tidak bisa dinonaktifkan.')
     if (r.id === aktor.peran.id) throw new GalatAturan('Kamu tidak bisa menonaktifkan peranmu sendiri.')
     const baru = await tx.role.update({ where: { id }, data: { active: aktif, updatedBy: aktor.id } })
     const pemakai = await tx.appUser.count({ where: { roleId: id, active: true } })
@@ -126,10 +126,10 @@ export async function simpanIzinPeran(db: Db, k: Konteks, aktor: Aktor, id: numb
   for (const menu of MENU_IZIN) {
     baru[menu.kode] = AKSI.filter((a) => menu.aksi.includes(a) && (matriks[menu.kode] ?? '').includes(a)).join('')
   }
-  if (r.code === 'owner') {
+  if (setaraOwner(r.code)) {
     const kurang = MENU_TERKUNCI_OWNER.filter((m) => baru[m] !== MENU_PER_KODE.get(m)!.aksi)
     if (kurang.length) {
-      throw new GalatAturan(`Peran Owner harus tetap memegang semua izin ${kurang.map((m) => MENU_PER_KODE.get(m)!.nama).join(', ')}.`)
+      throw new GalatAturan(`Peran ${r.name} harus tetap memegang semua izin ${kurang.map((m) => MENU_PER_KODE.get(m)!.nama).join(', ')}.`)
     }
   }
   const lama = new Map(r.permissions.map((p) => [p.menuCode, hurufIzin(p)]))
@@ -187,9 +187,9 @@ export async function simpanSaklarPeran(db: Db, k: Konteks, aktor: Aktor, id: nu
   const r = await db.role.findUnique({ where: { id }, include: { switches: { include: { featureSwitch: true } } } })
   if (!r) throw new GalatAturan('Peran tidak ditemukan.')
   cekBolehAturPeran(aktor, r)
-  if (r.code === 'owner') {
+  if (setaraOwner(r.code)) {
     const mati = SAKLAR_TERKUNCI_OWNER.filter((kode) => nilai[kode] && !nilai[kode].nyala)
-    if (mati.length) throw new GalatAturan('Peran Owner harus tetap bisa melihat semua jejak audit.')
+    if (mati.length) throw new GalatAturan(`Peran ${r.name} harus tetap bisa melihat semua jejak audit.`)
   }
   const semua = await db.featureSwitch.findMany()
   const lama = new Map(r.switches.map((s) => [s.featureSwitch.code, { nyala: s.enabled, batas: s.limitValue === null ? null : Number(s.limitValue) }]))

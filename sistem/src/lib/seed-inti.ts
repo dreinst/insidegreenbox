@@ -3,7 +3,7 @@
 import bcrypt from 'bcryptjs'
 import { catatAudit } from './audit'
 import type { Db } from './db'
-import { KOLOM_AKSI, MENU_IZIN, PERAN_SISTEM, SAKLAR, type Aksi, type KodePeranSistem } from './katalog'
+import { KODE_SETARA_OWNER, KOLOM_AKSI, MENU_IZIN, PERAN_SISTEM, SAKLAR, type Aksi, type KodePeranSistem } from './katalog'
 
 export const BIAYA_BCRYPT = 12
 
@@ -14,6 +14,10 @@ export function barisIzin(aksi: string) {
 }
 
 export async function isiPeranDanIzin(db: Db) {
+  // Peran tambahan berkode superadmin akan menjadi setara Owner bila dijadikan peran sistem. Sama dengan migrasi
+  // 20261126100000_peran_superadmin_finance, seed berhenti supaya pemilik memeriksanya dulu (KONTRAK 11 butir 161).
+  const tiruan = await db.role.findFirst({ where: { code: { in: [...KODE_SETARA_OWNER] }, isSystem: false } })
+  if (tiruan) throw new Error(`Sudah ada peran tambahan berkode ${tiruan.code}. Periksa peran itu dulu (KONTRAK bagian 11 butir 161) sebelum seed dijalankan.`)
   for (const p of PERAN_SISTEM) {
     await db.role.upsert({ where: { code: p.kode }, update: { isSystem: true }, create: { code: p.kode, name: p.nama, isSystem: true } })
   }

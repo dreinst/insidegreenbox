@@ -24,7 +24,13 @@ export const KOLOM_AKSI = {
   P: 'canPost',
 } as const satisfies Record<Aksi, string>
 
-export type KodePeranSistem = 'owner' | 'admin' | 'kasir'
+// Permintaan pemilik 26 November 2026 (KONTRAK 4.1 dan 11 butir 161): Superadmin dan Finance ditambahkan sesudah
+// tiga peran awal, supaya id peran lama di basis data yang sudah berjalan tidak bergeser.
+export type KodePeranSistem = 'owner' | 'admin' | 'kasir' | 'superadmin' | 'finance'
+
+// Peran setingkat Owner (KONTRAK 4.1 dan 4.6). Setiap pengecekan "hanya Owner" menerima semua kode di sini.
+export const KODE_SETARA_OWNER: readonly string[] = ['owner', 'superadmin']
+export const setaraOwner = (kodePeran: string) => KODE_SETARA_OWNER.includes(kodePeran)
 
 export type MenuIzin = {
   kode: string
@@ -112,17 +118,47 @@ const BARIS_KPT: [string, string, string, string, string, string][] = [['atur.pe
 
 const bersih = (s: string) => (s === '-' ? '' : s)
 
+// Matriks bawaan Finance (KONTRAK 11 butir 161). Menu yang tidak disebut tanpa akses: layar kasir, master menu, stok,
+// produksi, pesanan dan penerimaan pembelian, pengguna, peran, saklar, dan aturan persetujuan. Ajukan memakai aksi
+// Ubah, jadi Finance bisa mengajukan dokumen yang ia pegang Ubah-nya. Setujui tidak diberikan di menu mana pun,
+// sehingga dokumen yang terkena aturan persetujuan tetap menunggu Owner. Hapus hanya untuk draf.
+const BAWAAN_FINANCE: Record<string, string> = {
+  'kasir.setoran': 'LTUHP',
+  'kas.transaksi': 'LTUHP',
+  'kas.pindah': 'LTUHP',
+  'kas.rekening': 'LTUH',
+  'kas.rekonsiliasi': 'LTUHP',
+  'kas.hutang': 'L',
+  'kas.piutang': 'L',
+  'beli.faktur': 'LTUH',
+  'beli.pembayaran': 'LTUH',
+  'b2b.penerimaan': 'LTUHP',
+  'akun.coa': 'L',
+  'akun.metode_bayar': 'L',
+  'akun.jurnal': 'LTUH',
+  'akun.buku_besar': 'L',
+  'akun.tutup_periode': 'L',
+  'aset.daftar': 'L',
+  'aset.penyusutan': 'L',
+  'anggaran.anggaran': 'L',
+  'laporan.penjualan': 'L',
+  'laporan.persediaan': 'L',
+  'laporan.keuangan': 'L',
+  'atur.audit': 'L',
+}
+
+// Superadmin memegang matriks bawaan yang sama dengan Owner.
 export const MENU_IZIN: MenuIzin[] = [...BARIS, ...BARIS_3B, ...BARIS_6A, ...BARIS_KPT].map(([kode, grup, nama, owner, admin, kasir]) => ({
   kode,
   grup,
   nama,
   aksi: owner,
-  bawaan: { owner: bersih(owner), admin: bersih(admin), kasir: bersih(kasir) },
+  bawaan: { owner: bersih(owner), admin: bersih(admin), kasir: bersih(kasir), superadmin: bersih(owner), finance: BAWAAN_FINANCE[kode] ?? '' },
 }))
 
 export const MENU_PER_KODE = new Map(MENU_IZIN.map((m) => [m.kode, m]))
 
-// Menu yang izinnya tidak boleh hilang dari peran owner (KONTRAK 4.6).
+// Menu yang izinnya tidak boleh hilang dari peran Owner dan Superadmin (KONTRAK 4.6).
 export const MENU_TERKUNCI_OWNER = ['atur.pengguna', 'atur.peran', 'atur.saklar', 'atur.audit', 'atur.persetujuan']
 export const SAKLAR_TERKUNCI_OWNER = ['log.lihat_semua']
 
@@ -136,12 +172,15 @@ export type SaklarFitur = {
   bawaan: Record<KodePeranSistem, { nyala: boolean; batas: number | null }>
 }
 
+type NilaiBawaan = { nyala: boolean; batas: number | null }
+type SaklarDasar = Omit<SaklarFitur, 'bawaan'> & { bawaan: Record<'owner' | 'admin' | 'kasir', NilaiBawaan> }
+
 const Y = (batas: number | null = null) => ({ nyala: true, batas })
 const N = (batas: number | null = null) => ({ nyala: false, batas })
 
 // Saklar RANCANGAN 8.3 ditambah log.lihat_semua dan, sejak tahap 4B, pos.jual_stok_minus (KONTRAK 4.4).
 // tahap 6C: pos.batas_selisih_kas dihapus karena selisih kas tidak lagi butuh persetujuan Owner (KONTRAK 11 butir 122).
-export const SAKLAR: SaklarFitur[] = [
+const SAKLAR_DASAR: SaklarDasar[] = [
   { kode: 'beli.po_tanpa_pr', nama: 'Pesanan tanpa permintaan', keterangan: 'Pesanan pembelian boleh dibuat tanpa permintaan pembelian.', bawaan: { owner: Y(), admin: Y(), kasir: N() } },
   { kode: 'beli.ubah_qty_pr', nama: 'Ubah qty permintaan', keterangan: 'Qty di pesanan boleh berbeda dari permintaan.', bawaan: { owner: Y(), admin: Y(), kasir: N() } },
   { kode: 'beli.ubah_harga_po', nama: 'Ubah harga pesanan', keterangan: 'Harga di pesanan dan penerimaan boleh berbeda dari harga terakhir.', bawaan: { owner: Y(), admin: Y(), kasir: N() } },
@@ -174,15 +213,32 @@ export const SAKLAR: SaklarFitur[] = [
   },
 ]
 
+// Saklar Finance (KONTRAK 11 butir 161) mengikuti Admin untuk saklar yang menyentuh pekerjaan keuangan: faktur
+// pembelian, nilai persediaan dan void di laporan, tanggal mundur dokumen, serta dua saklar perilaku yang juga nyala
+// untuk Kasir. Saklar modul yang tidak bisa dibuka Finance mati, dengan batas angka sama dengan Admin.
+const SAKLAR_FINANCE_IKUT_ADMIN = ['beli.ubah_harga_faktur', 'beli.po_selesai_otomatis', 'stok.wajib_alasan', 'stok.lihat_nilai', 'pos.lihat_void_nonsales', 'dok.tanggal_mundur']
+
+export const SAKLAR: SaklarFitur[] = SAKLAR_DASAR.map((s) => ({
+  ...s,
+  bawaan: {
+    ...s.bawaan,
+    superadmin: s.bawaan.owner,
+    finance: SAKLAR_FINANCE_IKUT_ADMIN.includes(s.kode) ? s.bawaan.admin : { nyala: false, batas: s.bawaan.admin.batas },
+  },
+}))
+
 export const PERAN_SISTEM: { kode: KodePeranSistem; nama: string }[] = [
   { kode: 'owner', nama: 'Owner' },
   { kode: 'admin', nama: 'Admin' },
   { kode: 'kasir', nama: 'Kasir' },
+  { kode: 'superadmin', nama: 'Superadmin' },
+  { kode: 'finance', nama: 'Finance' },
 ]
 
 // menu berisi satu kode, beberapa kode (tampil bila salah satunya boleh dilihat), atau null untuk semua pengguna.
-// khusus 'menunggu': item Menunggu Persetujuan, tampil bila memegang Setujui di salah satu modul antrean (dihitung di
-// layout lewat bolehLihatMenunggu, KONTRAK 11 butir 158). lencana: angka kecil di kanan label.
+// khusus 'menunggu': item Menunggu Persetujuan, tampil bila bisa menindaklanjuti salah satu jenis antrean (Setujui, atau
+// Posting untuk yang sudah disetujui; dihitung di layout lewat bolehLihatMenunggu, KONTRAK 11 butir 158 dan 161).
+// lencana: angka kecil di kanan label.
 export type ItemSidebar = { href: string; label: string; menu: string | string[] | null; ikon: string; khusus?: 'menunggu'; lencana?: number }
 
 // Hanya halaman yang sudah dibangun (KONTRAK 8). menu null artinya tampil untuk semua pengguna yang masuk.

@@ -11,6 +11,7 @@
     "postinstall": "prisma generate",
     "db:setup": "prisma migrate deploy && prisma db seed",
     "seed:contoh": "tsx scripts/seed-contoh.ts",
+    "akun:awal": "tsx scripts/akun-awal.ts",
     "impor:menu": "tsx scripts/impor-menu.ts",
     "impor:stok": "tsx scripts/impor-stok.ts",
     "impor:resep": "tsx scripts/impor-resep.ts",
