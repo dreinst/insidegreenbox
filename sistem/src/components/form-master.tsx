@@ -5,37 +5,39 @@ import { useActionState, useState } from 'react'
 import { InputBerkas, MB } from '@/components/berkas'
 import { galatKolom, nilaiAwal, PesanHasil, TombolKirim } from '@/components/form'
 import { HASIL_AWAL, type HasilAksi } from '@/lib/aksi'
+import { idMedan } from '@/lib/medan'
 
 type Aksi = (sebelum: HasilAksi, fd: FormData) => Promise<HasilAksi>
 type Pilihan = { nilai: string; label: string }
 
-export type Medan =
+// id (opsional) menggantikan nama sebagai dasar id elemen, untuk halaman yang memuat dua formulir dengan nama medan
+// sama (misalnya "memo" di kepala dan di baris jurnal). Nama tetap dipakai untuk isian yang dikirim dan untuk galat.
+export type Medan = { id?: string } & (
   | { jenis: 'teks' | 'angka' | 'tanggal'; nama: string; label: string; awal?: string; wajib?: boolean; bantuan?: string; maxLength?: number; inputMode?: 'numeric' | 'decimal' | 'tel'; placeholder?: string; lebar?: boolean }
   | { jenis: 'area'; nama: string; label: string; awal?: string; bantuan?: string; maxLength?: number; lebar?: boolean }
   | { jenis: 'pilih'; nama: string; label: string; awal?: string; pilihan: Pilihan[]; wajib?: boolean; bantuan?: string; lebar?: boolean }
   | { jenis: 'centang'; nama: string; label: string; awal?: boolean; bantuan?: string; lebar?: boolean }
   | { jenis: 'foto'; nama: string; label: string; awal?: string; foto: string[]; urlAwal?: string | null; bantuan?: string; lebar?: boolean }
+)
 
-const idKolom = (nama: string) => `k-${nama}`
-
-function Galat({ hasil, nama }: { hasil: HasilAksi; nama: string }) {
+function Galat({ hasil, nama, id }: { hasil: HasilAksi; nama: string; id: string }) {
   const g = galatKolom(hasil, nama)
   return g ? (
-    <small id={`${idKolom(nama)}-g`} className="galat-kolom">
+    <small id={`${id}-g`} className="galat-kolom">
       {g}
     </small>
   ) : null
 }
 
-function Bantuan({ hasil, nama, bantuan }: { hasil: HasilAksi; nama: string; bantuan?: string }) {
-  return !galatKolom(hasil, nama) && bantuan ? <small id={`${idKolom(nama)}-b`}>{bantuan}</small> : null
+function Bantuan({ hasil, nama, id, bantuan }: { hasil: HasilAksi; nama: string; id: string; bantuan?: string }) {
+  return !galatKolom(hasil, nama) && bantuan ? <small id={`${id}-b`}>{bantuan}</small> : null
 }
 
-const deskripsi = (hasil: HasilAksi, nama: string, bantuan?: string) => (galatKolom(hasil, nama) ? `${idKolom(nama)}-g` : bantuan ? `${idKolom(nama)}-b` : undefined)
+const deskripsi = (hasil: HasilAksi, nama: string, id: string, bantuan?: string) => (galatKolom(hasil, nama) ? `${id}-g` : bantuan ? `${id}-b` : undefined)
 
 // Satu medan formulir. Dipakai FormMaster dan formulir khusus yang mengatur medannya sendiri.
 export function IsiMedan({ m, hasil }: { m: Medan; hasil: HasilAksi }) {
-  const id = idKolom(m.nama)
+  const id = idMedan(m)
   const salah = !!galatKolom(hasil, m.nama)
   const kelas = `kolom${salah ? ' salah' : ''}${m.lebar ? ' lebar' : ''}`
   if (m.jenis === 'centang') {
@@ -43,11 +45,11 @@ export function IsiMedan({ m, hasil }: { m: Medan; hasil: HasilAksi }) {
     return (
       <div className={`${kelas} centang`}>
         <label className="centang-baris" htmlFor={id}>
-          <input id={id} name={m.nama} type="checkbox" defaultChecked={nyala} aria-describedby={deskripsi(hasil, m.nama, m.bantuan)} />
+          <input id={id} name={m.nama} type="checkbox" defaultChecked={nyala} aria-describedby={deskripsi(hasil, m.nama, id, m.bantuan)} />
           <span>{m.label}</span>
         </label>
-        <Galat hasil={hasil} nama={m.nama} />
-        <Bantuan hasil={hasil} nama={m.nama} bantuan={m.bantuan} />
+        <Galat hasil={hasil} nama={m.nama} id={id} />
+        <Bantuan hasil={hasil} nama={m.nama} id={id} bantuan={m.bantuan} />
       </div>
     )
   }
@@ -55,15 +57,15 @@ export function IsiMedan({ m, hasil }: { m: Medan; hasil: HasilAksi }) {
     return (
       <div className={kelas}>
         <label htmlFor={id}>{m.label}</label>
-        <select id={id} name={m.nama} defaultValue={nilaiAwal(hasil, m.nama, m.awal)} required={m.wajib} aria-invalid={salah || undefined} aria-describedby={deskripsi(hasil, m.nama, m.bantuan)}>
+        <select id={id} name={m.nama} defaultValue={nilaiAwal(hasil, m.nama, m.awal)} required={m.wajib} aria-invalid={salah || undefined} aria-describedby={deskripsi(hasil, m.nama, id, m.bantuan)}>
           {m.pilihan.map((p) => (
             <option key={p.nilai} value={p.nilai}>
               {p.label}
             </option>
           ))}
         </select>
-        <Galat hasil={hasil} nama={m.nama} />
-        <Bantuan hasil={hasil} nama={m.nama} bantuan={m.bantuan} />
+        <Galat hasil={hasil} nama={m.nama} id={id} />
+        <Bantuan hasil={hasil} nama={m.nama} id={id} bantuan={m.bantuan} />
       </div>
     )
   }
@@ -71,9 +73,9 @@ export function IsiMedan({ m, hasil }: { m: Medan; hasil: HasilAksi }) {
     return (
       <div className={kelas}>
         <label htmlFor={id}>{m.label}</label>
-        <textarea id={id} name={m.nama} rows={3} defaultValue={nilaiAwal(hasil, m.nama, m.awal)} maxLength={m.maxLength} aria-invalid={salah || undefined} aria-describedby={deskripsi(hasil, m.nama, m.bantuan)} />
-        <Galat hasil={hasil} nama={m.nama} />
-        <Bantuan hasil={hasil} nama={m.nama} bantuan={m.bantuan} />
+        <textarea id={id} name={m.nama} rows={3} defaultValue={nilaiAwal(hasil, m.nama, m.awal)} maxLength={m.maxLength} aria-invalid={salah || undefined} aria-describedby={deskripsi(hasil, m.nama, id, m.bantuan)} />
+        <Galat hasil={hasil} nama={m.nama} id={id} />
+        <Bantuan hasil={hasil} nama={m.nama} id={id} bantuan={m.bantuan} />
       </div>
     )
   }
@@ -94,7 +96,7 @@ export function IsiMedan({ m, hasil }: { m: Medan; hasil: HasilAksi }) {
             </span>
           )}
           <div className="foto-kontrol">
-            <select id={id} name={m.nama} defaultValue={pilih} aria-invalid={salah || undefined} aria-describedby={deskripsi(hasil, m.nama, m.bantuan)}>
+            <select id={id} name={m.nama} defaultValue={pilih} aria-invalid={salah || undefined} aria-describedby={deskripsi(hasil, m.nama, id, m.bantuan)}>
               <option value="">Tanpa foto</option>
               {unggahan ? <option value={unggahan}>Foto unggahan saat ini</option> : null}
               {m.foto.map((f) => (
@@ -114,8 +116,8 @@ export function IsiMedan({ m, hasil }: { m: Medan; hasil: HasilAksi }) {
             {galatBerkas}
           </small>
         ) : null}
-        <Galat hasil={hasil} nama={m.nama} />
-        <Bantuan hasil={hasil} nama={m.nama} bantuan={m.bantuan ?? 'Pilih foto situs atau unggah WebP, PNG, atau JPG (maksimal 2 MB). Berkas unggahan menggantikan pilihan.'} />
+        <Galat hasil={hasil} nama={m.nama} id={id} />
+        <Bantuan hasil={hasil} nama={m.nama} id={id} bantuan={m.bantuan ?? 'Pilih foto situs atau unggah WebP, PNG, atau JPG (maksimal 2 MB). Berkas unggahan menggantikan pilihan.'} />
       </div>
     )
   }
@@ -133,10 +135,10 @@ export function IsiMedan({ m, hasil }: { m: Medan; hasil: HasilAksi }) {
         placeholder={m.placeholder}
         autoComplete="off"
         aria-invalid={salah || undefined}
-        aria-describedby={deskripsi(hasil, m.nama, m.bantuan)}
+        aria-describedby={deskripsi(hasil, m.nama, id, m.bantuan)}
       />
-      <Galat hasil={hasil} nama={m.nama} />
-      <Bantuan hasil={hasil} nama={m.nama} bantuan={m.bantuan} />
+      <Galat hasil={hasil} nama={m.nama} id={id} />
+      <Bantuan hasil={hasil} nama={m.nama} id={id} bantuan={m.bantuan} />
     </div>
   )
 }

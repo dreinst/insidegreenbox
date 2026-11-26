@@ -11,6 +11,7 @@ import { pilihanAkun } from '@/lib/akuntansi/akun'
 import { namaSumber, tautanSumber } from '@/lib/akuntansi/dokumen'
 import { namaPeriode } from '@/lib/akuntansi/jurnal'
 import { akunBukuPembantu, ambilJurnal, butuhSetujuMemorial, tombolMemorial } from '@/lib/akuntansi/memorial'
+import { medanBarisMemorial, medanKepalaMemorial } from '@/lib/akuntansi/memorial-form'
 import { db } from '@/lib/db'
 import { wajibIzin } from '@/lib/izin'
 import { punyaIzin } from '@/lib/izin-inti'
@@ -50,10 +51,7 @@ export default async function RincianJurnal({ params, searchParams }: { params: 
           {t?.ubah ? (
             <FormMaster
               aksi={ubahKepalaMemorialAksi.bind(null, j.id)}
-              medan={[
-                { jenis: 'tanggal', nama: 'date', label: 'Tanggal jurnal', awal: isoTanggal(j.date), wajib: true },
-                { jenis: 'area', nama: 'memo', label: 'Keterangan', awal: j.memo, maxLength: 300, lebar: true },
-              ]}
+              medan={medanKepalaMemorial({ date: isoTanggal(j.date), memo: j.memo })}
               tombol="Simpan kepala"
               kelasTombol="btn sekunder"
             />
@@ -209,24 +207,7 @@ export default async function RincianJurnal({ params, searchParams }: { params: 
             <h3>Tambah baris</h3>
             <FormMaster
               aksi={tambahBarisMemorialAksi.bind(null, j.id)}
-              medan={[
-                { jenis: 'pilih', nama: 'accountId', label: 'Akun', pilihan: [{ nilai: '', label: 'Pilih akun' }, ...akun.map((a) => ({ nilai: String(a.id), label: `${a.code} ${a.name}` }))], wajib: true, lebar: true },
-                { jenis: 'angka', nama: 'debit', label: 'Debit (Rp)', placeholder: '0', bantuan: 'Isi debit atau kredit saja.' },
-                { jenis: 'angka', nama: 'kredit', label: 'Kredit (Rp)', placeholder: '0' },
-                {
-                  jenis: 'pilih',
-                  nama: 'pihak',
-                  label: 'Pelanggan atau pemasok',
-                  pilihan: [
-                    { nilai: '', label: 'Tanpa (akun selain Piutang dan Hutang Usaha)' },
-                    ...pelanggan.map((c) => ({ nilai: `c:${c.id}`, label: `Pelanggan: ${c.name}` })),
-                    ...pemasok.map((x) => ({ nilai: `s:${x.id}`, label: `Pemasok: ${x.name}` })),
-                  ],
-                  bantuan: 'Wajib untuk baris Piutang Usaha (pelanggan) dan Hutang Usaha (pemasok).',
-                  lebar: true,
-                },
-                { jenis: 'teks', nama: 'memo', label: 'Keterangan baris', maxLength: 200, lebar: true },
-              ]}
+              medan={medanBarisMemorial(akun, pelanggan, pemasok)}
               tombol="Tambah baris"
               kelasTombol="btn sekunder"
             />

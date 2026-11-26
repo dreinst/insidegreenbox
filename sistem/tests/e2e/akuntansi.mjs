@@ -151,17 +151,24 @@ const idKasLaci = await akunId('1-1100')
   await page.fill('#k-memo', 'Setoran modal pemilik ke kas besar')
   await kirimKe(page, 'Buat draf', /\/jurnal\/\d+\?pesan=draf/)
   const idMemorial = idDariUrl(page)
-  const tambahBaris = async (akunLabel, debit, kredit) => {
+  const tambahBaris = async (akunLabel, debit, kredit, memo = '') => {
     await page.selectOption('#k-accountId', { label: akunLabel })
     if (debit) await page.fill('#k-debit', debit)
     if (kredit) await page.fill('#k-kredit', kredit)
+    // Lewat label, seperti pengguna yang mengklik tulisan "Keterangan baris" lalu mengetik.
+    if (memo) await page.getByLabel('Keterangan baris').fill(memo)
     await kirimKe(page, 'Tambah baris', /pesan=baris/)
   }
-  await tambahBaris('1-1200 Kas Besar', '250.000', '')
+  cek('memorial: id elemen di rincian tidak ganda', (await page.evaluate(() => { const id = [...document.querySelectorAll('[id]')].map((e) => e.id); return id.length - new Set(id).size })) === 0)
+  await tambahBaris('1-1200 Kas Besar', '250.000', '', 'Kas masuk dari pemilik')
   await page.click('button:text-is("Ajukan untuk disetujui")')
   await page.waitForSelector('.pesan.galat')
   cek('memorial: satu baris ditolak saat diajukan', (await page.textContent('.pesan.galat')).includes('minimal dua baris'))
-  await tambahBaris('3-1000 Modal Pemilik', '', '250.000')
+  await tambahBaris('3-1000 Modal Pemilik', '', '250.000', 'Tambahan modal pemilik')
+  const barisMemo = (await sql.query('select memo from journal_line where journal_id=$1 order by id', [idMemorial])).rows.map((r) => r.memo)
+  const kepalaMemo = (await satu('select memo from journal where id=$1', [idMemorial])).memo
+  cek('memorial: keterangan tiap baris tersimpan di barisnya, kepala tetap terpisah', JSON.stringify(barisMemo) === JSON.stringify(['Kas masuk dari pemilik', 'Tambahan modal pemilik']) && kepalaMemo === 'Setoran modal pemilik ke kas besar', JSON.stringify({ barisMemo, kepalaMemo }))
+  cek('memorial: keterangan baris tampil di tabel dan kepala tidak berubah di formulir', (await page.locator('td[data-label="Keterangan"]').allTextContents()).join('|').includes('Tambahan modal pemilik') && (await page.inputValue('textarea#k-memo')) === 'Setoran modal pemilik ke kas besar')
   await potret(page, '1440-ak-memorial-draf')
   await kirimKe(page, 'Ajukan untuk disetujui', /pesan=ajukan/)
   cek('memorial: Diajukan', (await satu('select status::text s from journal where id=$1', [idMemorial])).s === 'Diajukan')
